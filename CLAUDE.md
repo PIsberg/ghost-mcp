@@ -9,28 +9,28 @@ Ghost MCP is an MCP (Model Context Protocol) server written in Go that exposes O
 ## Build Commands
 
 ```bash
-# Build for current platform
-go build -o ghost-mcp.exe .   # Windows
-go build -o ghost-mcp .        # macOS/Linux
+# Build for current platform (run from repo root)
+go build -o ghost-mcp.exe ./cmd/ghost-mcp/   # Windows
+go build -o ghost-mcp ./cmd/ghost-mcp/        # macOS/Linux
 
 # Cross-compile release builds
-GOOS=windows GOARCH=amd64 go build -o ghost-mcp.exe -ldflags="-s -w" .
-GOOS=darwin  GOARCH=amd64 go build -o ghost-mcp     -ldflags="-s -w" .
-GOOS=linux   GOARCH=amd64 go build -o ghost-mcp     -ldflags="-s -w" .
+GOOS=windows GOARCH=amd64 go build -o ghost-mcp.exe -ldflags="-s -w" ./cmd/ghost-mcp/
+GOOS=darwin  GOARCH=amd64 go build -o ghost-mcp     -ldflags="-s -w" ./cmd/ghost-mcp/
+GOOS=linux   GOARCH=amd64 go build -o ghost-mcp     -ldflags="-s -w" ./cmd/ghost-mcp/
 ```
 
 ## Test Commands
 
 ```bash
 # Unit tests only (no display required)
-go test -v -short ./...
+go test -v -short ./cmd/ghost-mcp/...
 
 # Integration tests (requires display and GCC)
-INTEGRATION=1 go test -v -run Integration ./...   # Linux/macOS
-set INTEGRATION=1 && go test -v -run Integration ./...  # Windows
+INTEGRATION=1 go test -v -run Integration ./cmd/ghost-mcp/...   # Linux/macOS
+set INTEGRATION=1 && go test -v -run Integration ./cmd/ghost-mcp/...  # Windows
 
 # With race detector
-go test -race -short ./...
+go test -race -short ./cmd/ghost-mcp/...
 
 # Platform test runners
 test_runner.bat              # Windows: unit tests
@@ -56,7 +56,7 @@ gofmt -l .   # List unformatted files
 AI Client (Claude) ←→[stdio JSON-RPC]←→ Ghost MCP Server ←→[CGo]←→ RobotGo ←→ OS
 ```
 
-The server exposes six tools: `get_screen_size`, `move_mouse`, `click`, `type_text`, `press_key`, `take_screenshot`. Everything lives in `main.go`.
+The server exposes six tools: `get_screen_size`, `move_mouse`, `click`, `type_text`, `press_key`, `take_screenshot`. Source lives in `cmd/ghost-mcp/`.
 
 ### Critical Design Constraints
 
@@ -67,9 +67,9 @@ The server exposes six tools: `get_screen_size`, `move_mouse`, `click`, `type_te
 
 ### Testing Architecture
 
-- `main_test.go` — unit tests for parameter extraction, handlers, logging, and failsafe
-- `integration_test.go` — full MCP server tests using the helper client in `mcpclient/`
-- `test_fixture/` — a Go HTTP server + HTML/JS page that renders interactive UI elements for integration tests to automate against
+- `cmd/ghost-mcp/main_test.go` — unit tests for parameter extraction, handlers, logging, and failsafe
+- `cmd/ghost-mcp/integration_test.go` — full MCP server tests using the helper client in `mcpclient/`
+- `cmd/ghost-mcp/test_fixture/` — a Go HTTP server + HTML/JS page that renders interactive UI elements for integration tests to automate against
 
 Integration tests are gated behind the `INTEGRATION=1` env var because they require a real display (or Xvfb on Linux) and a GCC toolchain for CGo.
 

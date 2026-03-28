@@ -101,8 +101,8 @@ cd ghost-mcp
 go mod download
 
 # Build the binary
-go build -o ghost-mcp.exe .    # Windows
-go build -o ghost-mcp .        # macOS/Linux
+go build -o ghost-mcp.exe ./cmd/ghost-mcp/    # Windows
+go build -o ghost-mcp ./cmd/ghost-mcp/        # macOS/Linux
 ```
 
 ### 2. Verify the Build
@@ -472,24 +472,24 @@ set INTEGRATION=1 && go test -v ./...   # Integration tests (Windows)
 export INTEGRATION=1 && go test -v ./... # Integration tests (Unix)
 ```
 
-For detailed testing documentation, see [TESTING.md](./TESTING.md).
+For detailed testing documentation, see [TESTING.md](./docs/TESTING.md).
 
 ### Building for Release
 
 ```bash
 # Windows
-GOOS=windows GOARCH=amd64 go build -o ghost-mcp.exe -ldflags="-s -w" .
+GOOS=windows GOARCH=amd64 go build -o ghost-mcp.exe -ldflags="-s -w" ./cmd/ghost-mcp/
 
 # macOS
-GOOS=darwin GOARCH=amd64 go build -o ghost-mcp -ldflags="-s -w" .
+GOOS=darwin GOARCH=amd64 go build -o ghost-mcp -ldflags="-s -w" ./cmd/ghost-mcp/
 
 # Linux
-GOOS=linux GOARCH=amd64 go build -o ghost-mcp -ldflags="-s -w" .
+GOOS=linux GOARCH=amd64 go build -o ghost-mcp -ldflags="-s -w" ./cmd/ghost-mcp/
 ```
 
 ## Architecture
 
-See [ARCHITECTURE.md](./ARCHITECTURE.md) for detailed information about:
+See [ARCHITECTURE.md](./docs/ARCHITECTURE.md) for detailed information about:
 - Server structure and components
 - MCP protocol implementation
 - Tool handling flow
@@ -500,9 +500,9 @@ See [ARCHITECTURE.md](./ARCHITECTURE.md) for detailed information about:
 | Document | Description |
 |----------|-------------|
 | [README.md](./README.md) | Getting started and usage |
-| [USAGE.md](./USAGE.md) | Interactive examples and API reference |
-| [ARCHITECTURE.md](./ARCHITECTURE.md) | System design and internals |
-| [TESTING.md](./TESTING.md) | Testing guide and fixture docs |
+| [USAGE.md](./docs/USAGE.md) | Interactive examples and API reference |
+| [ARCHITECTURE.md](./docs/ARCHITECTURE.md) | System design and internals |
+| [TESTING.md](./docs/TESTING.md) | Testing guide and fixture docs |
 
 ## License
 

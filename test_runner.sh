@@ -39,7 +39,7 @@ fi
 
 # Build the main binary first
 echo "[STEP 1] Building $BINARY..."
-go build -o "$BINARY" -ldflags="-s -w" .
+go build -o "cmd/ghost-mcp/$BINARY" -ldflags="-s -w" ./cmd/ghost-mcp/
 if [ $? -ne 0 ]; then
     echo ""
     echo "[ERROR] Build failed!"
@@ -65,7 +65,7 @@ if [ "$TEST_TYPE" == "fixture" ]; then
     echo "Test Fixture URL: http://localhost:8765"
     echo "Press Ctrl+C to stop"
     echo ""
-    go run test_fixture/fixture_server.go
+    go run cmd/ghost-mcp/test_fixture/fixture_server.go
     exit 0
 fi
 
@@ -73,7 +73,7 @@ fi
 if [ "$TEST_TYPE" == "unit" ]; then
     echo "[STEP 2] Running unit tests..."
     echo ""
-    go test -v -short ./...
+    go test -v -short ./cmd/ghost-mcp/...
     goto_summary
 fi
 
@@ -110,16 +110,16 @@ if [ "$TEST_TYPE" == "integration" ]; then
     
     # Start fixture server in background
     echo "[INFO] Starting test fixture server..."
-    go run test_fixture/fixture_server.go &
+    go run cmd/ghost-mcp/test_fixture/fixture_server.go &
     FIXTURE_PID=$!
     sleep 3
-    
+
     # Ensure cleanup on exit
     trap "kill $FIXTURE_PID 2>/dev/null || true" EXIT
-    
+
     echo "[INFO] Running integration tests..."
     echo ""
-    INTEGRATION=1 go test -v -run Integration ./...
+    INTEGRATION=1 go test -v -run Integration ./cmd/ghost-mcp/...
     goto_summary
 fi
 
@@ -130,29 +130,29 @@ if [ "$TEST_TYPE" == "all" ]; then
     
     echo "--- Unit Tests ---"
     echo ""
-    go test -v -short ./...
+    go test -v -short ./cmd/ghost-mcp/...
     echo ""
-    
+
     echo "--- Integration Tests ---"
     echo ""
     echo "WARNING: Integration tests will control your mouse and keyboard!"
     echo ""
-    
+
     if ! command -v gcc &> /dev/null; then
         echo "[SKIP] GCC not found, skipping integration tests"
         goto_summary
     fi
-    
+
     # Start fixture server
     echo "[INFO] Starting test fixture server..."
-    go run test_fixture/fixture_server.go &
+    go run cmd/ghost-mcp/test_fixture/fixture_server.go &
     FIXTURE_PID=$!
     sleep 3
-    
+
     # Ensure cleanup on exit
     trap "kill $FIXTURE_PID 2>/dev/null || true" EXIT
-    
-    INTEGRATION=1 go test -v -run Integration ./...
+
+    INTEGRATION=1 go test -v -run Integration ./cmd/ghost-mcp/...
     goto_summary
 fi
 
