@@ -507,13 +507,12 @@ func TestHandleTakeScreenshotValid(t *testing.T) {
 		t.Fatal("Expected non-nil result")
 	}
 
-	// Parse the JSON response
+	// Content[0] is the JSON metadata, Content[1] is the PNG image
 	var response map[string]interface{}
 	if err := json.Unmarshal([]byte(result.Content[0].(mcp.TextContent).Text), &response); err != nil {
 		t.Fatalf("Failed to parse result JSON: %v", err)
 	}
 
-	// Verify response contains expected fields
 	if success, ok := response["success"].(bool); !ok || !success {
 		t.Error("Expected success to be true")
 	}
@@ -522,8 +521,9 @@ func TestHandleTakeScreenshotValid(t *testing.T) {
 		t.Error("Response missing 'filepath' field")
 	}
 
-	if _, ok := response["base64"]; !ok {
-		t.Error("Response missing 'base64' field")
+	// Image data is in Content[1] as ImageContent
+	if len(result.Content) < 2 {
+		t.Error("Expected at least 2 content items (metadata + image)")
 	}
 }
 
@@ -551,7 +551,6 @@ func TestHandleTakeScreenshotWithRegion(t *testing.T) {
 		t.Fatal("Expected non-nil result")
 	}
 
-	// Parse the JSON response
 	var response map[string]interface{}
 	if err := json.Unmarshal([]byte(result.Content[0].(mcp.TextContent).Text), &response); err != nil {
 		t.Fatalf("Failed to parse result JSON: %v", err)
@@ -808,5 +807,79 @@ func TestHandleMoveMouse_FractionalCoords(t *testing.T) {
 	}
 	if !result.IsError {
 		t.Error("Expected tool error for fractional x coordinate")
+	}
+}
+
+// =============================================================================
+// CLICK_AT TESTS
+// =============================================================================
+
+// TestHandleClickAt_InvalidButton tests click_at with an invalid button value
+func TestHandleClickAt_InvalidButton(t *testing.T) {
+	req := mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: map[string]interface{}{
+		"x": float64(100), "y": float64(200), "button": "invalid",
+	}}}
+	result, err := handleClickAt(nil, req)
+	if err != nil {
+		t.Fatalf("Handler returned unexpected Go error: %v", err)
+	}
+	if !result.IsError {
+		t.Error("Expected tool error for invalid button")
+	}
+}
+
+// TestHandleClickAt_MissingX tests click_at with missing x parameter
+func TestHandleClickAt_MissingX(t *testing.T) {
+	req := mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: map[string]interface{}{
+		"y": float64(200),
+	}}}
+	result, err := handleClickAt(nil, req)
+	if err != nil {
+		t.Fatalf("Handler returned unexpected Go error: %v", err)
+	}
+	if !result.IsError {
+		t.Error("Expected tool error for missing x parameter")
+	}
+}
+
+// TestHandleClickAt_MissingY tests click_at with missing y parameter
+func TestHandleClickAt_MissingY(t *testing.T) {
+	req := mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: map[string]interface{}{
+		"x": float64(100),
+	}}}
+	result, err := handleClickAt(nil, req)
+	if err != nil {
+		t.Fatalf("Handler returned unexpected Go error: %v", err)
+	}
+	if !result.IsError {
+		t.Error("Expected tool error for missing y parameter")
+	}
+}
+
+// TestHandleClickAt_FractionalCoords tests click_at rejects fractional coordinates
+func TestHandleClickAt_FractionalCoords(t *testing.T) {
+	req := mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: map[string]interface{}{
+		"x": 100.7, "y": float64(200),
+	}}}
+	result, err := handleClickAt(nil, req)
+	if err != nil {
+		t.Fatalf("Handler returned unexpected Go error: %v", err)
+	}
+	if !result.IsError {
+		t.Error("Expected tool error for fractional x coordinate")
+	}
+}
+
+// TestHandleClickAt_NegativeCoords tests click_at rejects out-of-bounds coordinates
+func TestHandleClickAt_NegativeCoords(t *testing.T) {
+	req := mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: map[string]interface{}{
+		"x": float64(-1), "y": float64(200),
+	}}}
+	result, err := handleClickAt(nil, req)
+	if err != nil {
+		t.Fatalf("Handler returned unexpected Go error: %v", err)
+	}
+	if !result.IsError {
+		t.Error("Expected tool error for negative x coordinate")
 	}
 }

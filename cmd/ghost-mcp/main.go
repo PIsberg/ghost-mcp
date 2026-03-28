@@ -156,12 +156,61 @@ func handleClick(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToo
 		visual.PulseCursor(x, y)
 	}
 
-	robotgo.Click(button, true)
+	robotgo.Click(button, false)
 	logging.Info("ACTION COMPLETE: %s click executed", button)
 
 	if err := checkFailsafe(); err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
+
+	return mcp.NewToolResultText(fmt.Sprintf(`{"success": true, "button": "%s", "x": %d, "y": %d}`, button, x, y)), nil
+}
+
+func handleClickAt(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	logging.Debug("Handling click_at request")
+
+	x, err := getIntParam(request, "x")
+	if err != nil {
+		logging.Error("Invalid x parameter: %v", err)
+		return mcp.NewToolResultError(fmt.Sprintf("invalid x parameter: %v", err)), nil
+	}
+	y, err := getIntParam(request, "y")
+	if err != nil {
+		logging.Error("Invalid y parameter: %v", err)
+		return mcp.NewToolResultError(fmt.Sprintf("invalid y parameter: %v", err)), nil
+	}
+
+	button, err := getStringParam(request, "button")
+	if err != nil {
+		button = "left"
+	}
+
+	validButtons := map[string]bool{"left": true, "right": true, "middle": true}
+	if !validButtons[button] {
+		err := fmt.Errorf("invalid button '%s', must be 'left', 'right', or 'middle'", button)
+		logging.Error("%v", err)
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	screenW, screenH := robotgo.GetScreenSize()
+	if err := validate.Coords(x, y, screenW, screenH); err != nil {
+		logging.Error("Coordinate validation failed: %v", err)
+		return mcp.NewToolResultError(fmt.Sprintf("invalid coordinates: %v", err)), nil
+	}
+
+	logging.Info("ACTION: Moving mouse to (%d, %d) for %s click", x, y, button)
+	robotgo.Move(x, y)
+
+	if os.Getenv("GHOST_MCP_VISUAL") == "1" {
+		visual.PulseCursor(x, y)
+	}
+
+	if err := checkFailsafe(); err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	robotgo.Click(button, false)
+	logging.Info("ACTION COMPLETE: %s click at (%d, %d)", button, x, y)
 
 	return mcp.NewToolResultText(fmt.Sprintf(`{"success": true, "button": "%s", "x": %d, "y": %d}`, button, x, y)), nil
 }
@@ -392,6 +441,17 @@ BEFORE CLICKING: Call take_screenshot to confirm the cursor is over the correct 
 Use right-click to open context menus. Use double-click by calling click twice rapidly. After clicking, take a screenshot to confirm the expected UI change occurred (e.g. a window opened, a button activated, a field was selected).`),
 		mcp.WithString("button", mcp.Description("Mouse button to click: 'left' for normal clicks and selecting items, 'right' for context menus, 'middle' for middle-click."), mcp.Required()),
 	), handleClick)
+
+	mcpServer.AddTool(mcp.NewTool("click_at",
+		mcp.WithDescription(`Move the mouse to (x, y) and click in one atomic operation. Preferred over separate move_mouse + click calls.
+
+Use read_screen_text to get bounding boxes, compute the center (x + width/2, y + height/2), then call click_at with that center.
+
+After clicking, take a screenshot to confirm the expected UI change occurred.`),
+		mcp.WithNumber("x", mcp.Description("X coordinate in pixels from the left edge of the screen."), mcp.Required()),
+		mcp.WithNumber("y", mcp.Description("Y coordinate in pixels from the top edge of the screen."), mcp.Required()),
+		mcp.WithString("button", mcp.Description("Mouse button: 'left' (default), 'right', or 'middle'.")),
+	), handleClickAt)
 
 	mcpServer.AddTool(mcp.NewTool("type_text",
 		mcp.WithDescription(`Type text as keyboard input into the currently focused element. Click the target input field first to ensure it has focus before typing.
