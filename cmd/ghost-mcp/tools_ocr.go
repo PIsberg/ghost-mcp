@@ -29,13 +29,21 @@ TIPS:
 	), handleReadScreenText)
 
 	mcpServer.AddTool(mcp.NewTool("find_and_click",
-		mcp.WithDescription(`Scan the full screen with OCR, find the first (or nth) word matching the given text, and click its center. Combines read_screen_text + click_at into one call.
+		mcp.WithDescription(`PREFERRED WAY TO CLICK UI ELEMENTS. Scans the screen with OCR, finds the word matching the given text, and clicks its center — all in one call.
 
-Use this when you know the text label of the element you want to click (button, menu item, link). The match is case-insensitive substring — "Save" matches "Save File", "SAVE", etc.
+Prefer this over the read_screen_text + click_at two-step pattern whenever you know the label of what you want to click (button, link, menu item, checkbox label, etc.).
 
-If the element is not found, take a screenshot to check whether it is visible and try again with a more specific text.`),
+Match is case-insensitive substring: "save" matches "Save", "SAVE ALL", "Auto-save", etc.
+
+SPEED TIP: Supply x/y/width/height to scan only the relevant area of the screen (e.g. a toolbar, dialog, or panel). Scanning a small region is significantly faster than scanning the full screen.
+
+If the element is not found: call take_screenshot to verify it is visible, then retry with a more specific or shorter text fragment.`),
 		mcp.WithString("text", mcp.Description("Text to search for (case-insensitive substring match)."), mcp.Required()),
 		mcp.WithString("button", mcp.Description("Mouse button: 'left' (default), 'right', or 'middle'.")),
 		mcp.WithNumber("nth", mcp.Description("Which occurrence to click if the text appears multiple times (default: 1 = first match).")),
+		mcp.WithNumber("x", mcp.Description("X coordinate of the top-left corner of the region to scan (default: 0 = full screen).")),
+		mcp.WithNumber("y", mcp.Description("Y coordinate of the top-left corner of the region to scan (default: 0 = full screen).")),
+		mcp.WithNumber("width", mcp.Description("Width of the region to scan in pixels (default: full screen width). Smaller regions scan faster.")),
+		mcp.WithNumber("height", mcp.Description("Height of the region to scan in pixels (default: full screen height). Smaller regions scan faster.")),
 	), handleFindAndClick)
 }

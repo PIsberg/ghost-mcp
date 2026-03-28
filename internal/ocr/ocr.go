@@ -34,9 +34,10 @@ type Result struct {
 const MinConfidence = 30.0
 
 // ScaleFactor is how much we upscale the image before OCR.
-// Screen captures are ~96 DPI; Tesseract works best at 300 DPI.
-// 3x brings 96 DPI close enough to 300 DPI for reliable results.
-const ScaleFactor = 3
+// Screen captures are ~96 DPI; Tesseract works best at ~200–300 DPI.
+// 2x is a good balance: font pixels become large enough for reliable
+// recognition while keeping the image size manageable (4x pixels vs 9x for 3x).
+const ScaleFactor = 2
 
 // ReadFile runs OCR on the image at the given file path and returns structured output.
 func ReadFile(imagePath string) (*Result, error) {

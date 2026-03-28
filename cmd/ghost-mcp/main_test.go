@@ -1061,3 +1061,31 @@ func TestHandleFindAndClick_InvalidNth(t *testing.T) {
 		t.Error("Expected tool error for nth = 0")
 	}
 }
+
+// TestHandleFindAndClick_InvalidRegion tests find_and_click with an out-of-bounds region.
+func TestHandleFindAndClick_InvalidRegion(t *testing.T) {
+	req := mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: map[string]interface{}{
+		"text": "hello", "x": float64(-1), "y": float64(0), "width": float64(100), "height": float64(100),
+	}}}
+	result, err := handleFindAndClick(nil, req)
+	if err != nil {
+		t.Fatalf("Handler returned unexpected Go error: %v", err)
+	}
+	if !result.IsError {
+		t.Error("Expected tool error for negative x in region")
+	}
+}
+
+// TestHandleFindAndClick_ZeroSizeRegion tests find_and_click with zero width/height.
+func TestHandleFindAndClick_ZeroSizeRegion(t *testing.T) {
+	req := mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: map[string]interface{}{
+		"text": "hello", "x": float64(0), "y": float64(0), "width": float64(0), "height": float64(100),
+	}}}
+	result, err := handleFindAndClick(nil, req)
+	if err != nil {
+		t.Fatalf("Handler returned unexpected Go error: %v", err)
+	}
+	if !result.IsError {
+		t.Error("Expected tool error for zero width region")
+	}
+}

@@ -120,8 +120,33 @@ func handleFindAndClick(ctx context.Context, request mcp.CallToolRequest) (*mcp.
 
 	screenW, screenH := robotgo.GetScreenSize()
 
-	// Capture full screen for OCR
-	img, captureErr := robotgo.CaptureImg(0, 0, screenW, screenH)
+	// Optional region — defaults to full screen.
+	regionX := 0
+	regionY := 0
+	regionW := screenW
+	regionH := screenH
+	if v, err := getIntParam(request, "x"); err == nil {
+		regionX = v
+	}
+	if v, err := getIntParam(request, "y"); err == nil {
+		regionY = v
+	}
+	if v, err := getIntParam(request, "width"); err == nil {
+		regionW = v
+	}
+	if v, err := getIntParam(request, "height"); err == nil {
+		regionH = v
+	}
+
+	if err := validate.ScreenRegion(regionX, regionY, regionW, regionH, screenW, screenH); err != nil {
+		logging.Error("Screen region validation failed: %v", err)
+		return mcp.NewToolResultError(fmt.Sprintf("invalid screen region: %v", err)), nil
+	}
+
+	logging.Info("find_and_click: OCR region (%d,%d) %dx%d for text %q", regionX, regionY, regionW, regionH, searchText)
+
+	// Capture region for OCR.
+	img, captureErr := robotgo.CaptureImg(regionX, regionY, regionW, regionH)
 	if captureErr != nil {
 		logging.Error("Failed to capture screen: %v", captureErr)
 		return mcp.NewToolResultError(fmt.Sprintf("failed to capture screen: %v", captureErr)), nil
@@ -156,8 +181,9 @@ func handleFindAndClick(ctx context.Context, request mcp.CallToolRequest) (*mcp.
 		if strings.Contains(strings.ToLower(w.Text), needle) {
 			matchCount++
 			if matchCount == nth {
-				cx := w.X + w.Width/2
-				cy := w.Y + w.Height/2
+				// OCR coords are relative to the captured region; translate to screen coords.
+				cx := regionX + w.X + w.Width/2
+				cy := regionY + w.Y + w.Height/2
 
 				if err := validate.Coords(cx, cy, screenW, screenH); err != nil {
 					return mcp.NewToolResultError(fmt.Sprintf("found text but center out of bounds: %v", err)), nil
