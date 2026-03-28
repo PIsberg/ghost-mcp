@@ -299,6 +299,24 @@ func (c *Client) PressKey(ctx context.Context, key string) error {
 	return err
 }
 
+// ReadScreenText runs OCR on a screen region and returns extracted text and word positions.
+func (c *Client) ReadScreenText(ctx context.Context, args map[string]interface{}) (text string, words []map[string]interface{}, err error) {
+	result, err := c.CallToolString(ctx, "read_screen_text", args)
+	if err != nil {
+		return "", nil, err
+	}
+
+	var data struct {
+		Text  string                   `json:"text"`
+		Words []map[string]interface{} `json:"words"`
+	}
+	if err := json.Unmarshal([]byte(result), &data); err != nil {
+		return "", nil, fmt.Errorf("failed to parse read_screen_text result: %w", err)
+	}
+
+	return data.Text, data.Words, nil
+}
+
 // TakeScreenshot captures the screen and returns the base64 PNG data
 func (c *Client) TakeScreenshot(ctx context.Context) (filepath, base64Data string, width, height int, err error) {
 	result, err := c.CallToolString(ctx, "take_screenshot", nil)

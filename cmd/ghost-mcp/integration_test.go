@@ -542,6 +542,7 @@ func TestIntegration_ToolDiscovery(t *testing.T) {
 		"type_text",
 		"press_key",
 		"take_screenshot",
+		"read_screen_text",
 	}
 
 	for _, tool := range expectedTools {
@@ -557,6 +558,202 @@ func TestIntegration_ToolDiscovery(t *testing.T) {
 			t.Logf("Tool %s exists (isError: %v)", tool, result.IsError)
 		})
 	}
+}
+
+// TestIntegration_ReadScreenTextResultFormat verifies read_screen_text response shape.
+func TestIntegration_ReadScreenTextResultFormat(t *testing.T) {
+	if os.Getenv("INTEGRATION") != "1" {
+		t.Skip("Integration tests not enabled")
+	}
+
+	skipIfNoGCC(t)
+	skipIfNoDisplay(t)
+
+	client, err := mcpclient.NewClient(mcpclient.Config{
+		Timeout: testTimeout,
+	})
+	if err != nil {
+		t.Fatalf("Failed to create MCP client: %v", err)
+	}
+	defer client.Close()
+
+	ctx := context.Background()
+
+	result, err := client.CallToolString(ctx, "read_screen_text", nil)
+	if err != nil {
+		t.Fatalf("read_screen_text failed: %v", err)
+	}
+
+	var data struct {
+		Success bool   `json:"success"`
+		Text    string `json:"text"`
+		Words   []struct {
+			Text       string  `json:"text"`
+			X          int     `json:"x"`
+			Y          int     `json:"y"`
+			Width      int     `json:"width"`
+			Height     int     `json:"height"`
+			Confidence float64 `json:"confidence"`
+		} `json:"words"`
+		Region struct {
+			X      int `json:"x"`
+			Y      int `json:"y"`
+			Width  int `json:"width"`
+			Height int `json:"height"`
+		} `json:"region"`
+	}
+	if err := json.Unmarshal([]byte(result), &data); err != nil {
+		t.Fatalf("Result is not valid JSON: %v\nraw: %s", err, result)
+	}
+
+	if !data.Success {
+		t.Error("read_screen_text did not report success")
+	}
+	if data.Region.Width <= 0 || data.Region.Height <= 0 {
+		t.Errorf("Region dimensions invalid: %dx%d", data.Region.Width, data.Region.Height)
+	}
+	// words slice must be present (may be empty if Tesseract not installed)
+	if data.Words == nil {
+		t.Error("words field must not be null")
+	}
+
+	t.Logf("✓ read_screen_text: %d words extracted, region %dx%d",
+		len(data.Words), data.Region.Width, data.Region.Height)
+}
+
+// TestIntegration_ReadScreenTextRegion verifies the x/y/width/height parameters.
+func TestIntegration_ReadScreenTextRegion(t *testing.T) {
+	if os.Getenv("INTEGRATION") != "1" {
+		t.Skip("Integration tests not enabled")
+	}
+
+	skipIfNoGCC(t)
+	skipIfNoDisplay(t)
+
+	client, err := mcpclient.NewClient(mcpclient.Config{
+		Timeout: testTimeout,
+	})
+	if err != nil {
+		t.Fatalf("Failed to create MCP client: %v", err)
+	}
+	defer client.Close()
+
+	ctx := context.Background()
+
+	result, err := client.CallToolString(ctx, "read_screen_text", map[string]interface{}{
+		"x":      0,
+		"y":      0,
+		"width":  400,
+		"height": 200,
+	})
+	if err != nil {
+		t.Fatalf("read_screen_text (region) failed: %v", err)
+	}
+
+	var data struct {
+		Success bool `json:"success"`
+		Region  struct {
+			Width  int `json:"width"`
+			Height int `json:"height"`
+		} `json:"region"`
+	}
+	if err := json.Unmarshal([]byte(result), &data); err != nil {
+		t.Fatalf("Result is not valid JSON: %v", err)
+	}
+
+	if !data.Success {
+		t.Error("read_screen_text did not report success for region call")
+	}
+	if data.Region.Width != 400 || data.Region.Height != 200 {
+		t.Errorf("Expected region 400x200, got %dx%d", data.Region.Width, data.Region.Height)
+	}
+
+	t.Logf("✓ Region read_screen_text returned correct dimensions")
+}
+
+// TestIntegration_ReadScreenTextFixture reads the test fixture page and looks for known text.
+func TestIntegration_ReadScreenTextFixture(t *testing.T) {
+	if os.Getenv("INTEGRATION") != "1" {
+		t.Skip("Integration tests not enabled")
+	}
+
+	skipIfNoGCC(t)
+	skipIfNoDisplay(t)
+
+	_, cleanup := startFixtureServer(t)
+	defer cleanup()
+	waitForFixture(t)
+
+	client, err := mcpclient.NewClient(mcpclient.Config{
+		Timeout: testTimeout,
+	})
+	if err != nil {
+		t.Fatalf("Failed to create MCP client: %v", err)
+	}
+	defer client.Close()
+
+	ctx := context.Background()
+
+	// Give the browser time to render the fixture page.
+	time.Sleep(settleTime)
+
+	text, words, err := client.ReadScreenText(ctx, nil)
+	if err != nil {
+		t.Fatalf("ReadScreenText failed: %v", err)
+	}
+
+	t.Logf("Extracted %d words from fixture page", len(words))
+	t.Logf("First 200 chars of text: %.200s", text)
+
+	// If Tesseract found anything, each word must have valid coordinates.
+	for i, w := range words {
+		txt, _ := w["text"].(string)
+		x, _ := w["x"].(float64)
+		y, _ := w["y"].(float64)
+		width, _ := w["width"].(float64)
+		height, _ := w["height"].(float64)
+		if width <= 0 || height <= 0 {
+			t.Errorf("Word %d (%q) has invalid size: %.0fx%.0f", i, txt, width, height)
+		}
+		if x < 0 || y < 0 {
+			t.Errorf("Word %d (%q) has negative coords: (%.0f, %.0f)", i, txt, x, y)
+		}
+	}
+}
+
+// TestIntegration_ReadScreenTextInvalidRegion verifies error on out-of-bounds region.
+func TestIntegration_ReadScreenTextInvalidRegion(t *testing.T) {
+	if os.Getenv("INTEGRATION") != "1" {
+		t.Skip("Integration tests not enabled")
+	}
+
+	skipIfNoGCC(t)
+	skipIfNoDisplay(t)
+
+	client, err := mcpclient.NewClient(mcpclient.Config{
+		Timeout: testTimeout,
+	})
+	if err != nil {
+		t.Fatalf("Failed to create MCP client: %v", err)
+	}
+	defer client.Close()
+
+	ctx := context.Background()
+
+	result, err := client.CallTool(ctx, "read_screen_text", map[string]interface{}{
+		"x":      -100,
+		"y":      0,
+		"width":  400,
+		"height": 300,
+	})
+	if err != nil {
+		t.Fatalf("CallTool failed: %v", err)
+	}
+	if !result.IsError {
+		t.Error("Expected error result for negative x coordinate")
+	}
+
+	t.Log("✓ Invalid region correctly rejected")
 }
 
 // Helper function to parse tool result JSON
@@ -1026,6 +1223,14 @@ func TestIntegration_CompleteToolSuite(t *testing.T) {
 	t.Run("take_screenshot", func(t *testing.T) {
 		_, _, _, _, err := client.TakeScreenshot(ctx)
 		results["take_screenshot"] = err == nil
+		if err != nil {
+			t.Errorf("Failed: %v", err)
+		}
+	})
+
+	t.Run("read_screen_text", func(t *testing.T) {
+		_, _, err := client.ReadScreenText(ctx, nil)
+		results["read_screen_text"] = err == nil
 		if err != nil {
 			t.Errorf("Failed: %v", err)
 		}

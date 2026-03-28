@@ -80,6 +80,8 @@ go run test_fixture/fixture_server.go
 
 Ghost MCP provides the following tools for UI automation:
 
+> **OCR dependency**: `read_screen_text` requires [Tesseract OCR](https://github.com/tesseract-ocr/tesseract) to be installed on the system. The other six tools work without Tesseract.
+
 ### 1. **Get Screen Size**
 
 Returns the dimensions of the display.
@@ -240,7 +242,69 @@ Captures the current screen and saves it to a file.
 
 ---
 
-### 6. **Key Press**
+### 6. **Read Screen Text** (OCR)
+
+Captures a screen region, runs OCR, and returns the text content with word-level bounding boxes. Use the returned `x`/`y` coordinates to click specific words without needing image recognition.
+
+**Request:**
+```json
+{
+  "tool": "read_screen_text",
+  "arguments": {
+    "x": 0,
+    "y": 0,
+    "width": 800,
+    "height": 600
+  }
+}
+```
+
+**Parameters** (all optional — default is full screen):
+- `x`: X coordinate of region (default: 0)
+- `y`: Y coordinate of region (default: 0)
+- `width`: Width of region (default: full screen width)
+- `height`: Height of region (default: full screen height)
+
+**Response:**
+```json
+{
+  "success": true,
+  "text": "File Edit View Help\nGhost MCP Automation\nClick Submit to Continue",
+  "words": [
+    {"text": "File",   "x": 10,  "y": 20,  "width": 30, "height": 15, "confidence": 98.5},
+    {"text": "Submit", "x": 450, "y": 320, "width": 60, "height": 20, "confidence": 97.1}
+  ],
+  "region": {"x": 0, "y": 0, "width": 800, "height": 600}
+}
+```
+
+**Use Case:** Let the AI read what is on screen and locate UI elements by their label text.
+
+**OCR-driven click example:**
+```json
+[
+  {"tool": "read_screen_text", "arguments": {}},
+  // AI finds "Submit" word at x:450, y:320 from the response
+  {"tool": "move_mouse", "arguments": {"x": 450, "y": 320}},
+  {"tool": "click", "arguments": {"button": "left"}}
+]
+```
+
+**Requirements:** Tesseract OCR must be installed:
+```bash
+# Windows (Chocolatey)
+choco install tesseract
+
+# macOS
+brew install tesseract
+
+# Ubuntu/Debian
+sudo apt install tesseract-ocr
+```
+
+---
+
+### 7. **Press Key**
 
 Presses a single key or key combination.
 
@@ -740,7 +804,7 @@ Captures the screen to a file.
 
 ---
 
-### Tool: key_press
+### Tool: press_key
 
 Presses a key or key combination.
 
@@ -750,9 +814,43 @@ Presses a key or key combination.
 **Returns:**
 ```json
 {
-  "message": "Pressed key: enter"
+  "success": true,
+  "key": "enter"
 }
 ```
+
+---
+
+### Tool: read_screen_text
+
+Reads text from a screen region using OCR. Requires Tesseract OCR to be installed.
+
+**Arguments** (all optional):
+- `x` (number): X coordinate of region (default: 0)
+- `y` (number): Y coordinate of region (default: 0)
+- `width` (number): Width of region (default: full screen width)
+- `height` (number): Height of region (default: full screen height)
+
+**Returns:**
+```json
+{
+  "success": true,
+  "text": "Full extracted text including newlines",
+  "words": [
+    {
+      "text": "Submit",
+      "x": 450,
+      "y": 320,
+      "width": 60,
+      "height": 20,
+      "confidence": 97.1
+    }
+  ],
+  "region": {"x": 0, "y": 0, "width": 1920, "height": 1080}
+}
+```
+
+The `words` array gives pixel coordinates for each recognised word so the AI can move the mouse to a specific word and click it.
 
 ---
 

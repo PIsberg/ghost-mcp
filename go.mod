@@ -7,6 +7,7 @@ toolchain go1.24.5
 require (
 	github.com/go-vgo/robotgo v1.0.1
 	github.com/mark3labs/mcp-go v0.46.0
+	github.com/otiai10/gosseract/v2 v2.4.1
 )
 
 require (
@@ -19,7 +20,6 @@ require (
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/jezek/xgb v1.2.0 // indirect
 	github.com/lufia/plan9stats v0.0.0-20251013123823-9fd1530e3ec3 // indirect
-	github.com/otiai10/gosseract/v2 v2.4.1 // indirect
 	github.com/power-devops/perfstat v0.0.0-20240221224432-82ca36839d55 // indirect
 	github.com/robotn/xgb v0.10.0 // indirect
 	github.com/robotn/xgbutil v0.10.0 // indirect
