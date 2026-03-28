@@ -21,9 +21,9 @@ import (
 
 	"github.com/ghost-mcp/internal/audit"
 	"github.com/ghost-mcp/internal/logging"
-	"github.com/ghost-mcp/internal/ocr"
 	"github.com/ghost-mcp/internal/transport"
 	"github.com/ghost-mcp/internal/validate"
+	"github.com/ghost-mcp/internal/visual"
 	"github.com/go-vgo/robotgo"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
@@ -113,7 +113,10 @@ func handleMoveMouse(ctx context.Context, request mcp.CallToolRequest) (*mcp.Cal
 		return mcp.NewToolResultError(fmt.Sprintf("invalid coordinates: %v", err)), nil
 	}
 
-	logging.Info("Moving mouse to (%d, %d)", x, y)
+	// Log current position
+	currentX, currentY := robotgo.GetMousePos()
+	logging.Info("ACTION: Moving mouse from (%d, %d) to (%d, %d)", currentX, currentY, x, y)
+
 	robotgo.MoveSmooth(x, y)
 
 	if err := checkFailsafe(); err != nil {
@@ -121,7 +124,7 @@ func handleMoveMouse(ctx context.Context, request mcp.CallToolRequest) (*mcp.Cal
 	}
 
 	finalX, finalY := robotgo.GetMousePos()
-	logging.Debug("Mouse moved to (%d, %d)", finalX, finalY)
+	logging.Info("ACTION COMPLETE: Mouse now at (%d, %d)", finalX, finalY)
 	return mcp.NewToolResultText(fmt.Sprintf(`{"success": true, "x": %d, "y": %d}`, finalX, finalY)), nil
 }
 
@@ -141,10 +144,16 @@ func handleClick(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToo
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	logging.Info("Performing %s click", button)
 	x, y := robotgo.GetMousePos()
-	logging.Debug("Clicking at (%d, %d)", x, y)
+	logging.Info("ACTION: Performing %s click at (%d, %d)", button, x, y)
+
+	// Show visual feedback if enabled
+	if os.Getenv("GHOST_MCP_VISUAL") == "1" {
+		visual.PulseCursor(x, y)
+	}
+
 	robotgo.Click(button, true)
+	logging.Info("ACTION COMPLETE: %s click executed", button)
 
 	if err := checkFailsafe(); err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
@@ -167,8 +176,14 @@ func handleTypeText(ctx context.Context, request mcp.CallToolRequest) (*mcp.Call
 		return mcp.NewToolResultError(fmt.Sprintf("invalid text: %v", err)), nil
 	}
 
-	logging.Info("Typing text (%d characters)", len(text))
+	// Truncate long text for logging
+	displayText := text
+	if len(text) > 50 {
+		displayText = text[:47] + "..."
+	}
+	logging.Info("ACTION: Typing text: %q", displayText)
 	robotgo.TypeStr(text)
+	logging.Info("ACTION COMPLETE: Typed %d characters", len(text))
 	return mcp.NewToolResultText(fmt.Sprintf(`{"success": true, "characters_typed": %d}`, len(text))), nil
 }
 
@@ -186,8 +201,9 @@ func handlePressKey(ctx context.Context, request mcp.CallToolRequest) (*mcp.Call
 		return mcp.NewToolResultError(fmt.Sprintf("invalid key: %v", err)), nil
 	}
 
-	logging.Info("Pressing key: %s", key)
+	logging.Info("ACTION: Pressing key: %s", key)
 	robotgo.KeyTap(key)
+	logging.Info("ACTION COMPLETE: Key %s pressed", key)
 	return mcp.NewToolResultText(fmt.Sprintf(`{"success": true, "key": "%s"}`, key)), nil
 }
 
@@ -219,8 +235,20 @@ func handleTakeScreenshot(ctx context.Context, request mcp.CallToolRequest) (*mc
 		return mcp.NewToolResultError(fmt.Sprintf("failed to capture screen: %v", captureErr)), nil
 	}
 
+	// Determine screenshot directory
+	screenshotDir := os.Getenv("GHOST_MCP_SCREENSHOT_DIR")
+	if screenshotDir == "" {
+		screenshotDir = os.TempDir()
+	}
+
+	// Ensure directory exists
+	if err := os.MkdirAll(screenshotDir, 0755); err != nil {
+		logging.Error("Failed to create screenshot directory: %v", err)
+		return mcp.NewToolResultError(fmt.Sprintf("failed to create screenshot directory: %v", err)), nil
+	}
+
 	filename := fmt.Sprintf("ghost-mcp-screenshot-%d.png", time.Now().UnixNano())
-	fpath := filepath.Join(os.TempDir(), filename)
+	fpath := filepath.Join(screenshotDir, filename)
 
 	if saveErr := robotgo.SavePng(img, fpath); saveErr != nil {
 		logging.Error("Failed to save screenshot: %v", saveErr)
@@ -240,70 +268,6 @@ func handleTakeScreenshot(ctx context.Context, request mcp.CallToolRequest) (*mc
 	return mcp.NewToolResultText(fmt.Sprintf(
 		`{"success": true, "filepath": "%s", "base64": "%s", "width": %d, "height": %d}`,
 		fpath, base64.StdEncoding.EncodeToString(data), width, height,
-	)), nil
-}
-
-func handleReadScreenText(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	logging.Debug("Handling read_screen_text request")
-
-	screenW, screenH := robotgo.GetScreenSize()
-	x, _ := getIntParam(request, "x")
-	y, _ := getIntParam(request, "y")
-	width := screenW
-	height := screenH
-	if w, err := getIntParam(request, "width"); err == nil {
-		width = w
-	}
-	if h, err := getIntParam(request, "height"); err == nil {
-		height = h
-	}
-
-	if err := validate.ScreenRegion(x, y, width, height, screenW, screenH); err != nil {
-		logging.Error("Screen region validation failed: %v", err)
-		return mcp.NewToolResultError(fmt.Sprintf("invalid screen region: %v", err)), nil
-	}
-
-	logging.Info("Capturing screen for OCR at (%d, %d) size %dx%d", x, y, width, height)
-
-	img, captureErr := robotgo.CaptureImg(x, y, width, height)
-	if captureErr != nil {
-		logging.Error("Failed to capture screen: %v", captureErr)
-		return mcp.NewToolResultError(fmt.Sprintf("failed to capture screen: %v", captureErr)), nil
-	}
-
-	filename := fmt.Sprintf("ghost-mcp-ocr-%d.png", time.Now().UnixNano())
-	fpath := filepath.Join(os.TempDir(), filename)
-
-	if saveErr := robotgo.SavePng(img, fpath); saveErr != nil {
-		logging.Error("Failed to save screenshot for OCR: %v", saveErr)
-		return mcp.NewToolResultError(fmt.Sprintf("failed to save screenshot: %v", saveErr)), nil
-	}
-	defer os.Remove(fpath)
-
-	result, ocrErr := ocr.ReadFile(fpath)
-	if ocrErr != nil {
-		logging.Error("OCR failed: %v", ocrErr)
-		return mcp.NewToolResultError(fmt.Sprintf("OCR failed: %v", ocrErr)), nil
-	}
-
-	logging.Info("OCR extracted %d words", len(result.Words))
-
-	// Build JSON response manually to avoid encoding/json import churn.
-	wordsJSON := "["
-	for i, w := range result.Words {
-		if i > 0 {
-			wordsJSON += ","
-		}
-		wordsJSON += fmt.Sprintf(
-			`{"text":%q,"x":%d,"y":%d,"width":%d,"height":%d,"confidence":%.1f}`,
-			w.Text, w.X, w.Y, w.Width, w.Height, w.Confidence,
-		)
-	}
-	wordsJSON += "]"
-
-	return mcp.NewToolResultText(fmt.Sprintf(
-		`{"success":true,"text":%q,"words":%s,"region":{"x":%d,"y":%d,"width":%d,"height":%d}}`,
-		result.Text, wordsJSON, x, y, width, height,
 	)), nil
 }
 
@@ -391,45 +355,39 @@ func registerTools(mcpServer *server.MCPServer) {
 	logging.Info("Registering tools...")
 
 	mcpServer.AddTool(mcp.NewTool("get_screen_size",
-		mcp.WithDescription("Returns the width and height of the primary monitor"),
+		mcp.WithDescription("Get the screen resolution. Returns {width, height}. Call this first to know valid coordinate ranges."),
 	), handleGetScreenSize)
 
 	mcpServer.AddTool(mcp.NewTool("move_mouse",
-		mcp.WithDescription("Moves the mouse cursor to the specified coordinates"),
-		mcp.WithNumber("x", mcp.Description("Target X coordinate"), mcp.Required()),
-		mcp.WithNumber("y", mcp.Description("Target Y coordinate"), mcp.Required()),
+		mcp.WithDescription("Move the mouse cursor to absolute screen coordinates. Origin (0,0) is top-left. Use get_screen_size first to know valid ranges."),
+		mcp.WithNumber("x", mcp.Description("X coordinate (pixels from left edge). Required."), mcp.Required()),
+		mcp.WithNumber("y", mcp.Description("Y coordinate (pixels from top edge). Required."), mcp.Required()),
 	), handleMoveMouse)
 
 	mcpServer.AddTool(mcp.NewTool("click",
-		mcp.WithDescription("Performs a mouse click at the current cursor position"),
-		mcp.WithString("button", mcp.Description("Mouse button: 'left', 'right', or 'middle'"), mcp.Required()),
+		mcp.WithDescription("Click the mouse at the current cursor position. Call move_mouse first to position the cursor."),
+		mcp.WithString("button", mcp.Description("Mouse button: 'left' (default), 'right', or 'middle'."), mcp.Required()),
 	), handleClick)
 
 	mcpServer.AddTool(mcp.NewTool("type_text",
-		mcp.WithDescription("Types out text via the keyboard"),
-		mcp.WithString("text", mcp.Description("The text to type"), mcp.Required()),
+		mcp.WithDescription("Type text via keyboard input. Use for entering text into focused input fields."),
+		mcp.WithString("text", mcp.Description("The exact text to type. Special characters are supported."), mcp.Required()),
 	), handleTypeText)
 
 	mcpServer.AddTool(mcp.NewTool("press_key",
-		mcp.WithDescription("Presses a single key on the keyboard"),
-		mcp.WithString("key", mcp.Description("Key to press (e.g., 'enter', 'tab', 'esc', 'ctrl')"), mcp.Required()),
+		mcp.WithDescription("Press a single keyboard key. Use for special keys like Enter, Tab, Escape, or keyboard shortcuts."),
+		mcp.WithString("key", mcp.Description("Key name: 'enter', 'tab', 'esc', 'space', 'ctrl', 'alt', 'shift', 'backspace', 'delete', arrow keys ('up','down','left','right'), or any letter."), mcp.Required()),
 	), handlePressKey)
 
 	mcpServer.AddTool(mcp.NewTool("take_screenshot",
-		mcp.WithDescription("Captures the screen and returns a base64-encoded PNG"),
-		mcp.WithNumber("x", mcp.Description("X coordinate of screenshot region (default: 0)")),
-		mcp.WithNumber("y", mcp.Description("Y coordinate of screenshot region (default: 0)")),
-		mcp.WithNumber("width", mcp.Description("Width of screenshot region (default: full screen)")),
-		mcp.WithNumber("height", mcp.Description("Height of screenshot region (default: full screen)")),
+		mcp.WithDescription("Capture a screenshot and return it as base64 PNG. Use optional region parameters to capture only part of the screen."),
+		mcp.WithNumber("x", mcp.Description("X coordinate of region (default: 0).")),
+		mcp.WithNumber("y", mcp.Description("Y coordinate of region (default: 0).")),
+		mcp.WithNumber("width", mcp.Description("Width of region in pixels (default: full screen width).")),
+		mcp.WithNumber("height", mcp.Description("Height of region in pixels (default: full screen height).")),
 	), handleTakeScreenshot)
 
-	mcpServer.AddTool(mcp.NewTool("read_screen_text",
-		mcp.WithDescription("Reads text from the screen using OCR and returns the text content with word positions for clicking"),
-		mcp.WithNumber("x", mcp.Description("X coordinate of region to read (default: 0)")),
-		mcp.WithNumber("y", mcp.Description("Y coordinate of region to read (default: 0)")),
-		mcp.WithNumber("width", mcp.Description("Width of region to read (default: full screen)")),
-		mcp.WithNumber("height", mcp.Description("Height of region to read (default: full screen)")),
-	), handleReadScreenText)
+	registerOCRTools(mcpServer)
 
 	logging.Info("All tools registered successfully")
 }

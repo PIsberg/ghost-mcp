@@ -1,3 +1,5 @@
+//go:build ocr
+
 // Package ocr wraps Tesseract OCR via gosseract to extract text from images.
 package ocr
 
