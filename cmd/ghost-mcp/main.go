@@ -162,13 +162,14 @@ func handleClick(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToo
 
 	robotgo.Click(button, false)
 	applyClickDelay(request)
-	logging.Info("ACTION COMPLETE: %s click executed", button)
 
 	if err := checkFailsafe(); err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	return mcp.NewToolResultText(fmt.Sprintf(`{"success": true, "button": "%s", "x": %d, "y": %d}`, button, x, y)), nil
+	finalX, finalY := robotgo.GetMousePos()
+	logging.Info("ACTION COMPLETE: %s click executed at (%d, %d)", button, finalX, finalY)
+	return mcp.NewToolResultText(fmt.Sprintf(`{"success": true, "button": "%s", "x": %d, "y": %d}`, button, finalX, finalY)), nil
 }
 
 func handleClickAt(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -216,9 +217,17 @@ func handleClickAt(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallT
 
 	robotgo.Click(button, false)
 	applyClickDelay(request)
-	logging.Info("ACTION COMPLETE: %s click at (%d, %d)", button, x, y)
 
-	return mcp.NewToolResultText(fmt.Sprintf(`{"success": true, "button": "%s", "x": %d, "y": %d}`, button, x, y)), nil
+	finalX, finalY := robotgo.GetMousePos()
+	if finalX != x || finalY != y {
+		logging.Info("WARNING: cursor moved after click: requested (%d,%d) actual (%d,%d)", x, y, finalX, finalY)
+	}
+	logging.Info("ACTION COMPLETE: %s click at (%d, %d)", button, finalX, finalY)
+
+	return mcp.NewToolResultText(fmt.Sprintf(
+		`{"success": true, "button": "%s", "requested_x": %d, "requested_y": %d, "actual_x": %d, "actual_y": %d}`,
+		button, x, y, finalX, finalY,
+	)), nil
 }
 
 func handleDoubleClick(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -254,9 +263,17 @@ func handleDoubleClick(ctx context.Context, request mcp.CallToolRequest) (*mcp.C
 
 	robotgo.Click("left", true)
 	applyClickDelay(request)
+
+	finalX, finalY := robotgo.GetMousePos()
+	if finalX != x || finalY != y {
+		logging.Info("WARNING: cursor moved after double-click: requested (%d,%d) actual (%d,%d)", x, y, finalX, finalY)
+	}
 	logging.Info("ACTION COMPLETE: Double-click at (%d, %d)", x, y)
 
-	return mcp.NewToolResultText(fmt.Sprintf(`{"success": true, "x": %d, "y": %d}`, x, y)), nil
+	return mcp.NewToolResultText(fmt.Sprintf(
+		`{"success": true, "requested_x": %d, "requested_y": %d, "actual_x": %d, "actual_y": %d}`,
+		x, y, finalX, finalY,
+	)), nil
 }
 
 func handleScroll(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {

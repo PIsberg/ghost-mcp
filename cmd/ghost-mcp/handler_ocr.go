@@ -199,11 +199,16 @@ func handleFindAndClick(ctx context.Context, request mcp.CallToolRequest) (*mcp.
 
 				robotgo.Click(button, false)
 				applyClickDelay(request)
-				logging.Info("ACTION COMPLETE: find_and_click %q at (%d, %d)", searchText, cx, cy)
+
+				finalX, finalY := robotgo.GetMousePos()
+				if finalX != cx || finalY != cy {
+					logging.Info("WARNING: cursor moved after click: requested (%d,%d) actual (%d,%d)", cx, cy, finalX, finalY)
+				}
+				logging.Info("ACTION COMPLETE: find_and_click %q at (%d, %d)", searchText, finalX, finalY)
 
 				return mcp.NewToolResultText(fmt.Sprintf(
-					`{"success":true,"found":%q,"x":%d,"y":%d,"button":%q,"occurrence":%d}`,
-					w.Text, cx, cy, button, nth,
+					`{"success":true,"found":%q,"requested_x":%d,"requested_y":%d,"actual_x":%d,"actual_y":%d,"button":%q,"occurrence":%d}`,
+					w.Text, cx, cy, finalX, finalY, button, nth,
 				)), nil
 			}
 		}
