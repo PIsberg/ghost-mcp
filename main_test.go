@@ -648,7 +648,10 @@ func TestValidateStartupToken_Present(t *testing.T) {
 // TestMakeTokenValidator_ValidToken tests that a matching token passes validation
 func TestMakeTokenValidator_ValidToken(t *testing.T) {
 	t.Setenv(TokenEnvVar, "valid-token")
-	validator := makeTokenValidator("valid-token")
+	t.Setenv(AuditEnvVar, t.TempDir())
+	al, _ := NewAuditLogger()
+	defer al.Close()
+	validator := makeTokenValidator("valid-token", al)
 	if err := validator(context.Background(), 1, nil); err != nil {
 		t.Errorf("Expected valid token to pass, got error: %v", err)
 	}
@@ -657,7 +660,10 @@ func TestMakeTokenValidator_ValidToken(t *testing.T) {
 // TestMakeTokenValidator_WrongToken tests that a mismatched token is rejected
 func TestMakeTokenValidator_WrongToken(t *testing.T) {
 	t.Setenv(TokenEnvVar, "wrong-token")
-	validator := makeTokenValidator("expected-token")
+	t.Setenv(AuditEnvVar, t.TempDir())
+	al, _ := NewAuditLogger()
+	defer al.Close()
+	validator := makeTokenValidator("expected-token", al)
 	if err := validator(context.Background(), 1, nil); err == nil {
 		t.Error("Expected error for mismatched token, got nil")
 	}
@@ -666,7 +672,10 @@ func TestMakeTokenValidator_WrongToken(t *testing.T) {
 // TestMakeTokenValidator_MissingToken tests that a cleared token is rejected
 func TestMakeTokenValidator_MissingToken(t *testing.T) {
 	t.Setenv(TokenEnvVar, "")
-	validator := makeTokenValidator("expected-token")
+	t.Setenv(AuditEnvVar, t.TempDir())
+	al, _ := NewAuditLogger()
+	defer al.Close()
+	validator := makeTokenValidator("expected-token", al)
 	if err := validator(context.Background(), 1, nil); err == nil {
 		t.Error("Expected error for missing token, got nil")
 	}
