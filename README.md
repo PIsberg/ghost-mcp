@@ -30,6 +30,7 @@ Ghost MCP allows AI assistants like Claude to control your computer's mouse, key
 | `move_mouse` | Move mouse cursor to absolute coordinates. Origin (0,0) is top-left. | `x`, `y` |
 | `click` | Click mouse at current cursor position. Use `move_mouse` first. | `button` (left/right/middle) |
 | `click_at` | Move mouse to coordinates and click in one operation. Preferred over separate move+click. | `x`, `y`, `button` (optional, default left) |
+| `scroll` | Move mouse to coordinates and scroll the wheel. | `x`, `y`, `direction` (up/down/left/right), `amount` (optional, default 3) |
 | `type_text` | Type text via keyboard. Use for input fields. | `text` |
 | `press_key` | Press a single key. Use for Enter, Tab, shortcuts, etc. | `key` |
 | `take_screenshot` | Capture screen as base64 PNG. Optional region parameters. | `x`, `y`, `width`, `height` |

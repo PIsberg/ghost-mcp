@@ -883,3 +883,77 @@ func TestHandleClickAt_NegativeCoords(t *testing.T) {
 		t.Error("Expected tool error for negative x coordinate")
 	}
 }
+
+// =============================================================================
+// SCROLL TESTS
+// =============================================================================
+
+// TestHandleScroll_InvalidDirection tests scroll with an invalid direction
+func TestHandleScroll_InvalidDirection(t *testing.T) {
+	req := mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: map[string]interface{}{
+		"x": float64(100), "y": float64(200), "direction": "sideways",
+	}}}
+	result, err := handleScroll(nil, req)
+	if err != nil {
+		t.Fatalf("Handler returned unexpected Go error: %v", err)
+	}
+	if !result.IsError {
+		t.Error("Expected tool error for invalid direction")
+	}
+}
+
+// TestHandleScroll_MissingDirection tests scroll with missing direction
+func TestHandleScroll_MissingDirection(t *testing.T) {
+	req := mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: map[string]interface{}{
+		"x": float64(100), "y": float64(200),
+	}}}
+	result, err := handleScroll(nil, req)
+	if err != nil {
+		t.Fatalf("Handler returned unexpected Go error: %v", err)
+	}
+	if !result.IsError {
+		t.Error("Expected tool error for missing direction")
+	}
+}
+
+// TestHandleScroll_MissingX tests scroll with missing x parameter
+func TestHandleScroll_MissingX(t *testing.T) {
+	req := mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: map[string]interface{}{
+		"y": float64(200), "direction": "down",
+	}}}
+	result, err := handleScroll(nil, req)
+	if err != nil {
+		t.Fatalf("Handler returned unexpected Go error: %v", err)
+	}
+	if !result.IsError {
+		t.Error("Expected tool error for missing x parameter")
+	}
+}
+
+// TestHandleScroll_ZeroAmount tests scroll rejects zero amount
+func TestHandleScroll_ZeroAmount(t *testing.T) {
+	req := mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: map[string]interface{}{
+		"x": float64(100), "y": float64(200), "direction": "down", "amount": float64(0),
+	}}}
+	result, err := handleScroll(nil, req)
+	if err != nil {
+		t.Fatalf("Handler returned unexpected Go error: %v", err)
+	}
+	if !result.IsError {
+		t.Error("Expected tool error for zero amount")
+	}
+}
+
+// TestHandleScroll_NegativeCoords tests scroll rejects out-of-bounds coordinates
+func TestHandleScroll_NegativeCoords(t *testing.T) {
+	req := mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: map[string]interface{}{
+		"x": float64(-1), "y": float64(200), "direction": "down",
+	}}}
+	result, err := handleScroll(nil, req)
+	if err != nil {
+		t.Fatalf("Handler returned unexpected Go error: %v", err)
+	}
+	if !result.IsError {
+		t.Error("Expected tool error for negative x coordinate")
+	}
+}

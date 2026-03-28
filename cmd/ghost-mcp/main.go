@@ -215,6 +215,60 @@ func handleClickAt(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallT
 	return mcp.NewToolResultText(fmt.Sprintf(`{"success": true, "button": "%s", "x": %d, "y": %d}`, button, x, y)), nil
 }
 
+func handleScroll(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	logging.Debug("Handling scroll request")
+
+	x, err := getIntParam(request, "x")
+	if err != nil {
+		logging.Error("Invalid x parameter: %v", err)
+		return mcp.NewToolResultError(fmt.Sprintf("invalid x parameter: %v", err)), nil
+	}
+	y, err := getIntParam(request, "y")
+	if err != nil {
+		logging.Error("Invalid y parameter: %v", err)
+		return mcp.NewToolResultError(fmt.Sprintf("invalid y parameter: %v", err)), nil
+	}
+
+	direction, err := getStringParam(request, "direction")
+	if err != nil {
+		logging.Error("Invalid direction parameter: %v", err)
+		return mcp.NewToolResultError(fmt.Sprintf("invalid direction parameter: %v", err)), nil
+	}
+
+	validDirections := map[string]bool{"up": true, "down": true, "left": true, "right": true}
+	if !validDirections[direction] {
+		err := fmt.Errorf("invalid direction '%s', must be 'up', 'down', 'left', or 'right'", direction)
+		logging.Error("%v", err)
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	amount := 3
+	if a, err := getIntParam(request, "amount"); err == nil {
+		if a <= 0 {
+			return mcp.NewToolResultError("amount must be positive"), nil
+		}
+		amount = a
+	}
+
+	screenW, screenH := robotgo.GetScreenSize()
+	if err := validate.Coords(x, y, screenW, screenH); err != nil {
+		logging.Error("Coordinate validation failed: %v", err)
+		return mcp.NewToolResultError(fmt.Sprintf("invalid coordinates: %v", err)), nil
+	}
+
+	logging.Info("ACTION: Moving mouse to (%d, %d) then scrolling %s by %d", x, y, direction, amount)
+	robotgo.Move(x, y)
+
+	if err := checkFailsafe(); err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	robotgo.ScrollDir(amount, direction)
+	logging.Info("ACTION COMPLETE: Scrolled %s by %d at (%d, %d)", direction, amount, x, y)
+
+	return mcp.NewToolResultText(fmt.Sprintf(`{"success": true, "x": %d, "y": %d, "direction": "%s", "amount": %d}`, x, y, direction, amount)), nil
+}
+
 func handleTypeText(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	logging.Debug("Handling type_text request")
 
@@ -452,6 +506,16 @@ After clicking, take a screenshot to confirm the expected UI change occurred.`),
 		mcp.WithNumber("y", mcp.Description("Y coordinate in pixels from the top edge of the screen."), mcp.Required()),
 		mcp.WithString("button", mcp.Description("Mouse button: 'left' (default), 'right', or 'middle'.")),
 	), handleClickAt)
+
+	mcpServer.AddTool(mcp.NewTool("scroll",
+		mcp.WithDescription(`Move the mouse to (x, y) and scroll the mouse wheel. Use for scrolling lists, pages, and dropdowns.
+
+Scroll 'down' to reveal content below, 'up' to go back up. For horizontal content use 'left' or 'right'. After scrolling, take a screenshot to see the new content.`),
+		mcp.WithNumber("x", mcp.Description("X coordinate to scroll at (pixels from left edge)."), mcp.Required()),
+		mcp.WithNumber("y", mcp.Description("Y coordinate to scroll at (pixels from top edge)."), mcp.Required()),
+		mcp.WithString("direction", mcp.Description("Scroll direction: 'up', 'down', 'left', or 'right'."), mcp.Required()),
+		mcp.WithNumber("amount", mcp.Description("Number of scroll steps (default: 3). Higher values scroll further.")),
+	), handleScroll)
 
 	mcpServer.AddTool(mcp.NewTool("type_text",
 		mcp.WithDescription(`Type text as keyboard input into the currently focused element. Click the target input field first to ensure it has focus before typing.
