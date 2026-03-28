@@ -11,6 +11,7 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
+	"math"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -153,6 +154,13 @@ func handleMoveMouse(ctx context.Context, request mcp.CallToolRequest) (*mcp.Cal
 		return mcp.NewToolResultError(fmt.Sprintf("invalid y parameter: %v", err)), nil
 	}
 
+	// Validate coordinates against current screen bounds
+	screenW, screenH := robotgo.GetScreenSize()
+	if err := ValidateCoords(x, y, screenW, screenH); err != nil {
+		logError("Coordinate validation failed: %v", err)
+		return mcp.NewToolResultError(fmt.Sprintf("invalid coordinates: %v", err)), nil
+	}
+
 	logInfo("Moving mouse to (%d, %d)", x, y)
 
 	// Move the mouse smoothly
@@ -227,6 +235,11 @@ func handleTypeText(ctx context.Context, request mcp.CallToolRequest) (*mcp.Call
 		return mcp.NewToolResultError(fmt.Sprintf("invalid text parameter: %v", err)), nil
 	}
 
+	if err := ValidateText(text); err != nil {
+		logError("Text validation failed: %v", err)
+		return mcp.NewToolResultError(fmt.Sprintf("invalid text: %v", err)), nil
+	}
+
 	logInfo("Typing text (%d characters)", len(text))
 
 	// Type the text with a small delay between characters for reliability
@@ -251,6 +264,11 @@ func handlePressKey(ctx context.Context, request mcp.CallToolRequest) (*mcp.Call
 		return mcp.NewToolResultError(fmt.Sprintf("invalid key parameter: %v", err)), nil
 	}
 
+	if err := ValidateKey(key); err != nil {
+		logError("Key validation failed: %v", err)
+		return mcp.NewToolResultError(fmt.Sprintf("invalid key: %v", err)), nil
+	}
+
 	logInfo("Pressing key: %s", key)
 
 	// Press the key
@@ -272,15 +290,23 @@ func handleTakeScreenshot(ctx context.Context, request mcp.CallToolRequest) (*mc
 	logDebug("Handling take_screenshot request")
 
 	// Get optional region parameters with defaults
+	screenW, screenH := robotgo.GetScreenSize()
 	x, _ := getIntParam(request, "x")
 	y, _ := getIntParam(request, "y")
-	width, height := robotgo.GetScreenSize()
+	width := screenW
+	height := screenH
 
-	if w, err := getIntParam(request, "width"); err == nil && w > 0 {
+	if w, err := getIntParam(request, "width"); err == nil {
 		width = w
 	}
-	if h, err := getIntParam(request, "height"); err == nil && h > 0 {
+	if h, err := getIntParam(request, "height"); err == nil {
 		height = h
+	}
+
+	// Validate the region against current screen bounds
+	if err := ValidateScreenRegion(x, y, width, height, screenW, screenH); err != nil {
+		logError("Screenshot region validation failed: %v", err)
+		return mcp.NewToolResultError(fmt.Sprintf("invalid screenshot region: %v", err)), nil
 	}
 
 	logInfo("Taking screenshot at (%d, %d) with size %dx%d", x, y, width, height)
@@ -349,8 +375,12 @@ func getIntParam(request mcp.CallToolRequest, name string) (int, error) {
 		return 0, fmt.Errorf("missing required parameter: %s", name)
 	}
 
-	// Handle float64 (JSON numbers are decoded as float64)
+	// Handle float64 (JSON numbers are decoded as float64).
+	// Reject fractional values — coordinates and sizes must be whole numbers.
 	if f, ok := val.(float64); ok {
+		if f != math.Trunc(f) {
+			return 0, fmt.Errorf("parameter %s must be a whole number, got %v", name, f)
+		}
 		return int(f), nil
 	}
 
