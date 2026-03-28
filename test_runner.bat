@@ -33,24 +33,26 @@ REM Parse arguments
 set TEST_TYPE=%1
 if "%TEST_TYPE%"=="" set TEST_TYPE=unit
 
-REM Add MinGW to PATH if not already there
-where gcc >nul 2>&1
-if %errorlevel% neq 0 (
-    if exist "C:\ProgramData\mingw64\mingw64\bin\gcc.exe" (
-        set "PATH=C:\ProgramData\mingw64\mingw64\bin;%PATH%"
-        echo [INFO] Added MinGW to PATH
-    )
+REM Always add MinGW to PATH (prepend so it takes priority)
+if exist "C:\ProgramData\mingw64\mingw64\bin\gcc.exe" (
+    set "MINGW_BIN=C:\ProgramData\mingw64\mingw64\bin"
+    echo [INFO] MinGW found at !MINGW_BIN!
+) else (
+    set "MINGW_BIN="
+    echo [WARN] MinGW not found at default location, hoping gcc is already in PATH
 )
+if not "!MINGW_BIN!"=="" set "PATH=!MINGW_BIN!;%PATH%"
 
-REM Set CGO flags for Tesseract/Leptonica (vcpkg x64-mingw-dynamic)
-if "%CGO_CPPFLAGS%"=="" (
-    if exist "%USERPROFILE%\vcpkg\installed\x64-mingw-dynamic\include" (
-        set "VCPKG=%USERPROFILE%\vcpkg\installed\x64-mingw-dynamic"
-        set "CGO_CPPFLAGS=-I%USERPROFILE%/vcpkg/installed/x64-mingw-dynamic/include"
-        set "CGO_LDFLAGS=-L%USERPROFILE%/vcpkg/installed/x64-mingw-dynamic/lib"
-        set "CGO_ENABLED=1"
-        echo [INFO] Set CGO flags for vcpkg Tesseract
-    )
+REM Always set CGO flags from vcpkg (overrides any stale persistent env vars)
+set "VCPKG_DIR=%USERPROFILE%\vcpkg\installed\x64-mingw-dynamic"
+if exist "!VCPKG_DIR!\include" (
+    set "CGO_CPPFLAGS=-I%USERPROFILE%/vcpkg/installed/x64-mingw-dynamic/include"
+    set "CGO_LDFLAGS=-L%USERPROFILE%/vcpkg/installed/x64-mingw-dynamic/lib"
+    set "CGO_ENABLED=1"
+    echo [INFO] CGO flags set from !VCPKG_DIR!
+) else (
+    echo [WARN] vcpkg x64-mingw-dynamic not found at !VCPKG_DIR!
+    echo [WARN] Tesseract/OCR build may fail. Run installers\install.ps1 first.
 )
 
 REM Build the main binary first
@@ -60,20 +62,21 @@ if %errorlevel% neq 0 (
     echo.
     echo [ERROR] Build failed!
     echo.
-    echo Common issues:
-    echo   - GCC/MinGW not installed (required for robotgo)
-    echo     Install with: choco install mingw
-    echo   - Missing dependencies
-    echo     Run: go mod download
+    echo Diagnostics:
+    echo   GCC:          & where gcc 2^>^&1
+    echo   CGO_CPPFLAGS: !CGO_CPPFLAGS!
+    echo   CGO_LDFLAGS:  !CGO_LDFLAGS!
+    echo   CGO_ENABLED:  !CGO_ENABLED!
+    echo.
+    echo If GCC is missing: choco install mingw
+    echo If Tesseract is missing: run installers\install.ps1
     echo.
     exit /b 1
 )
 echo [OK] Build successful
 
-REM Add vcpkg bin to PATH so runtime DLLs are found during tests
-if not "%VCPKG%"=="" (
-    set "PATH=%VCPKG%\bin;%PATH%"
-)
+REM Add vcpkg bin to PATH so runtime DLLs are found when tests run
+if exist "!VCPKG_DIR!\bin" set "PATH=!VCPKG_DIR!\bin;!PATH!"
 echo.
 
 if "%TEST_TYPE%"=="fixture" (
