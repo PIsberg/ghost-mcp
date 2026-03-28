@@ -42,17 +42,23 @@ The `OnRequestInitialization` hook runs before every MCP request and rejects cal
 
 ### 3. Tool Registration (`registerTools()`)
 
-Registers each tool with its schema and handler:
+Registers each tool with its schema and handler. Mouse/keyboard/screen tools live in `cmd/ghost-mcp/main.go`; OCR tools live in `cmd/ghost-mcp/tools_ocr.go` and `handler_ocr.go`:
 
 ```
-registerTools()
+registerTools()                          (main.go)
   │
-  ├─► AddTool("get_screen_size", schema, handleGetScreenSize)
-  ├─► AddTool("move_mouse", schema, handleMoveMouse)
-  ├─► AddTool("click", schema, handleClick)
-  ├─► AddTool("type_text", schema, handleTypeText)
-  ├─► AddTool("press_key", schema, handlePressKey)
-  └─► AddTool("take_screenshot", schema, handleTakeScreenshot)
+  ├─► AddTool("get_screen_size",  handleGetScreenSize)
+  ├─► AddTool("move_mouse",       handleMoveMouse)
+  ├─► AddTool("click",            handleClick)
+  ├─► AddTool("click_at",         handleClickAt)
+  ├─► AddTool("double_click",     handleDoubleClick)
+  ├─► AddTool("scroll",           handleScroll)
+  ├─► AddTool("type_text",        handleTypeText)
+  ├─► AddTool("press_key",        handlePressKey)
+  ├─► AddTool("take_screenshot",  handleTakeScreenshot)
+  └─► registerOCRTools()               (tools_ocr.go)
+        ├─► AddTool("read_screen_text", handleReadScreenText)
+        └─► AddTool("find_and_click",   handleFindAndClick)
 ```
 
 Each tool definition includes:
@@ -177,7 +183,7 @@ var state = &serverState{
    y := getIntParam(request, "y")  // 200
 
 5. Handler calls RobotGo
-   robotgo.MoveSmooth(100, 200)
+   robotgo.Move(100, 200)
 
 6. Handler checks failsafe
    checkFailsafe()
@@ -193,7 +199,7 @@ var state = &serverState{
 
 ### Response Format
 
-All tool responses are JSON strings wrapped in MCP result:
+Most tool responses are JSON strings in a single `text` content block:
 
 ```json
 {
@@ -201,10 +207,20 @@ All tool responses are JSON strings wrapped in MCP result:
   "id": 1,
   "result": {
     "content": [
-      {
-        "type": "text",
-        "text": "{\"success\": true, \"x\": 100, \"y\": 200}"
-      }
+      { "type": "text", "text": "{\"success\": true, \"x\": 100, \"y\": 200}" }
+    ]
+  }
+}
+```
+
+`take_screenshot` returns two content blocks — JSON metadata followed by the PNG image:
+
+```json
+{
+  "result": {
+    "content": [
+      { "type": "text",  "text": "{\"success\": true, \"filepath\": \"...\", \"width\": 1920, \"height\": 1080}" },
+      { "type": "image", "data": "<base64-png>", "mimeType": "image/png" }
     ]
   }
 }
@@ -265,28 +281,58 @@ The server handles requests sequentially via ServeStdio(), which is appropriate 
 
 | Aspect | Details |
 |--------|---------|
-| **Purpose** | Move cursor to coordinates |
-| **Parameters** | `x` (int), `y` (int) |
+| **Purpose** | Move cursor to absolute coordinates |
+| **Parameters** | `x` (int, required), `y` (int, required) |
 | **Returns** | `{"success": bool, "x": int, "y": int}` |
-| **RobotGo Call** | `robotgo.MoveSmooth(x, y)` |
+| **RobotGo Call** | `robotgo.Move(x, y)` |
 | **Failsafe** | ✓ Checked after movement |
 
 ### click
 
 | Aspect | Details |
 |--------|---------|
-| **Purpose** | Click at current position |
+| **Purpose** | Click at current cursor position |
 | **Parameters** | `button` ("left", "right", "middle") |
 | **Returns** | `{"success": bool, "button": string, "x": int, "y": int}` |
-| **RobotGo Call** | `robotgo.Click(button, true)` |
+| **RobotGo Call** | `robotgo.Click(button, false)` |
 | **Failsafe** | ✓ Checked after click |
+
+### click_at
+
+| Aspect | Details |
+|--------|---------|
+| **Purpose** | Move to coordinates and click in one call |
+| **Parameters** | `x` (int, required), `y` (int, required), `button` (string, default "left") |
+| **Returns** | `{"success": bool, "button": string, "x": int, "y": int}` |
+| **RobotGo Calls** | `robotgo.Move(x, y)`, `robotgo.Click(button, false)` |
+| **Failsafe** | ✓ Checked between move and click |
+
+### double_click
+
+| Aspect | Details |
+|--------|---------|
+| **Purpose** | Move to coordinates and double-click |
+| **Parameters** | `x` (int, required), `y` (int, required) |
+| **Returns** | `{"success": bool, "x": int, "y": int}` |
+| **RobotGo Calls** | `robotgo.Move(x, y)`, `robotgo.Click("left", true)` |
+| **Failsafe** | ✓ Checked between move and click |
+
+### scroll
+
+| Aspect | Details |
+|--------|---------|
+| **Purpose** | Move to coordinates and scroll the mouse wheel |
+| **Parameters** | `x` (int, required), `y` (int, required), `direction` ("up"/"down"/"left"/"right"), `amount` (int, default 3) |
+| **Returns** | `{"success": bool, "x": int, "y": int, "direction": string, "amount": int}` |
+| **RobotGo Calls** | `robotgo.Move(x, y)`, `robotgo.ScrollDir(amount, direction)` |
+| **Failsafe** | ✓ Checked after move |
 
 ### type_text
 
 | Aspect | Details |
 |--------|---------|
-| **Purpose** | Type text via keyboard |
-| **Parameters** | `text` (string) |
+| **Purpose** | Type text via keyboard into focused element |
+| **Parameters** | `text` (string, max 10,000 chars) |
 | **Returns** | `{"success": bool, "characters_typed": int}` |
 | **RobotGo Call** | `robotgo.TypeStr(text)` |
 
@@ -294,7 +340,7 @@ The server handles requests sequentially via ServeStdio(), which is appropriate 
 
 | Aspect | Details |
 |--------|---------|
-| **Purpose** | Press single key |
+| **Purpose** | Press a single key (uses allowlist validation) |
 | **Parameters** | `key` (string) |
 | **Returns** | `{"success": bool, "key": string}` |
 | **RobotGo Call** | `robotgo.KeyTap(key)` |
@@ -303,11 +349,32 @@ The server handles requests sequentially via ServeStdio(), which is appropriate 
 
 | Aspect | Details |
 |--------|---------|
-| **Purpose** | Capture screen as PNG |
+| **Purpose** | Capture screen as PNG, returned as image content |
 | **Parameters** | `x`, `y`, `width`, `height` (all optional) |
-| **Returns** | `{"success": bool, "filepath": string, "base64": string, "width": int, "height": int}` |
-| **RobotGo Calls** | `robotgo.CaptureScreen()`, `robotgo.SavePng()` |
-| **Cleanup** | Temp file deleted after encoding |
+| **Returns** | Text block: `{"success": bool, "filepath": string, "width": int, "height": int}` + image/png content block |
+| **RobotGo Calls** | `robotgo.CaptureImg()`, `robotgo.SavePng()` |
+| **Cleanup** | Temp file deleted after read unless `GHOST_MCP_KEEP_SCREENSHOTS=1` |
+
+### read_screen_text
+
+| Aspect | Details |
+|--------|---------|
+| **Purpose** | Capture screen region, run Tesseract OCR, return text with word bounding boxes |
+| **Parameters** | `x`, `y`, `width`, `height` (all optional — defaults to full screen) |
+| **Returns** | `{"success": bool, "text": string, "words": [{text, x, y, width, height, confidence}], "region": {...}}` |
+| **Dependencies** | Tesseract OCR (`gosseract`), `TESSDATA_PREFIX` must be set |
+| **Coordinates** | Word positions are relative to the region origin; add region `x`/`y` to get screen coords |
+
+### find_and_click
+
+| Aspect | Details |
+|--------|---------|
+| **Purpose** | Full-screen OCR scan, find nth matching word, click its center |
+| **Parameters** | `text` (string, required), `button` (default "left"), `nth` (int, default 1) |
+| **Returns** | `{"success": bool, "found": string, "x": int, "y": int, "button": string, "occurrence": int}` |
+| **Match logic** | Case-insensitive substring match against each OCR word |
+| **Dependencies** | Tesseract OCR (`gosseract`), `TESSDATA_PREFIX` must be set |
+| **RobotGo Calls** | `robotgo.CaptureImg()`, `robotgo.Move()`, `robotgo.Click()` |
 
 ## Dependencies
 
@@ -316,7 +383,8 @@ The server handles requests sequentially via ServeStdio(), which is appropriate 
 | Package | Purpose |
 |---------|---------|
 | `github.com/mark3labs/mcp-go` | MCP protocol implementation |
-| `github.com/go-vgo/robotgo` | OS-level automation |
+| `github.com/go-vgo/robotgo` | OS-level mouse/keyboard/screen automation (CGo) |
+| `github.com/otiai10/gosseract/v2` | Tesseract OCR bindings (CGo) |
 
 ### Standard Library
 
@@ -354,9 +422,9 @@ The (0,0) failsafe prevents infinite loops but:
 
 ### 4. Screenshot Data
 
-- Screenshots encoded as base64 in responses
-- Temporary files cleaned up immediately
-- No persistent storage of captured data
+- Screenshots returned as `image/png` content blocks (not base64 in JSON)
+- Temp file deleted after read unless `GHOST_MCP_KEEP_SCREENSHOTS=1`
+- No persistent storage of captured data by default
 
 ## Testing Strategy
 
@@ -418,9 +486,9 @@ Modify `main()` to use alternative transport instead of `ServeStdio()`.
 
 ### Latency
 
-- Mouse movement uses smooth animation (not instant)
+- Mouse movement is instant (`robotgo.Move`) — no animation delay
 - Keyboard typing has inherent OS latency
-- Screenshot capture is blocking
+- Screenshot capture and OCR are blocking; OCR on a full screen can take ~1–2 s
 
 ### Throughput
 

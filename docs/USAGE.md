@@ -16,10 +16,10 @@ This guide demonstrates how to use Ghost MCP to automate UI interactions through
 
 ### Prerequisites
 
-- Go 1.22 or later
+- Go 1.24 or later
 - GCC/MinGW (required for robotgo on Windows)
 - A display environment (Linux requires X11, Windows/macOS have it by default)
-- [Tesseract OCR](https://github.com/tesseract-ocr/tesseract) (required for `read_screen_text` only)
+- [Tesseract OCR](https://github.com/tesseract-ocr/tesseract) + `TESSDATA_PREFIX` set (required for OCR tools)
 
 ### Installation
 
@@ -59,9 +59,7 @@ The fixture will be available at: **http://localhost:8765**
 
 ## Using Ghost MCP Tools
 
-Ghost MCP provides seven tools for UI automation.
-
-> **OCR dependency**: `read_screen_text` requires [Tesseract OCR](https://github.com/tesseract-ocr/tesseract). The other six tools work without it.
+Ghost MCP provides eleven tools for UI automation. OCR is always built in — `read_screen_text` and `find_and_click` require Tesseract to be installed and `TESSDATA_PREFIX` to be set.
 
 ---
 
@@ -105,7 +103,53 @@ Performs a mouse click at the current cursor position.
 
 ---
 
-### 4. **Type Text**
+### 4. **Click At** *(preferred)*
+
+Moves the mouse to the given coordinates and clicks — one call instead of two.
+
+```json
+{ "tool": "click_at", "arguments": { "x": 400, "y": 300 } }
+```
+
+```json
+{ "success": true, "button": "left", "x": 400, "y": 300 }
+```
+
+`button` is optional and defaults to `"left"`.
+
+---
+
+### 5. **Double Click**
+
+Moves the mouse and performs a left double-click. Use for opening files or selecting words.
+
+```json
+{ "tool": "double_click", "arguments": { "x": 400, "y": 300 } }
+```
+
+```json
+{ "success": true, "x": 400, "y": 300 }
+```
+
+---
+
+### 6. **Scroll**
+
+Moves the mouse to the given position and scrolls the wheel.
+
+```json
+{ "tool": "scroll", "arguments": { "x": 400, "y": 300, "direction": "down", "amount": 5 } }
+```
+
+```json
+{ "success": true, "x": 400, "y": 300, "direction": "down", "amount": 5 }
+```
+
+`direction`: `"up"`, `"down"`, `"left"`, `"right"`. `amount` defaults to `3`.
+
+---
+
+### 7. **Type Text**
 
 Types text via the keyboard into the focused element.
 
@@ -119,7 +163,7 @@ Types text via the keyboard into the focused element.
 
 ---
 
-### 5. **Press Key**
+### 8. **Press Key**
 
 Presses a single key on the keyboard.
 
@@ -131,9 +175,9 @@ Supported keys include: `enter`, `tab`, `esc`, `space`, `backspace`, `delete`, `
 
 ---
 
-### 6. **Take Screenshot**
+### 9. **Take Screenshot**
 
-Captures a screen region and returns a base64-encoded PNG.
+Captures a screen region and returns a PNG image. The response has two parts: a JSON metadata text block and an `image/png` content block with the image data.
 
 ```json
 {
@@ -143,19 +187,14 @@ Captures a screen region and returns a base64-encoded PNG.
 ```
 
 ```json
-{
-  "success": true,
-  "base64": "iVBORw0KGgo...",
-  "width": 1920,
-  "height": 1080
-}
+{ "success": true, "filepath": "/tmp/ghost-mcp-screenshot-....png", "width": 1920, "height": 1080 }
 ```
 
-All parameters are optional — omitting them captures the full screen.
+All parameters are optional — omitting them captures the full screen. Set `GHOST_MCP_KEEP_SCREENSHOTS=1` to keep the file on disk after the response is sent.
 
 ---
 
-### 7. **Read Screen Text** (OCR)
+### 10. **Read Screen Text** (OCR)
 
 Captures a screen region, runs OCR, and returns the text with word-level bounding boxes. The coordinates in the response can be passed directly to `move_mouse` to click specific words.
 
@@ -181,12 +220,23 @@ Captures a screen region, runs OCR, and returns the text with word-level boundin
 
 All parameters are optional — omitting them reads the full screen.
 
-**Install Tesseract:**
-```bash
-choco install tesseract        # Windows
-brew install tesseract         # macOS
-sudo apt install tesseract-ocr # Ubuntu/Debian
+> Word coordinates are **relative to the region origin** — add the region's `x`/`y` to get absolute screen coordinates.
+
+---
+
+### 11. **Find and Click** (OCR) *(preferred for text targets)*
+
+Scans the full screen with OCR, finds the nth word matching `text` (case-insensitive substring), and clicks its center. Combines `read_screen_text` + `click_at` in one call.
+
+```json
+{ "tool": "find_and_click", "arguments": { "text": "Submit" } }
 ```
+
+```json
+{ "success": true, "found": "Submit", "x": 188, "y": 2768, "button": "left", "occurrence": 1 }
+```
+
+`button` defaults to `"left"`. `nth` defaults to `1` — use `2`, `3`, etc. to click the second or third match when the text appears multiple times.
 
 ---
 
@@ -206,11 +256,18 @@ The top section shows the status bar, four coloured buttons, and text input fiel
 
 ![Top of fixture](./screenshots/01-initial-fixture.png)
 
-**Button click workflow:**
+**Button click workflow (using find_and_click):**
 ```json
 [
-  { "tool": "move_mouse", "arguments": { "x": 183, "y": 98 } },
-  { "tool": "click",      "arguments": { "button": "left" } },
+  { "tool": "find_and_click",   "arguments": { "text": "PRIMARY" } },
+  { "tool": "take_screenshot",  "arguments": {} }
+]
+```
+
+**Button click workflow (using click_at with known coordinates):**
+```json
+[
+  { "tool": "click_at",        "arguments": { "x": 183, "y": 98 } },
   { "tool": "take_screenshot", "arguments": {} }
 ]
 ```
@@ -218,9 +275,8 @@ The top section shows the status bar, four coloured buttons, and text input fiel
 **Text input workflow:**
 ```json
 [
-  { "tool": "move_mouse", "arguments": { "x": 400, "y": 150 } },
-  { "tool": "click",      "arguments": { "button": "left" } },
-  { "tool": "type_text",  "arguments": { "text": "Automated input" } }
+  { "tool": "click_at",  "arguments": { "x": 400, "y": 150 } },
+  { "tool": "type_text", "arguments": { "text": "Automated input" } }
 ]
 ```
 
@@ -233,16 +289,14 @@ The top section shows the status bar, four coloured buttons, and text input fiel
 **Checkbox toggle:**
 ```json
 [
-  { "tool": "move_mouse", "arguments": { "x": 205, "y": 240 } },
-  { "tool": "click",      "arguments": { "button": "left" } }
+  { "tool": "click_at", "arguments": { "x": 205, "y": 240 } }
 ]
 ```
 
 **Dropdown selection:**
 ```json
 [
-  { "tool": "move_mouse", "arguments": { "x": 245, "y": 340 } },
-  { "tool": "click",      "arguments": { "button": "left" } }
+  { "tool": "click_at", "arguments": { "x": 245, "y": 340 } }
 ]
 ```
 
@@ -255,10 +309,9 @@ The top section shows the status bar, four coloured buttons, and text input fiel
 **Click counter:**
 ```json
 [
-  { "tool": "move_mouse", "arguments": { "x": 397, "y": 308 } },
-  { "tool": "click",      "arguments": { "button": "left" } },
-  { "tool": "click",      "arguments": { "button": "left" } },
-  { "tool": "click",      "arguments": { "button": "left" } }
+  { "tool": "click_at", "arguments": { "x": 397, "y": 308 } },
+  { "tool": "click_at", "arguments": { "x": 397, "y": 308 } },
+  { "tool": "click_at", "arguments": { "x": 397, "y": 308 } }
 ]
 ```
 
@@ -271,10 +324,9 @@ The top section shows the status bar, four coloured buttons, and text input fiel
 **Keyboard test workflow:**
 ```json
 [
-  { "tool": "move_mouse", "arguments": { "x": 300, "y": 190 } },
-  { "tool": "click",      "arguments": { "button": "left" } },
-  { "tool": "press_key",  "arguments": { "key": "enter" } },
-  { "tool": "press_key",  "arguments": { "key": "tab" } }
+  { "tool": "click_at",  "arguments": { "x": 300, "y": 190 } },
+  { "tool": "press_key", "arguments": { "key": "enter" } },
+  { "tool": "press_key", "arguments": { "key": "tab" } }
 ]
 ```
 
@@ -352,59 +404,56 @@ Targeting just the white OCR test panel at the bottom of the fixture gives a cle
 }
 ```
 
-### OCR-driven click example
+### OCR-driven click examples
 
-Using the word positions from `read_screen_text` to click "Submit":
+**Simplest — use `find_and_click` directly:**
+```json
+{ "tool": "find_and_click", "arguments": { "text": "Submit" } }
+```
 
+**Manual — use `read_screen_text` then `click_at` with offset arithmetic:**
 ```json
 [
   {
     "tool": "read_screen_text",
     "arguments": { "x": 140, "y": 2680, "width": 600, "height": 200 }
   },
-  { "comment": "AI finds 'Submit' at x:48+140=188, y:88+2680=2768 (region offset)" },
-  { "tool": "move_mouse", "arguments": { "x": 188, "y": 2768 } },
-  { "tool": "click",      "arguments": { "button": "left" } }
+  {
+    "comment": "AI finds 'Submit' at word.x=48, word.y=88. Absolute = 48+140=188, 88+2680=2768. Center = 188+22=210, 2768+8=2776."
+  },
+  { "tool": "click_at", "arguments": { "x": 210, "y": 2776 } }
 ]
 ```
 
-> Note: `read_screen_text` returns coordinates **relative to the region origin** (the `x`/`y` parameters). Add the region offset to get absolute screen coordinates.
+> `read_screen_text` returns word coordinates **relative to the region origin** — add the region's `x`/`y` to get absolute screen coordinates. `find_and_click` handles this automatically.
 
 ---
 
 ## Example Workflows
 
-### Complete automation workflow
+### OCR-first workflow (recommended)
+
+Use `find_and_click` to locate and click elements by their visible text label — no coordinate guessing:
 
 ```json
 [
-  { "tool": "get_screen_size", "arguments": {} },
-
-  { "tool": "move_mouse",  "arguments": { "x": 183, "y": 98 } },
-  { "tool": "click",       "arguments": { "button": "left" } },
-  { "tool": "take_screenshot", "arguments": {} },
-
-  { "tool": "move_mouse",  "arguments": { "x": 400, "y": 150 } },
-  { "tool": "click",       "arguments": { "button": "left" } },
-  { "tool": "type_text",   "arguments": { "text": "Automated test data" } },
-
-  { "tool": "move_mouse",  "arguments": { "x": 205, "y": 240 } },
-  { "tool": "click",       "arguments": { "button": "left" } },
-
-  { "tool": "take_screenshot", "arguments": {} }
+  { "tool": "get_screen_size",  "arguments": {} },
+  { "tool": "find_and_click",   "arguments": { "text": "PRIMARY" } },
+  { "tool": "take_screenshot",  "arguments": {} },
+  { "tool": "find_and_click",   "arguments": { "text": "Type here" } },
+  { "tool": "type_text",        "arguments": { "text": "Automated test data" } },
+  { "tool": "find_and_click",   "arguments": { "text": "Option 1" } },
+  { "tool": "take_screenshot",  "arguments": {} }
 ]
 ```
 
-### OCR-driven navigation
-
-Let the AI read the screen and decide where to click:
+### Scroll and interact
 
 ```json
 [
-  { "tool": "read_screen_text", "arguments": {} },
-  { "comment": "AI reads text and word positions, then moves to the right button" },
-  { "tool": "move_mouse", "arguments": { "x": 183, "y": 98 } },
-  { "tool": "click",      "arguments": { "button": "left" } }
+  { "tool": "find_and_click", "arguments": { "text": "Dropdown" } },
+  { "tool": "scroll",         "arguments": { "x": 400, "y": 400, "direction": "down", "amount": 3 } },
+  { "tool": "take_screenshot","arguments": {} }
 ]
 ```
 
@@ -412,12 +461,20 @@ Let the AI read the screen and decide where to click:
 
 ```json
 [
-  { "tool": "move_mouse", "arguments": { "x": 400, "y": 150 } },
-  { "tool": "click",      "arguments": { "button": "left" } },
-  { "tool": "type_text",  "arguments": { "text": "Username" } },
-  { "tool": "press_key",  "arguments": { "key": "tab" } },
-  { "tool": "type_text",  "arguments": { "text": "Password123" } },
-  { "tool": "press_key",  "arguments": { "key": "enter" } }
+  { "tool": "click_at",  "arguments": { "x": 400, "y": 150 } },
+  { "tool": "type_text", "arguments": { "text": "Username" } },
+  { "tool": "press_key", "arguments": { "key": "tab" } },
+  { "tool": "type_text", "arguments": { "text": "Password123" } },
+  { "tool": "press_key", "arguments": { "key": "enter" } }
+]
+```
+
+### Open a file with double-click
+
+```json
+[
+  { "tool": "find_and_click",  "arguments": { "text": "document.txt", "button": "left" } },
+  { "tool": "double_click",    "arguments": { "x": 400, "y": 300 } }
 ]
 ```
 
@@ -452,6 +509,39 @@ Let the AI read the screen and decide where to click:
 
 ---
 
+### Tool: click_at
+
+**Arguments:**
+- `x` (number, required): X-coordinate in pixels
+- `y` (number, required): Y-coordinate in pixels
+- `button` (string, optional): `"left"` (default), `"right"`, or `"middle"`
+
+**Returns:** `{ "success": true, "button": "left", "x": 400, "y": 300 }`
+
+---
+
+### Tool: double_click
+
+**Arguments:**
+- `x` (number, required): X-coordinate in pixels
+- `y` (number, required): Y-coordinate in pixels
+
+**Returns:** `{ "success": true, "x": 400, "y": 300 }`
+
+---
+
+### Tool: scroll
+
+**Arguments:**
+- `x` (number, required): X-coordinate to scroll at
+- `y` (number, required): Y-coordinate to scroll at
+- `direction` (string, required): `"up"`, `"down"`, `"left"`, or `"right"`
+- `amount` (number, optional): Scroll steps, default `3`
+
+**Returns:** `{ "success": true, "x": 400, "y": 300, "direction": "down", "amount": 3 }`
+
+---
+
 ### Tool: type_text
 
 **Arguments:**
@@ -478,22 +568,19 @@ Let the AI read the screen and decide where to click:
 - `width` (number): Width of region (default: full screen)
 - `height` (number): Height of region (default: full screen)
 
-**Returns:**
+**Returns:** Two content blocks — JSON metadata + PNG image:
 ```json
-{
-  "success": true,
-  "filepath": "/tmp/ghost-mcp-screenshot-1234.png",
-  "base64": "iVBORw0KGgo...",
-  "width": 1920,
-  "height": 1080
-}
+{ "success": true, "filepath": "/tmp/ghost-mcp-screenshot-1234.png", "width": 1920, "height": 1080 }
 ```
+*(image data is in a separate `image/png` content block, not in the JSON)*
+
+Set `GHOST_MCP_KEEP_SCREENSHOTS=1` to keep the file on disk.
 
 ---
 
 ### Tool: read_screen_text
 
-Reads text from a screen region using OCR. Requires Tesseract OCR.
+Reads text from a screen region using OCR. Requires Tesseract and `TESSDATA_PREFIX`.
 
 **Arguments** (all optional):
 - `x` (number): X coordinate of region (default: 0)
@@ -522,32 +609,57 @@ Word coordinates are **relative to the region origin** — add the region's `x`/
 
 ---
 
-## Best Practices
+### Tool: find_and_click
 
-### 1. Read before clicking
-Use `read_screen_text` to locate buttons by label rather than hardcoding coordinates:
+Scans the full screen with OCR, finds the nth word matching `text`, and clicks its center. Requires Tesseract and `TESSDATA_PREFIX`.
+
+**Arguments:**
+- `text` (string, required): Text to search for (case-insensitive substring match)
+- `button` (string, optional): `"left"` (default), `"right"`, or `"middle"`
+- `nth` (number, optional): Which occurrence to click (default: `1`)
+
+**Returns:**
 ```json
-{ "tool": "read_screen_text", "arguments": {} }
+{ "success": true, "found": "Submit", "x": 188, "y": 2768, "button": "left", "occurrence": 1 }
 ```
 
-### 2. Verify with screenshots
-Take a screenshot before and after key actions to confirm the UI changed as expected.
+Returns an error result if the text is not found on screen.
 
-### 3. Avoid the failsafe position
+---
+
+## Best Practices
+
+### 1. Prefer find_and_click for text targets
+Use `find_and_click` to locate and click elements by their visible text label rather than hardcoding coordinates:
+```json
+{ "tool": "find_and_click", "arguments": { "text": "Save" } }
+```
+
+### 2. Prefer click_at over move_mouse + click
+`click_at` is one tool call instead of two, and is the preferred pattern for coordinate-based clicks:
+```json
+{ "tool": "click_at", "arguments": { "x": 400, "y": 300 } }
+```
+
+### 3. Verify with screenshots
+Take a screenshot after key actions to confirm the UI changed as expected.
+
+### 4. Avoid the failsafe position
 Don't move the mouse to (0, 0) — this triggers an emergency shutdown.
 
-### 4. Use regions for faster OCR
-Narrow the region to where the text you need is located for quicker, more accurate results:
+### 5. Use regions for faster OCR
+Narrow `read_screen_text` to the area of interest for quicker, more accurate results:
 ```json
 { "tool": "read_screen_text", "arguments": { "x": 0, "y": 0, "width": 800, "height": 100 } }
 ```
 
-### 5. Convert word coordinates
-`read_screen_text` returns coordinates relative to the region. Always add the region offset:
+### 6. Convert word coordinates from read_screen_text
+`read_screen_text` returns coordinates relative to the region. Add the region offset for absolute screen coords:
 ```
 absolute_x = word.x + region.x
 absolute_y = word.y + region.y
 ```
+(`find_and_click` handles this automatically.)
 
 ---
 
@@ -558,16 +670,28 @@ absolute_y = word.y + region.y
 - **Linux**: Check X11 permissions with `xhost +`
 - **Windows**: Try running as Administrator
 
-### Tesseract Not Found
+### Tesseract / OCR Not Working
+
+On Windows, Tesseract must be installed via vcpkg (not Chocolatey) and `TESSDATA_PREFIX` must be set:
+```powershell
+# Install via vcpkg (MinGW-compatible)
+.\vcpkg install tesseract:x64-mingw-dynamic leptonica:x64-mingw-dynamic
+# Download language data
+$tessdata = "$env:USERPROFILE\vcpkg\installed\x64-mingw-dynamic\share\tessdata"
+Invoke-WebRequest "https://github.com/tesseract-ocr/tessdata_fast/raw/main/eng.traineddata" -OutFile "$tessdata\eng.traineddata"
+# Set env var
+[System.Environment]::SetEnvironmentVariable("TESSDATA_PREFIX", "$env:USERPROFILE\vcpkg\installed\x64-mingw-dynamic\share", "User")
+```
+
+On macOS/Linux:
 ```bash
-# Windows (Chocolatey)
-choco install tesseract
+brew install tesseract          # macOS
+sudo apt install tesseract-ocr  # Ubuntu/Debian
+```
 
-# macOS
-brew install tesseract
-
-# Ubuntu/Debian
-sudo apt install tesseract-ocr
+Check `TESSDATA_PREFIX` points to the **parent** of `tessdata/`:
+```bash
+ls $TESSDATA_PREFIX/tessdata/eng.traineddata
 ```
 
 ### Fixture Port Already in Use
