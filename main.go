@@ -281,9 +281,9 @@ func handleTakeScreenshot(ctx context.Context, request mcp.CallToolRequest) (*mc
 
 	logInfo("Taking screenshot at (%d, %d) with size %dx%d", x, y, width, height)
 
-	// Capture the bitmap
-	bitmap := robotgo.CaptureScreen(x, y, width, height)
-	if bitmap == nil {
+	// Capture the screen as image.Image
+	img := robotgo.CaptureImg(x, y, width, height)
+	if img == nil {
 		err := fmt.Errorf("failed to capture screen")
 		logError("%v", err)
 		return mcp.NewToolResultError(err.Error()), nil
@@ -294,8 +294,8 @@ func handleTakeScreenshot(ctx context.Context, request mcp.CallToolRequest) (*mc
 	filename := fmt.Sprintf("ghost-mcp-screenshot-%d.png", time.Now().UnixNano())
 	filepath := filepath.Join(tempDir, filename)
 
-	// Save the bitmap as PNG
-	saveErr := robotgo.SavePng(bitmap, filepath)
+	// Save the image as PNG
+	saveErr := robotgo.SavePng(img, filepath)
 	if saveErr != nil {
 		logError("Failed to save screenshot: %v", saveErr)
 		return mcp.NewToolResultError(fmt.Sprintf("failed to save screenshot: %v", saveErr)), nil
