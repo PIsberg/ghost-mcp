@@ -1,9 +1,9 @@
-// validate.go — Input validation and sanitisation for Ghost MCP tool parameters.
+// Package validate provides input validation for Ghost MCP tool parameters.
 //
-// Every public Validate* function returns a descriptive error on failure and nil
-// on success. Handlers call these after parameter extraction and before any
+// Every exported Validate* function returns a descriptive error on failure and
+// nil on success. Handlers call these after parameter extraction and before any
 // robotgo call, ensuring invalid input never reaches the OS automation layer.
-package main
+package validate
 
 import (
 	"fmt"
@@ -29,12 +29,9 @@ const (
 // COORDINATE VALIDATION
 // =============================================================================
 
-// ValidateCoords checks that (x, y) fall within the screen rectangle
+// Coords checks that (x, y) fall within the screen rectangle
 // [0, screenW) × [0, screenH).
-//
-// screenW and screenH should come from robotgo.GetScreenSize() at call time so
-// they reflect the current display configuration.
-func ValidateCoords(x, y, screenW, screenH int) error {
+func Coords(x, y, screenW, screenH int) error {
 	if x < 0 {
 		return fmt.Errorf("x coordinate %d is negative", x)
 	}
@@ -50,9 +47,9 @@ func ValidateCoords(x, y, screenW, screenH int) error {
 	return nil
 }
 
-// ValidateScreenRegion checks that the rectangle (x, y, w, h) lies entirely
-// within a screen of dimensions screenW × screenH, and that w and h are positive.
-func ValidateScreenRegion(x, y, w, h, screenW, screenH int) error {
+// ScreenRegion checks that the rectangle (x, y, w, h) lies entirely within a
+// screen of dimensions screenW × screenH, and that w and h are positive.
+func ScreenRegion(x, y, w, h, screenW, screenH int) error {
 	if x < 0 {
 		return fmt.Errorf("screenshot x %d is negative", x)
 	}
@@ -78,14 +75,14 @@ func ValidateScreenRegion(x, y, w, h, screenW, screenH int) error {
 // TEXT VALIDATION
 // =============================================================================
 
-// ValidateText checks that text is non-empty and within MaxTextLength Unicode
-// code points. The code-point count is used (not byte length) so that
-// multi-byte characters are counted naturally.
-func ValidateText(text string) error {
-	if text == "" {
+// Text checks that s is non-empty and within MaxTextLength Unicode code points.
+// The rune count is used (not byte length) so multi-byte characters are counted
+// naturally.
+func Text(s string) error {
+	if s == "" {
 		return fmt.Errorf("text must not be empty")
 	}
-	n := utf8.RuneCountInString(text)
+	n := utf8.RuneCountInString(s)
 	if n > MaxTextLength {
 		return fmt.Errorf("text length %d exceeds maximum %d characters", n, MaxTextLength)
 	}
@@ -96,10 +93,9 @@ func ValidateText(text string) error {
 // KEY VALIDATION
 // =============================================================================
 
-// ValidateKey checks that key is a member of the robotgo key allowlist.
-// This prevents arbitrary strings from reaching the OS key-tap API, which
-// eliminates a class of injection/undefined-behaviour bugs.
-func ValidateKey(key string) error {
+// Key checks that key is a member of the robotgo key allowlist.
+// This prevents arbitrary strings from reaching the OS key-tap API.
+func Key(key string) error {
 	if len(key) > MaxKeyNameLength {
 		return fmt.Errorf("key name too long (max %d characters)", MaxKeyNameLength)
 	}
@@ -109,7 +105,7 @@ func ValidateKey(key string) error {
 	return nil
 }
 
-// allowedKeys is the set of key names accepted by ValidateKey.
+// allowedKeys is the set of key names accepted by Key.
 // Sourced from the robotgo key constants; extended with common aliases.
 var allowedKeys = map[string]bool{
 	// Lowercase letters

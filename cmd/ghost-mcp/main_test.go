@@ -8,8 +8,12 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"testing"
 
+	"github.com/ghost-mcp/internal/audit"
+	"github.com/ghost-mcp/internal/logging"
+	"github.com/ghost-mcp/internal/validate"
 	"github.com/mark3labs/mcp-go/mcp"
 )
 
@@ -611,13 +615,13 @@ func TestInitiateShutdownIdempotent(t *testing.T) {
 // TestLoggingFunctions tests that logging functions don't panic
 func TestLoggingFunctions(t *testing.T) {
 	// These should not panic
-	logInfo("Test info message")
-	logError("Test error message")
-	logDebug("Test debug message")
+	logging.Info("Test info message")
+	logging.Error("Test error message")
+	logging.Debug("Test debug message")
 
 	// Enable debug mode and test again
 	t.Setenv("GHOST_MCP_DEBUG", "1")
-	logDebug("Test debug message with debug enabled")
+	logging.Debug("Test debug message with debug enabled")
 }
 
 // =============================================================================
@@ -648,8 +652,8 @@ func TestValidateStartupToken_Present(t *testing.T) {
 // TestMakeTokenValidator_ValidToken tests that a matching token passes validation
 func TestMakeTokenValidator_ValidToken(t *testing.T) {
 	t.Setenv(TokenEnvVar, "valid-token")
-	t.Setenv(AuditEnvVar, t.TempDir())
-	al, _ := NewAuditLogger()
+	t.Setenv(audit.EnvVar, t.TempDir())
+	al, _ := audit.New()
 	defer al.Close()
 	validator := makeTokenValidator("valid-token", al)
 	if err := validator(context.Background(), 1, nil); err != nil {
@@ -660,8 +664,8 @@ func TestMakeTokenValidator_ValidToken(t *testing.T) {
 // TestMakeTokenValidator_WrongToken tests that a mismatched token is rejected
 func TestMakeTokenValidator_WrongToken(t *testing.T) {
 	t.Setenv(TokenEnvVar, "wrong-token")
-	t.Setenv(AuditEnvVar, t.TempDir())
-	al, _ := NewAuditLogger()
+	t.Setenv(audit.EnvVar, t.TempDir())
+	al, _ := audit.New()
 	defer al.Close()
 	validator := makeTokenValidator("expected-token", al)
 	if err := validator(context.Background(), 1, nil); err == nil {
@@ -672,8 +676,8 @@ func TestMakeTokenValidator_WrongToken(t *testing.T) {
 // TestMakeTokenValidator_MissingToken tests that a cleared token is rejected
 func TestMakeTokenValidator_MissingToken(t *testing.T) {
 	t.Setenv(TokenEnvVar, "")
-	t.Setenv(AuditEnvVar, t.TempDir())
-	al, _ := NewAuditLogger()
+	t.Setenv(audit.EnvVar, t.TempDir())
+	al, _ := audit.New()
 	defer al.Close()
 	validator := makeTokenValidator("expected-token", al)
 	if err := validator(context.Background(), 1, nil); err == nil {
@@ -684,8 +688,8 @@ func TestMakeTokenValidator_MissingToken(t *testing.T) {
 // TestCreateServer_WithToken tests that createServer succeeds with a valid token
 func TestCreateServer_WithToken(t *testing.T) {
 	t.Setenv(TokenEnvVar, "test-token")
-	t.Setenv(AuditEnvVar, t.TempDir())
-	al, err := NewAuditLogger()
+	t.Setenv(audit.EnvVar, t.TempDir())
+	al, err := audit.New()
 	if err != nil {
 		t.Fatalf("Failed to create audit logger: %v", err)
 	}
@@ -693,5 +697,116 @@ func TestCreateServer_WithToken(t *testing.T) {
 	srv := createServer("test-token", al)
 	if srv == nil {
 		t.Fatal("Expected non-nil server")
+	}
+}
+
+// =============================================================================
+// GETINTPARAM — whole-number enforcement
+// =============================================================================
+
+func TestGetIntParam_WholeFloat(t *testing.T) {
+	req := mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: map[string]interface{}{"n": float64(42)}}}
+	v, err := getIntParam(req, "n")
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+	if v != 42 {
+		t.Errorf("Expected 42, got %d", v)
+	}
+}
+
+func TestGetIntParam_FractionalFloat_Rejected(t *testing.T) {
+	for _, f := range []float64{1.5, 0.1, 42.9, -1.1, 100.001} {
+		req := mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: map[string]interface{}{"n": f}}}
+		if _, err := getIntParam(req, "n"); err == nil {
+			t.Errorf("getIntParam with %v: expected error for fractional float", f)
+		}
+	}
+}
+
+func TestGetIntParam_NegativeWholeFloat(t *testing.T) {
+	req := mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: map[string]interface{}{"n": float64(-5)}}}
+	v, err := getIntParam(req, "n")
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+	if v != -5 {
+		t.Errorf("Expected -5, got %d", v)
+	}
+}
+
+func TestGetIntParam_ZeroFloat(t *testing.T) {
+	req := mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: map[string]interface{}{"n": float64(0)}}}
+	v, err := getIntParam(req, "n")
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+	if v != 0 {
+		t.Errorf("Expected 0, got %d", v)
+	}
+}
+
+// =============================================================================
+// HANDLER VALIDATION — no CGo; only tests the validation branch
+// =============================================================================
+
+func TestHandleTypeText_EmptyText(t *testing.T) {
+	req := mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: map[string]interface{}{"text": ""}}}
+	result, err := handleTypeText(nil, req)
+	if err != nil {
+		t.Fatalf("Handler returned unexpected Go error: %v", err)
+	}
+	if !result.IsError {
+		t.Error("Expected tool error result for empty text")
+	}
+}
+
+func TestHandleTypeText_TooLong(t *testing.T) {
+	req := mcp.CallToolRequest{Params: mcp.CallToolParams{
+		Arguments: map[string]interface{}{"text": strings.Repeat("a", validate.MaxTextLength+1)},
+	}}
+	result, err := handleTypeText(nil, req)
+	if err != nil {
+		t.Fatalf("Handler returned unexpected Go error: %v", err)
+	}
+	if !result.IsError {
+		t.Error("Expected tool error result for oversized text")
+	}
+}
+
+func TestHandlePressKey_UnknownKey(t *testing.T) {
+	req := mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: map[string]interface{}{"key": "not_a_real_key"}}}
+	result, err := handlePressKey(nil, req)
+	if err != nil {
+		t.Fatalf("Handler returned unexpected Go error: %v", err)
+	}
+	if !result.IsError {
+		t.Error("Expected tool error result for unknown key")
+	}
+}
+
+func TestHandlePressKey_InjectionAttempt(t *testing.T) {
+	for _, key := range []string{"; rm -rf /", "$(whoami)", "../../../etc/passwd", "ctrl+alt+del"} {
+		req := mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: map[string]interface{}{"key": key}}}
+		result, err := handlePressKey(nil, req)
+		if err != nil {
+			t.Fatalf("Handler returned unexpected Go error for %q: %v", key, err)
+		}
+		if !result.IsError {
+			t.Errorf("Expected tool error for injection attempt %q", key)
+		}
+	}
+}
+
+func TestHandleMoveMouse_FractionalCoords(t *testing.T) {
+	req := mcp.CallToolRequest{Params: mcp.CallToolParams{
+		Arguments: map[string]interface{}{"x": 100.5, "y": float64(200)},
+	}}
+	result, err := handleMoveMouse(nil, req)
+	if err != nil {
+		t.Fatalf("Handler returned unexpected Go error: %v", err)
+	}
+	if !result.IsError {
+		t.Error("Expected tool error for fractional x coordinate")
 	}
 }

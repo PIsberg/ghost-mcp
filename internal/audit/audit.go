@@ -1,4 +1,4 @@
-// audit.go - Tamper-evident audit logging for Ghost MCP
+// Package audit provides tamper-evident audit logging for Ghost MCP.
 //
 // Every tool invocation, authentication failure, and server lifecycle event is
 // written as a JSON Lines record to a dedicated log file.
@@ -18,7 +18,7 @@
 // Default: <UserConfigDir>/ghost-mcp/audit/
 //
 // Files are named ghost-mcp-audit-YYYY-MM-DD.jsonl (UTC date, rotated daily).
-package main
+package audit
 
 import (
 	"context"
@@ -33,23 +33,21 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ghost-mcp/internal/logging"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 )
 
-// AuditEnvVar is the environment variable that sets the audit log directory.
-const AuditEnvVar = "GHOST_MCP_AUDIT_LOG"
+// EnvVar is the environment variable that sets the audit log directory.
+const EnvVar = "GHOST_MCP_AUDIT_LOG"
 
 // maxParamValueLen is the maximum rune count logged for a single parameter value.
-// Longer values are truncated to prevent log bloat (e.g., long type_text inputs).
 const maxParamValueLen = 500
 
 // ErrAuthFailed is the sentinel error for authentication failures.
-// It is wrapped into the error returned by makeTokenValidator so that
-// callers can use errors.Is to distinguish auth failures from other errors.
 var ErrAuthFailed = errors.New("authentication required")
 
-// Audit event type constants used in the "event" field of every log entry.
+// Event type constants used in the "event" field of every log entry.
 const (
 	EventServerStart  = "SERVER_START"
 	EventServerStop   = "SERVER_STOP"
@@ -62,8 +60,8 @@ const (
 	EventRequestError = "REQUEST_ERROR"
 )
 
-// AuditEntry is one record in the audit log.
-type AuditEntry struct {
+// Entry is one record in the audit log.
+type Entry struct {
 	Sequence  int64                  `json:"seq"`
 	Timestamp string                 `json:"timestamp"`
 	Event     string                 `json:"event"`
@@ -75,9 +73,9 @@ type AuditEntry struct {
 	Hash      string                 `json:"hash"`
 }
 
-// AuditLogger writes tamper-evident audit records. Safe for concurrent use.
+// Logger writes tamper-evident audit records. Safe for concurrent use.
 // A disabled logger silently drops all writes; it is never nil.
-type AuditLogger struct {
+type Logger struct {
 	dir      string
 	mu       sync.Mutex
 	file     *os.File
@@ -88,10 +86,10 @@ type AuditLogger struct {
 	disabled bool   // true when startup failed; all writes become no-ops
 }
 
-// NewAuditLogger creates an AuditLogger. On error it returns a disabled logger
-// so callers never need nil-checks; writes simply become no-ops.
-func NewAuditLogger() (*AuditLogger, error) {
-	dir := os.Getenv(AuditEnvVar)
+// New creates a Logger. On error it returns a disabled logger so callers never
+// need nil-checks; writes simply become no-ops.
+func New() (*Logger, error) {
+	dir := os.Getenv(EnvVar)
 	if dir == "" {
 		configDir, err := os.UserConfigDir()
 		if err != nil {
@@ -101,25 +99,25 @@ func NewAuditLogger() (*AuditLogger, error) {
 	}
 
 	if err := os.MkdirAll(dir, 0700); err != nil {
-		return &AuditLogger{disabled: true},
+		return &Logger{disabled: true},
 			fmt.Errorf("failed to create audit log directory %q: %w", dir, err)
 	}
 
-	al := &AuditLogger{
+	al := &Logger{
 		dir:      dir,
 		lastHash: strings.Repeat("0", 64), // genesis hash — no previous entry
 	}
 	if err := al.openFile(); err != nil {
-		return &AuditLogger{disabled: true}, err
+		return &Logger{disabled: true}, err
 	}
 
-	logInfo("Audit logging enabled: %s", dir)
+	logging.Info("Audit logging enabled: %s", dir)
 	return al, nil
 }
 
 // openFile opens (or creates) today's audit log file in append mode.
 // Caller must hold al.mu.
-func (al *AuditLogger) openFile() error {
+func (al *Logger) openFile() error {
 	date := time.Now().UTC().Format("2006-01-02")
 	path := filepath.Join(al.dir, fmt.Sprintf("ghost-mcp-audit-%s.jsonl", date))
 
@@ -137,26 +135,26 @@ func (al *AuditLogger) openFile() error {
 }
 
 // SetClientID records the MCP client name so it appears in future log entries.
-func (al *AuditLogger) SetClientID(id string) {
+func (al *Logger) SetClientID(id string) {
 	al.mu.Lock()
 	al.clientID = id
 	al.mu.Unlock()
 }
 
 // GetClientID returns the current client identity string.
-func (al *AuditLogger) GetClientID() string {
+func (al *Logger) GetClientID() string {
 	al.mu.Lock()
 	defer al.mu.Unlock()
 	return al.clientID
 }
 
-// LogDir returns the directory where audit logs are written.
-func (al *AuditLogger) LogDir() string {
+// Dir returns the directory where audit logs are written.
+func (al *Logger) Dir() string {
 	return al.dir
 }
 
 // Log writes one audit entry. It is a no-op when the logger is disabled.
-func (al *AuditLogger) Log(event, tool, errMsg string, params map[string]interface{}) {
+func (al *Logger) Log(event, tool, errMsg string, params map[string]interface{}) {
 	if al == nil || al.disabled {
 		return
 	}
@@ -168,13 +166,13 @@ func (al *AuditLogger) Log(event, tool, errMsg string, params map[string]interfa
 	today := time.Now().UTC().Format("2006-01-02")
 	if today != al.date {
 		if err := al.openFile(); err != nil {
-			logError("Audit log rotation failed: %v", err)
+			logging.Error("Audit log rotation failed: %v", err)
 			return
 		}
 	}
 
 	al.seq++
-	entry := AuditEntry{
+	entry := Entry{
 		Sequence:  al.seq,
 		Timestamp: time.Now().UTC().Format(time.RFC3339Nano),
 		Event:     event,
@@ -189,21 +187,20 @@ func (al *AuditLogger) Log(event, tool, errMsg string, params map[string]interfa
 
 	data, err := json.Marshal(entry)
 	if err != nil {
-		logError("Audit: failed to marshal entry: %v", err)
+		logging.Error("Audit: failed to marshal entry: %v", err)
 		return
 	}
 	if _, err := fmt.Fprintf(al.file, "%s\n", data); err != nil {
-		logError("Audit: failed to write entry: %v", err)
+		logging.Error("Audit: failed to write entry: %v", err)
 		return
 	}
-	// Sync to disk after every entry so the log survives crashes.
 	al.file.Sync() //nolint:errcheck
 
-	logDebug("Audit[%d] event=%s tool=%q client=%q", al.seq, event, tool, al.clientID)
+	logging.Debug("Audit[%d] event=%s tool=%q client=%q", al.seq, event, tool, al.clientID)
 }
 
 // Close flushes and closes the underlying log file.
-func (al *AuditLogger) Close() {
+func (al *Logger) Close() {
 	if al == nil || al.disabled {
 		return
 	}
@@ -220,8 +217,7 @@ func (al *AuditLogger) Close() {
 // HASH CHAIN
 // =============================================================================
 
-// hashableEntry mirrors AuditEntry without the Hash field so we can produce
-// a deterministic hash of the entry's content.
+// hashableEntry mirrors Entry without the Hash field for deterministic hashing.
 type hashableEntry struct {
 	Sequence  int64                  `json:"seq"`
 	Timestamp string                 `json:"timestamp"`
@@ -233,8 +229,8 @@ type hashableEntry struct {
 	PrevHash  string                 `json:"prev_hash"`
 }
 
-// computeEntryHash returns the SHA-256 hex digest of entry content (Hash field excluded).
-func computeEntryHash(entry AuditEntry) string {
+// computeEntryHash returns the SHA-256 hex digest of entry content (Hash excluded).
+func computeEntryHash(entry Entry) string {
 	h := hashableEntry{
 		Sequence:  entry.Sequence,
 		Timestamp: entry.Timestamp,
@@ -260,14 +256,14 @@ func VerifyLogFile(path string) error {
 	}
 
 	lines := strings.Split(strings.TrimRight(string(raw), "\n"), "\n")
-	prevHash := strings.Repeat("0", 64) // expected genesis prev_hash
+	prevHash := strings.Repeat("0", 64)
 
 	for i, line := range lines {
 		line = strings.TrimSpace(line)
 		if line == "" {
 			continue
 		}
-		var entry AuditEntry
+		var entry Entry
 		if err := json.Unmarshal([]byte(line), &entry); err != nil {
 			return fmt.Errorf("line %d: invalid JSON: %w", i+1, err)
 		}
@@ -288,7 +284,7 @@ func VerifyLogFile(path string) error {
 // =============================================================================
 
 // sanitizeParams returns a copy of params safe for logging.
-// String values longer than maxParamValueLen are truncated.
+// String values longer than maxParamValueLen runes are truncated.
 func sanitizeParams(params map[string]interface{}) map[string]interface{} {
 	if len(params) == 0 {
 		return nil
@@ -310,9 +306,9 @@ func sanitizeParams(params map[string]interface{}) map[string]interface{} {
 // MCP SERVER HOOK REGISTRATION
 // =============================================================================
 
-// registerAuditHooks wires audit-log writes into an existing Hooks set.
+// RegisterHooks wires audit-log writes into an existing Hooks set.
 // It does not replace any hooks already registered (e.g. the token validator).
-func registerAuditHooks(hooks *server.Hooks, al *AuditLogger) {
+func RegisterHooks(hooks *server.Hooks, al *Logger) {
 	// Capture client identity from the MCP initialize handshake.
 	hooks.AddAfterInitialize(func(
 		_ context.Context, _ any,
@@ -363,8 +359,6 @@ func registerAuditHooks(hooks *server.Hooks, al *AuditLogger) {
 	})
 
 	// Log MCP-level errors (tool not found, malformed requests, etc.).
-	// Note: onRequestInitialization failures (auth) are logged directly in
-	// makeTokenValidator because they bypass this hook.
 	hooks.AddOnError(func(_ context.Context, _ any, method mcp.MCPMethod, _ any, err error) {
 		if err == nil {
 			return

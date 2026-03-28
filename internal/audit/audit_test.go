@@ -1,5 +1,5 @@
-// audit_test.go - Tests for the tamper-evident audit logging system
-package main
+// audit_test.go — Tests for the tamper-evident audit logging system.
+package audit
 
 import (
 	"bufio"
@@ -16,29 +16,26 @@ import (
 // HELPERS
 // =============================================================================
 
-// newTestLogger creates an AuditLogger writing to a temporary directory.
-func newTestLogger(t *testing.T) *AuditLogger {
+func newTestLogger(t *testing.T) *Logger {
 	t.Helper()
 	dir := t.TempDir()
-	t.Setenv(AuditEnvVar, dir)
-	al, err := NewAuditLogger()
+	t.Setenv(EnvVar, dir)
+	al, err := New()
 	if err != nil {
-		t.Fatalf("NewAuditLogger: %v", err)
+		t.Fatalf("New: %v", err)
 	}
 	t.Cleanup(al.Close)
 	return al
 }
 
-// readEntries reads all AuditEntry records from the first .jsonl file found
-// in the logger's directory. It closes the logger first to flush the file.
-func readEntries(t *testing.T, al *AuditLogger) []AuditEntry {
+func readEntries(t *testing.T, al *Logger) []Entry {
 	t.Helper()
 	al.Close()
 
-	pattern := filepath.Join(al.LogDir(), "ghost-mcp-audit-*.jsonl")
+	pattern := filepath.Join(al.Dir(), "ghost-mcp-audit-*.jsonl")
 	matches, err := filepath.Glob(pattern)
 	if err != nil || len(matches) == 0 {
-		t.Fatalf("no audit log file found in %s", al.LogDir())
+		t.Fatalf("no audit log file found in %s", al.Dir())
 	}
 
 	f, err := os.Open(matches[0])
@@ -47,14 +44,14 @@ func readEntries(t *testing.T, al *AuditLogger) []AuditEntry {
 	}
 	defer f.Close()
 
-	var entries []AuditEntry
+	var entries []Entry
 	scanner := bufio.NewScanner(f)
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
 		if line == "" {
 			continue
 		}
-		var e AuditEntry
+		var e Entry
 		if err := json.Unmarshal([]byte(line), &e); err != nil {
 			t.Fatalf("unmarshal entry: %v\nline: %s", err, line)
 		}
@@ -63,29 +60,26 @@ func readEntries(t *testing.T, al *AuditLogger) []AuditEntry {
 	return entries
 }
 
-// firstLogFile returns the path of the first audit log file in the logger's directory.
-func firstLogFile(t *testing.T, al *AuditLogger) string {
+func firstLogFile(t *testing.T, al *Logger) string {
 	t.Helper()
 	al.Close()
-	pattern := filepath.Join(al.LogDir(), "ghost-mcp-audit-*.jsonl")
+	pattern := filepath.Join(al.Dir(), "ghost-mcp-audit-*.jsonl")
 	matches, err := filepath.Glob(pattern)
 	if err != nil || len(matches) == 0 {
-		t.Fatalf("no audit log file found in %s", al.LogDir())
+		t.Fatalf("no audit log file found in %s", al.Dir())
 	}
 	return matches[0]
 }
 
 // =============================================================================
-// NEWAUDITLOGGER TESTS
+// NEW LOGGER TESTS
 // =============================================================================
 
-// TestNewAuditLogger_CreatesDirectory tests that NewAuditLogger creates
-// the log directory when it does not already exist.
-func TestNewAuditLogger_CreatesDirectory(t *testing.T) {
+func TestNew_CreatesDirectory(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "nested", "audit")
-	t.Setenv(AuditEnvVar, dir)
+	t.Setenv(EnvVar, dir)
 
-	al, err := NewAuditLogger()
+	al, err := New()
 	if err != nil {
 		t.Fatalf("Unexpected error: %v", err)
 	}
@@ -96,26 +90,23 @@ func TestNewAuditLogger_CreatesDirectory(t *testing.T) {
 	}
 }
 
-// TestNewAuditLogger_CreatesLogFile tests that a log file is created on startup.
-func TestNewAuditLogger_CreatesLogFile(t *testing.T) {
+func TestNew_CreatesLogFile(t *testing.T) {
 	al := newTestLogger(t)
 
-	pattern := filepath.Join(al.LogDir(), "ghost-mcp-audit-*.jsonl")
+	pattern := filepath.Join(al.Dir(), "ghost-mcp-audit-*.jsonl")
 	matches, err := filepath.Glob(pattern)
 	if err != nil || len(matches) == 0 {
 		t.Error("Expected audit log file to be created")
 	}
 }
 
-// TestNewAuditLogger_FileNameContainsDate tests that the log file name
-// includes today's UTC date.
-func TestNewAuditLogger_FileNameContainsDate(t *testing.T) {
+func TestNew_FileNameContainsDate(t *testing.T) {
 	al := newTestLogger(t)
 
 	today := time.Now().UTC().Format("2006-01-02")
 	expected := fmt.Sprintf("ghost-mcp-audit-%s.jsonl", today)
 
-	pattern := filepath.Join(al.LogDir(), "ghost-mcp-audit-*.jsonl")
+	pattern := filepath.Join(al.Dir(), "ghost-mcp-audit-*.jsonl")
 	matches, _ := filepath.Glob(pattern)
 	if len(matches) == 0 {
 		t.Fatal("No audit log file created")
@@ -125,38 +116,31 @@ func TestNewAuditLogger_FileNameContainsDate(t *testing.T) {
 	}
 }
 
-// TestNewAuditLogger_DisabledOnBadDirectory tests that an invalid directory
-// returns a disabled logger, not nil.
-func TestNewAuditLogger_DisabledOnBadDirectory(t *testing.T) {
-	// Use a path that cannot be created (file exists at parent path)
+func TestNew_DisabledOnBadDirectory(t *testing.T) {
 	tmp := t.TempDir()
 	blocker := filepath.Join(tmp, "blocker")
 	if err := os.WriteFile(blocker, []byte("x"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv(AuditEnvVar, filepath.Join(blocker, "subdir"))
+	t.Setenv(EnvVar, filepath.Join(blocker, "subdir"))
 
-	al, err := NewAuditLogger()
+	al, err := New()
 	if err == nil {
 		t.Error("Expected error for bad directory")
 	}
 	if al == nil {
 		t.Fatal("Expected non-nil disabled logger, got nil")
 	}
-	// Writes to a disabled logger must not panic
-	al.Log(EventServerStart, "", "", nil)
+	al.Log(EventServerStart, "", "", nil) // must not panic
 }
 
 // =============================================================================
 // LOG ENTRY TESTS
 // =============================================================================
 
-// TestLog_WritesEntry tests that Log writes a correctly structured entry.
 func TestLog_WritesEntry(t *testing.T) {
 	al := newTestLogger(t)
-	al.Log(EventServerStart, "", "", map[string]interface{}{
-		"version": "1.0.0",
-	})
+	al.Log(EventServerStart, "", "", map[string]interface{}{"version": "1.0.0"})
 
 	entries := readEntries(t, al)
 	if len(entries) != 1 {
@@ -181,7 +165,6 @@ func TestLog_WritesEntry(t *testing.T) {
 	}
 }
 
-// TestLog_SequenceIncrements tests that sequence numbers are monotonically increasing.
 func TestLog_SequenceIncrements(t *testing.T) {
 	al := newTestLogger(t)
 	al.Log(EventServerStart, "", "", nil)
@@ -199,7 +182,6 @@ func TestLog_SequenceIncrements(t *testing.T) {
 	}
 }
 
-// TestLog_ClientIDIncluded tests that the client ID appears in entries.
 func TestLog_ClientIDIncluded(t *testing.T) {
 	al := newTestLogger(t)
 	al.SetClientID("claude-desktop")
@@ -214,7 +196,6 @@ func TestLog_ClientIDIncluded(t *testing.T) {
 	}
 }
 
-// TestLog_ErrorFieldPopulated tests that error messages appear in entries.
 func TestLog_ErrorFieldPopulated(t *testing.T) {
 	al := newTestLogger(t)
 	al.Log(EventAuthFailure, "", "invalid token", nil)
@@ -228,7 +209,6 @@ func TestLog_ErrorFieldPopulated(t *testing.T) {
 	}
 }
 
-// TestLog_ToolNameIncluded tests that the tool name appears in entries.
 func TestLog_ToolNameIncluded(t *testing.T) {
 	al := newTestLogger(t)
 	al.Log(EventToolCall, "take_screenshot", "", nil)
@@ -246,7 +226,6 @@ func TestLog_ToolNameIncluded(t *testing.T) {
 // HASH CHAIN TESTS
 // =============================================================================
 
-// TestHashChain_GenesisHash tests that the first entry's prev_hash is the genesis value.
 func TestHashChain_GenesisHash(t *testing.T) {
 	al := newTestLogger(t)
 	al.Log(EventServerStart, "", "", nil)
@@ -261,8 +240,6 @@ func TestHashChain_GenesisHash(t *testing.T) {
 	}
 }
 
-// TestHashChain_ChainedCorrectly tests that each entry's prev_hash matches
-// the hash of the preceding entry.
 func TestHashChain_ChainedCorrectly(t *testing.T) {
 	al := newTestLogger(t)
 	al.Log(EventServerStart, "", "", nil)
@@ -281,7 +258,6 @@ func TestHashChain_ChainedCorrectly(t *testing.T) {
 	}
 }
 
-// TestHashChain_HashDiffersPerEntry tests that distinct entries produce distinct hashes.
 func TestHashChain_HashDiffersPerEntry(t *testing.T) {
 	al := newTestLogger(t)
 	al.Log(EventToolCall, "click", "", nil)
@@ -300,20 +276,17 @@ func TestHashChain_HashDiffersPerEntry(t *testing.T) {
 // VERIFY LOG FILE TESTS
 // =============================================================================
 
-// TestVerifyLogFile_ValidFile tests that an intact log file passes verification.
 func TestVerifyLogFile_ValidFile(t *testing.T) {
 	al := newTestLogger(t)
 	al.Log(EventServerStart, "", "", nil)
 	al.Log(EventToolCall, "click", "", nil)
 	al.Log(EventToolSuccess, "click", "", nil)
 
-	path := firstLogFile(t, al)
-	if err := VerifyLogFile(path); err != nil {
+	if err := VerifyLogFile(firstLogFile(t, al)); err != nil {
 		t.Errorf("Expected valid file to pass, got error: %v", err)
 	}
 }
 
-// TestVerifyLogFile_EmptyFile tests that an empty file is valid.
 func TestVerifyLogFile_EmptyFile(t *testing.T) {
 	f, err := os.CreateTemp(t.TempDir(), "audit-*.jsonl")
 	if err != nil {
@@ -325,14 +298,11 @@ func TestVerifyLogFile_EmptyFile(t *testing.T) {
 	}
 }
 
-// TestVerifyLogFile_TamperedHash tests that modifying an entry's content
-// is detected by VerifyLogFile.
 func TestVerifyLogFile_TamperedHash(t *testing.T) {
 	al := newTestLogger(t)
 	al.Log(EventToolCall, "click", "", nil)
 	path := firstLogFile(t, al)
 
-	// Read the file, modify one entry's event field, write it back.
 	raw, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)
@@ -347,7 +317,6 @@ func TestVerifyLogFile_TamperedHash(t *testing.T) {
 	}
 }
 
-// TestVerifyLogFile_TamperedChain tests that deleting an entry is detected.
 func TestVerifyLogFile_TamperedChain(t *testing.T) {
 	al := newTestLogger(t)
 	al.Log(EventServerStart, "", "", nil)
@@ -355,7 +324,6 @@ func TestVerifyLogFile_TamperedChain(t *testing.T) {
 	al.Log(EventToolSuccess, "click", "", nil)
 	path := firstLogFile(t, al)
 
-	// Remove the second line to break the chain.
 	raw, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)
@@ -364,7 +332,6 @@ func TestVerifyLogFile_TamperedChain(t *testing.T) {
 	if len(lines) < 3 {
 		t.Fatal("Expected at least 3 lines")
 	}
-	// Keep first and third, drop second
 	kept := append(lines[:1], lines[2:]...)
 	if err := os.WriteFile(path, []byte(strings.Join(kept, "\n")+"\n"), 0600); err != nil {
 		t.Fatal(err)
@@ -375,7 +342,6 @@ func TestVerifyLogFile_TamperedChain(t *testing.T) {
 	}
 }
 
-// TestVerifyLogFile_MissingFile tests that a missing file returns an error.
 func TestVerifyLogFile_MissingFile(t *testing.T) {
 	if err := VerifyLogFile("/does/not/exist.jsonl"); err == nil {
 		t.Error("Expected error for missing file")
@@ -383,37 +349,31 @@ func TestVerifyLogFile_MissingFile(t *testing.T) {
 }
 
 // =============================================================================
-// PARAMETER SANITIZATION TESTS
+// SANITIZE PARAMS TESTS
 // =============================================================================
 
-// TestSanitizeParams_NilInput tests that nil input returns nil.
 func TestSanitizeParams_NilInput(t *testing.T) {
 	if sanitizeParams(nil) != nil {
 		t.Error("Expected nil for nil input")
 	}
 }
 
-// TestSanitizeParams_EmptyInput tests that empty input returns nil.
 func TestSanitizeParams_EmptyInput(t *testing.T) {
 	if sanitizeParams(map[string]interface{}{}) != nil {
 		t.Error("Expected nil for empty input")
 	}
 }
 
-// TestSanitizeParams_ShortStringsPreserved tests that short values are unchanged.
 func TestSanitizeParams_ShortStringsPreserved(t *testing.T) {
-	input := map[string]interface{}{"key": "hello"}
-	out := sanitizeParams(input)
+	out := sanitizeParams(map[string]interface{}{"key": "hello"})
 	if out["key"] != "hello" {
 		t.Errorf("Expected 'hello', got %v", out["key"])
 	}
 }
 
-// TestSanitizeParams_LongStringTruncated tests that strings over the limit are truncated.
 func TestSanitizeParams_LongStringTruncated(t *testing.T) {
 	long := strings.Repeat("a", maxParamValueLen+100)
-	input := map[string]interface{}{"text": long}
-	out := sanitizeParams(input)
+	out := sanitizeParams(map[string]interface{}{"text": long})
 	s, ok := out["text"].(string)
 	if !ok {
 		t.Fatal("Expected string output")
@@ -426,10 +386,8 @@ func TestSanitizeParams_LongStringTruncated(t *testing.T) {
 	}
 }
 
-// TestSanitizeParams_NonStringPreserved tests that non-string values are unchanged.
 func TestSanitizeParams_NonStringPreserved(t *testing.T) {
-	input := map[string]interface{}{"x": float64(42)}
-	out := sanitizeParams(input)
+	out := sanitizeParams(map[string]interface{}{"x": float64(42)})
 	if out["x"] != float64(42) {
 		t.Errorf("Expected float64(42), got %v", out["x"])
 	}
@@ -439,27 +397,21 @@ func TestSanitizeParams_NonStringPreserved(t *testing.T) {
 // COMPUTE ENTRY HASH TESTS
 // =============================================================================
 
-// TestComputeEntryHash_Deterministic tests that the same entry always produces
-// the same hash.
 func TestComputeEntryHash_Deterministic(t *testing.T) {
-	entry := AuditEntry{
+	entry := Entry{
 		Sequence:  1,
 		Timestamp: "2024-01-01T00:00:00Z",
 		Event:     EventToolCall,
 		Tool:      "click",
 		PrevHash:  strings.Repeat("0", 64),
 	}
-	h1 := computeEntryHash(entry)
-	h2 := computeEntryHash(entry)
-	if h1 != h2 {
+	if computeEntryHash(entry) != computeEntryHash(entry) {
 		t.Error("Expected deterministic hash")
 	}
 }
 
-// TestComputeEntryHash_ChangesWithContent tests that different content produces
-// different hashes.
 func TestComputeEntryHash_ChangesWithContent(t *testing.T) {
-	base := AuditEntry{
+	base := Entry{
 		Sequence:  1,
 		Timestamp: "2024-01-01T00:00:00Z",
 		Event:     EventToolCall,
@@ -468,16 +420,13 @@ func TestComputeEntryHash_ChangesWithContent(t *testing.T) {
 	}
 	modified := base
 	modified.Tool = "move_mouse"
-
 	if computeEntryHash(base) == computeEntryHash(modified) {
 		t.Error("Expected different hashes for different content")
 	}
 }
 
-// TestComputeEntryHash_HashFieldIgnored tests that changing the Hash field
-// does not affect the computed hash (the hash covers content, not itself).
 func TestComputeEntryHash_HashFieldIgnored(t *testing.T) {
-	entry := AuditEntry{
+	entry := Entry{
 		Sequence:  1,
 		Timestamp: "2024-01-01T00:00:00Z",
 		Event:     EventServerStart,
@@ -486,8 +435,7 @@ func TestComputeEntryHash_HashFieldIgnored(t *testing.T) {
 	}
 	h1 := computeEntryHash(entry)
 	entry.Hash = "different-hash"
-	h2 := computeEntryHash(entry)
-	if h1 != h2 {
+	if h1 != computeEntryHash(entry) {
 		t.Error("Hash field should not influence the computed hash")
 	}
 }
@@ -496,7 +444,6 @@ func TestComputeEntryHash_HashFieldIgnored(t *testing.T) {
 // CLIENT ID TESTS
 // =============================================================================
 
-// TestSetGetClientID tests that SetClientID and GetClientID round-trip correctly.
 func TestSetGetClientID(t *testing.T) {
 	al := newTestLogger(t)
 	al.SetClientID("my-client")
@@ -509,10 +456,8 @@ func TestSetGetClientID(t *testing.T) {
 // DISABLED LOGGER TESTS
 // =============================================================================
 
-// TestDisabledLogger_DoesNotPanic tests that all methods on a disabled logger
-// are safe to call without panicking.
 func TestDisabledLogger_DoesNotPanic(t *testing.T) {
-	al := &AuditLogger{disabled: true}
+	al := &Logger{disabled: true}
 	al.Log(EventServerStart, "", "", nil)
 	al.SetClientID("x")
 	_ = al.GetClientID()
