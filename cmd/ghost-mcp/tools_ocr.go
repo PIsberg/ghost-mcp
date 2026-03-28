@@ -27,4 +27,15 @@ TIPS:
 		mcp.WithNumber("width", mcp.Description("Width of the region to scan in pixels (default: full screen width).")),
 		mcp.WithNumber("height", mcp.Description("Height of the region to scan in pixels (default: full screen height).")),
 	), handleReadScreenText)
+
+	mcpServer.AddTool(mcp.NewTool("find_and_click",
+		mcp.WithDescription(`Scan the full screen with OCR, find the first (or nth) word matching the given text, and click its center. Combines read_screen_text + click_at into one call.
+
+Use this when you know the text label of the element you want to click (button, menu item, link). The match is case-insensitive substring — "Save" matches "Save File", "SAVE", etc.
+
+If the element is not found, take a screenshot to check whether it is visible and try again with a more specific text.`),
+		mcp.WithString("text", mcp.Description("Text to search for (case-insensitive substring match)."), mcp.Required()),
+		mcp.WithString("button", mcp.Description("Mouse button: 'left' (default), 'right', or 'middle'.")),
+		mcp.WithNumber("nth", mcp.Description("Which occurrence to click if the text appears multiple times (default: 1 = first match).")),
+	), handleFindAndClick)
 }

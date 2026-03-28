@@ -36,6 +36,7 @@ Ghost MCP allows AI assistants like Claude to control your computer's mouse, key
 | `press_key` | Press a single key. Use for Enter, Tab, shortcuts, etc. | `key` |
 | `take_screenshot` | Capture screen as base64 PNG. Optional region parameters. | `x`, `y`, `width`, `height` |
 | `read_screen_text` **(OCR)** | Read text from screen using OCR. Returns text and word positions. | `x`, `y`, `width`, `height` |
+| `find_and_click` **(OCR)** | Find text on screen with OCR and click it. Combines read_screen_text + click_at. | `text`, `button` (optional), `nth` (optional, default 1) |
 
 > **Note:** `read_screen_text` requires Tesseract OCR to be installed and `TESSDATA_PREFIX` to be set. See [Prerequisites](#prerequisites).
 

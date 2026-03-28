@@ -1017,3 +1017,47 @@ func TestHandleScroll_NegativeCoords(t *testing.T) {
 		t.Error("Expected tool error for negative x coordinate")
 	}
 }
+
+// =============================================================================
+// FIND_AND_CLICK TESTS
+// =============================================================================
+
+// TestHandleFindAndClick_MissingText tests find_and_click with missing text parameter
+func TestHandleFindAndClick_MissingText(t *testing.T) {
+	req := mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: map[string]interface{}{}}}
+	result, err := handleFindAndClick(nil, req)
+	if err != nil {
+		t.Fatalf("Handler returned unexpected Go error: %v", err)
+	}
+	if !result.IsError {
+		t.Error("Expected tool error for missing text parameter")
+	}
+}
+
+// TestHandleFindAndClick_InvalidButton tests find_and_click with invalid button
+func TestHandleFindAndClick_InvalidButton(t *testing.T) {
+	req := mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: map[string]interface{}{
+		"text": "hello", "button": "invalid",
+	}}}
+	result, err := handleFindAndClick(nil, req)
+	if err != nil {
+		t.Fatalf("Handler returned unexpected Go error: %v", err)
+	}
+	if !result.IsError {
+		t.Error("Expected tool error for invalid button")
+	}
+}
+
+// TestHandleFindAndClick_InvalidNth tests find_and_click with nth < 1
+func TestHandleFindAndClick_InvalidNth(t *testing.T) {
+	req := mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: map[string]interface{}{
+		"text": "hello", "nth": float64(0),
+	}}}
+	result, err := handleFindAndClick(nil, req)
+	if err != nil {
+		t.Fatalf("Handler returned unexpected Go error: %v", err)
+	}
+	if !result.IsError {
+		t.Error("Expected tool error for nth = 0")
+	}
+}
