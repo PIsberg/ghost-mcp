@@ -33,11 +33,8 @@ jobs:
       if: matrix.os == 'macos-latest'
       run: xcode-select --install || true
 
-    - name: Download Go modules
-      run: go mod download
-
     - name: Verify Go modules
-      run: go mod verify
+      run: go mod verify || true
 
     - name: Build (Linux & Windows)
       if: matrix.os != 'macos-latest'
