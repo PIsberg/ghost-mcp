@@ -20,6 +20,7 @@ Ghost MCP allows AI assistants like Claude to control your computer's mouse, key
 - 📋 **Audit Logging**: Tamper-evident JSON Lines log of every tool call, auth failure, and lifecycle event
 - 🛡️ **Failsafe**: Emergency shutdown by moving mouse to top-left corner (0,0)
 - 📝 **Proper Logging**: All logs go to stderr, keeping stdout clean for MCP protocol
+- 🌐 **Dual Transport**: stdio (default) or HTTP/SSE for web-based clients
 
 ## Available Tools
 
@@ -169,6 +170,9 @@ Add this to your MCP client configuration to connect to Ghost MCP:
 | `GHOST_MCP_TOKEN` | **Required.** Secret authentication token. Server refuses to start without it. | *(none — must be set)* |
 | `GHOST_MCP_AUDIT_LOG` | Directory for audit log files. Created automatically if absent. | `<UserConfigDir>/ghost-mcp/audit/` |
 | `GHOST_MCP_DEBUG` | Enable debug logging | `0` (disabled) |
+| `GHOST_MCP_TRANSPORT` | Transport mode: `stdio` or `http` | `stdio` |
+| `GHOST_MCP_HTTP_ADDR` | Listen address for HTTP/SSE mode | `localhost:8080` |
+| `GHOST_MCP_HTTP_BASE_URL` | Public base URL advertised to SSE clients | `http://<addr>` |
 
 > **Security note:** `GHOST_MCP_TOKEN` must be set to a random secret. Generate one with:
 > ```bash
@@ -328,6 +332,59 @@ go run . verify-log /path/to/ghost-mcp-audit-2025-01-15.jsonl
 | `SCREENSHOT_REQUESTED` | `take_screenshot` tool succeeded |
 | `AUTH_FAILURE` | Request rejected due to missing/invalid token |
 | `REQUEST_ERROR` | MCP-level error (unknown tool, malformed request) |
+
+## HTTP/SSE Transport
+
+By default Ghost MCP communicates over stdio, which is the standard MCP transport used by Claude Desktop. Set `GHOST_MCP_TRANSPORT=http` to start an HTTP/SSE server instead.
+
+### Configuration
+
+```json
+{
+  "mcpServers": {
+    "ghost-mcp": {
+      "command": "C:\\path\\to\\ghost-mcp.exe",
+      "env": {
+        "GHOST_MCP_TOKEN": "your-secret-token-here",
+        "GHOST_MCP_TRANSPORT": "http",
+        "GHOST_MCP_HTTP_ADDR": "localhost:8080",
+        "GHOST_MCP_HTTP_BASE_URL": "http://localhost:8080"
+      }
+    }
+  }
+}
+```
+
+### Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/sse` | GET | Open SSE stream (MCP connection) |
+| `/message` | POST | Send MCP messages |
+
+### Authentication
+
+HTTP mode uses the same `GHOST_MCP_TOKEN` as Bearer authentication. Every request must include:
+
+```
+Authorization: Bearer <your-token>
+```
+
+Requests without a valid Bearer token are rejected with HTTP 401 and logged as `AUTH_FAILURE` events in the audit log.
+
+### Example with curl
+
+```bash
+# Open SSE stream (keep this running in a terminal)
+curl -N -H "Authorization: Bearer $GHOST_MCP_TOKEN" http://localhost:8080/sse
+
+# Send an MCP initialize message
+curl -X POST \
+  -H "Authorization: Bearer $GHOST_MCP_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","clientInfo":{"name":"test","version":"1.0"},"capabilities":{}}}' \
+  "http://localhost:8080/message?sessionId=<session-id-from-sse>"
+```
 
 ## Safety Features
 

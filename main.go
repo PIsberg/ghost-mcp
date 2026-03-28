@@ -556,19 +556,36 @@ func main() {
 		initiateShutdown()
 	}()
 
+	// Resolve transport configuration
+	cfg, err := loadTransportConfig()
+	if err != nil {
+		logError("Transport configuration error: %v", err)
+		os.Exit(1)
+	}
+	logInfo("Transport: %s", cfg.mode)
+
 	// Create the MCP server
 	mcpServer := createServer(token, auditLog)
 
-	// Start the stdio server
-	// This blocks and uses stdout/stdin for JSON-RPC communication
-	logInfo("Starting stdio server...")
-	logInfo("IMPORTANT: All application logs are written to stderr")
-	logInfo("stdout is reserved for MCP JSON-RPC protocol")
+	switch cfg.mode {
+	case TransportStdio:
+		logInfo("Starting stdio transport...")
+		logInfo("IMPORTANT: All application logs are written to stderr")
+		logInfo("stdout is reserved for MCP JSON-RPC protocol")
 
-	if err = server.ServeStdio(mcpServer); err != nil {
-		auditLog.Log(EventServerStop, "", err.Error(), nil)
-		logError("Server error: %v", err)
-		os.Exit(1)
+		if err = server.ServeStdio(mcpServer); err != nil {
+			auditLog.Log(EventServerStop, "", err.Error(), nil)
+			logError("Server error: %v", err)
+			os.Exit(1)
+		}
+
+	case TransportHTTP:
+		logInfo("Starting HTTP/SSE transport...")
+		if err = serveHTTPTransport(mcpServer, cfg, token, auditLog); err != nil {
+			auditLog.Log(EventServerStop, "", err.Error(), nil)
+			logError("HTTP server error: %v", err)
+			os.Exit(1)
+		}
 	}
 
 	auditLog.Log(EventServerStop, "", "", nil)
