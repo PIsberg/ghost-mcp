@@ -30,10 +30,10 @@ import (
 
 // Test configuration
 const (
-	fixtureURL      = "http://localhost:8765"
-	fixturePort     = "8765"
-	testTimeout     = 60 * time.Second
-	settleTime      = 500 * time.Millisecond // Time for UI to settle after actions
+	fixtureURL  = "http://localhost:8765"
+	fixturePort = "8765"
+	testTimeout = 60 * time.Second
+	settleTime  = 500 * time.Millisecond // Time for UI to settle after actions
 )
 
 // skipIfNoDisplay skips tests if no display is available

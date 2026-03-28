@@ -51,14 +51,14 @@ type ToolResult struct {
 
 // Client represents an MCP client connected via stdio
 type Client struct {
-	cmd      *exec.Cmd
-	stdin    io.WriteCloser
-	stdout   io.ReadCloser
-	scanner  *bufio.Scanner
-	mu       sync.Mutex
-	nextID   int64
-	timeout  time.Duration
-	closed   bool
+	cmd     *exec.Cmd
+	stdin   io.WriteCloser
+	stdout  io.ReadCloser
+	scanner *bufio.Scanner
+	mu      sync.Mutex
+	nextID  int64
+	timeout time.Duration
+	closed  bool
 }
 
 // Config holds client configuration

@@ -34,7 +34,7 @@ func main() {
 	addr := ":" + port
 	log.Printf("👻 Test Fixture Server starting on http://localhost%s", port)
 	log.Printf("   Press Ctrl+C to stop")
-	
+
 	if err := http.ListenAndServe(addr, nil); err != nil {
 		fmt.Fprintf(os.Stderr, "Server error: %v\n", err)
 		os.Exit(1)
