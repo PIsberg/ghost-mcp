@@ -1,0 +1,41 @@
+@startuml ghost-mcp-request-flow
+
+participant "Client" as client
+participant "MCP Parser" as parser
+participant "Tool Handler" as handler
+participant "RobotGo" as robotgo
+participant "OS" as os
+
+client -> parser: JSON-RPC\n(tools/call)
+activate parser
+
+parser -> handler: Extract & Route
+activate handler
+
+handler -> handler: Get parameters\nx=100, y=200
+
+handler -> robotgo: MoveSmooth(100, 200)
+activate robotgo
+
+robotgo -> os: OS API Call
+activate os
+os -->> robotgo: Success
+deactivate os
+deactivate robotgo
+
+handler -> handler: Check Failsafe
+handler -> handler: Format Response
+
+handler -->> parser: JSON Result
+deactivate handler
+
+parser -> client: JSON-RPC Response
+deactivate parser
+
+note right of client
+  Success Response:
+  {"success": true,
+   "x": 100, "y": 200}
+end note
+
+@enduml

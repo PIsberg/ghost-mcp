@@ -1,0 +1,53 @@
+@startuml ghost-mcp-architecture
+
+skinparam backgroundColor #f0f0f0
+
+card "AI Client\n(Claude)" as client
+
+card "Ghost MCP Server" as server {
+  card "MCP SDK" {
+    file "Tool Router" as router
+    file "Protocol Handler" as handler  
+    file "stdio Transport" as transport
+  }
+  
+  card "Tool Handlers" {
+    file "get_screen_size" as gs
+    file "move_mouse" as mm
+    file "click" as cl
+    file "type_text" as tt
+    file "press_key" as pk
+    file "take_screenshot" as ts
+  }
+  
+  card "RobotGo" {
+    file "Mouse Control" as mc
+    file "Keyboard Control" as kc
+    file "Screen Capture" as sc
+  }
+}
+
+card "Operating System" as os
+
+client --> transport: JSON-RPC\nstdio
+transport --> handler
+handler --> router
+router --> gs
+router --> mm
+router --> cl
+router --> tt
+router --> pk
+router --> ts
+
+gs --> mc
+mm --> mc
+cl --> mc
+tt --> kc
+pk --> kc
+ts --> sc
+
+mc --> os
+kc --> os
+sc --> os
+
+@enduml

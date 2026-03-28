@@ -1,0 +1,35 @@
+@startuml ghost-mcp-tool-handler
+
+start
+
+:Log Debug;
+
+:Extract Parameters;
+
+if (Valid?) then (no)
+  :Return Error;
+  end
+else (yes)
+  :Log Info;
+  
+  :Call RobotGo;
+  
+  if (Success?) then (no)
+    :Return Error;
+    end
+  else (yes)
+    :Check Failsafe;
+    
+    if (At 0,0?) then (yes)
+      :Log FAILSAFE;
+      :Shutdown;
+      end
+    else (no)
+      :Format JSON;
+      :Return Success;
+      end
+    endif
+  endif
+endif
+
+@enduml

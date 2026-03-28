@@ -1,0 +1,22 @@
+@startuml ghost-mcp-concurrency
+
+participant "Main" as main
+participant "Signal" as signal
+
+main -> main: signal.Notify(sigChan)
+
+main -> main: ServeStdio()\n(blocking)
+
+== Request 1 ==
+main -> main: Parse request
+main -> main: Execute tool  
+main -> main: Send response
+
+== Ctrl+C Pressed ==
+signal -> main: SIGINT
+
+main -> main: Initiate Shutdown
+
+main -> main: Graceful Exit
+
+@enduml

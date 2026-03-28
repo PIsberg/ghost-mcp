@@ -1,0 +1,44 @@
+@startuml ghost-mcp-classes
+
+class MCPServer {
+  AddTool()
+  ServeStdio()
+}
+
+class Tool {
+  Name
+  Description
+  Parameters
+}
+
+class CallToolRequest {
+  Params
+}
+
+class CallToolResult {
+  Content
+  IsError
+}
+
+class Handlers {
+  handleGetScreenSize()
+  handleMoveMouse()
+  handleClick()
+  handleTypeText()
+  handlePressKey()
+  handleTakeScreenshot()
+}
+
+class Failsafe {
+  checkFailsafe()
+  initiateShutdown()
+}
+
+MCPServer --> Tool
+MCPServer --> CallToolRequest
+MCPServer --> CallToolResult
+Handlers --> CallToolRequest
+Handlers --> CallToolResult
+Handlers --> Failsafe
+
+@enduml

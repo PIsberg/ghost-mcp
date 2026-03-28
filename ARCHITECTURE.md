@@ -4,57 +4,15 @@ This document describes the internal architecture and design decisions of the Gh
 
 ## System Overview
 
-```
-┌─────────────────────────────────────────────────────────────────────────┐
-│                         AI Client (e.g., Claude)                        │
-└─────────────────────────────────────────────────────────────────────────┘
-                                    │
-                                    │ JSON-RPC over stdio
-                                    │ (stdin/stdout)
-                                    ▼
-┌─────────────────────────────────────────────────────────────────────────┐
-│                         Ghost MCP Server                                │
-│  ┌─────────────────────────────────────────────────────────────────┐   │
-│  │                    MCP SDK (mark3labs/mcp-go)                    │   │
-│  │  ┌─────────────┐ ┌─────────────┐ ┌─────────────────────────┐   │   │
-│  │  │ Tool Router │ │  Protocol   │ │   stdio Transport       │   │   │
-│  │  │             │ │   Handler   │ │   (stdin/stdout)        │   │   │
-│  │  └─────────────┘ └─────────────┘ └─────────────────────────┘   │   │
-│  └─────────────────────────────────────────────────────────────────┘   │
-│                                    │                                    │
-│                                    ▼                                    │
-│  ┌─────────────────────────────────────────────────────────────────┐   │
-│  │                     Tool Handlers                               │   │
-│  │  ┌──────────┐ ┌──────────┐ ┌────────┐ ┌─────────┐ ┌──────────┐ │   │
-│  │  │get_screen│ │move_mouse│ │ click  │ │type_text│ │press_key │ │   │
-│  │  │  _size   │ │          │ │        │ │         │ │          │ │   │
-│  │  └──────────┘ └──────────┘ └────────┘ └─────────┘ └──────────┘ │   │
-│  │  ┌──────────────────┐                                          │   │
-│  │  │take_screenshot   │                                          │   │
-│  │  └──────────────────┘                                          │   │
-│  └─────────────────────────────────────────────────────────────────┘   │
-│                                    │                                    │
-│                                    ▼                                    │
-│  ┌─────────────────────────────────────────────────────────────────┐   │
-│  │                    RobotGo Library                               │   │
-│  │  ┌─────────────┐ ┌─────────────┐ ┌─────────────────────────┐   │   │
-│  │  │   Mouse     │ │  Keyboard   │ │      Screen             │   │   │
-│  │  │   Control   │ │   Control   │ │      Capture            │   │   │
-│  │  └─────────────┘ └─────────────┘ └─────────────────────────┘   │   │
-│  └─────────────────────────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────────────────────────┘
-                                    │
-                                    │ OS-level APIs
-                                    ▼
-┌─────────────────────────────────────────────────────────────────────────┐
-│                         Operating System                                │
-│                    (Windows / macOS / Linux)                            │
-└─────────────────────────────────────────────────────────────────────────┘
-```
+![Architecture Diagram](./diagrams/01-architecture.png)
+
+The Ghost MCP server sits between an AI client (like Claude) and the operating system, providing a safe, sandboxed interface for UI automation through the MCP protocol over stdio.
 
 ## Core Components
 
 ### 1. Main Entry Point (`main()`)
+
+![Startup Diagram](./diagrams/06-startup.png)
 
 The entry point orchestrates server initialization:
 
@@ -62,19 +20,6 @@ The entry point orchestrates server initialization:
 2. **Signal Handling**: Registers handlers for SIGINT/SIGTERM
 3. **Server Creation**: Calls `createServer()` to build the MCP server
 4. **Blocking Serve**: Calls `server.ServeStdio()` which blocks until shutdown
-
-```
-main()
-  │
-  ├─► logInfo() - Startup messages to stderr
-  │
-  ├─► signal.Notify() - Register shutdown signals
-  │
-  ├─► createServer()
-  │     └─► registerTools() - Add all 6 tools
-  │
-  └─► server.ServeStdio() - Block on stdio communication
-```
 
 ### 2. MCP Server (`createServer()`)
 
@@ -111,24 +56,9 @@ Each tool definition includes:
 
 ### 4. Tool Handlers
 
-Each tool follows a consistent pattern:
+![Tool Handler Flow](./diagrams/03-tool-handler.png)
 
-```
-Tool Handler Flow
-  │
-  ├─► logDebug() - Log incoming request
-  │
-  ├─► Extract parameters using getStringParam()/getIntParam()
-  │     └─► Return mcp.NewToolResultError() on failure
-  │
-  ├─► logInfo() - Log action being performed
-  │
-  ├─► Call RobotGo function
-  │
-  ├─► checkFailsafe() - For mouse operations
-  │
-  └─► Return mcp.NewToolResultText() with JSON response
-```
+Each tool follows a consistent pattern:
 
 #### Handler Signatures
 
@@ -310,27 +240,9 @@ if err := checkFailsafe(); err != nil {
 
 ## Concurrency Model
 
-```
-Main Thread                    Signal Handler Goroutine
-     │                              │
-     │                              │
-     ├─► signal.Notify(sigChan) ◄──┤
-     │                              │
-     │                              │  SIGINT/SIGTERM
-     │                              │ received
-     │                              │
-     │◄──────── initiateShutdown() ─┤
-     │                              │
-     │                              │
-server.ServeStdio() blocks
-     │
-     │ (handles requests sequentially)
-     │
-     ▼
-```
+![Concurrency Diagram](./diagrams/04-concurrency.png)
 
-The server handles requests sequentially via `ServeStdio()`, which is appropriate for stdio transport.
-
+The server handles requests sequentially via ServeStdio(), which is appropriate for stdio transport.
 ## Tool Specifications
 
 ### get_screen_size
@@ -535,3 +447,5 @@ Debug logs show:
 2. **Parameter errors**: Verify parameter types in schema
 3. **RobotGo failures**: Check platform permissions
 4. **Protocol errors**: Ensure no stdout pollution
+
+

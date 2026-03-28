@@ -1,0 +1,28 @@
+@startuml ghost-mcp-startup
+
+start
+
+:main();
+
+:Setup logging;
+
+:Register signal handlers;
+
+:createServer();
+
+:Create MCPServer;
+
+:registerTools();
+
+:Log startup;
+
+:ServeStdio();
+
+if (Shutdown?) then (yes)
+  :Exit;
+  end
+else (no)
+  :continue;
+endif
+
+@enduml
