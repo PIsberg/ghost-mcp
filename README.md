@@ -17,6 +17,7 @@ Ghost MCP allows AI assistants like Claude to control your computer's mouse, key
 - ⌨️ **Keyboard Control**: Type text, press individual keys
 - 📸 **Screen Capture**: Take screenshots with optional region selection
 - 🔐 **Token Authentication**: Requires a secret token before the server will start
+- 📋 **Audit Logging**: Tamper-evident JSON Lines log of every tool call, auth failure, and lifecycle event
 - 🛡️ **Failsafe**: Emergency shutdown by moving mouse to top-left corner (0,0)
 - 📝 **Proper Logging**: All logs go to stderr, keeping stdout clean for MCP protocol
 
@@ -166,6 +167,7 @@ Add this to your MCP client configuration to connect to Ghost MCP:
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `GHOST_MCP_TOKEN` | **Required.** Secret authentication token. Server refuses to start without it. | *(none — must be set)* |
+| `GHOST_MCP_AUDIT_LOG` | Directory for audit log files. Created automatically if absent. | `<UserConfigDir>/ghost-mcp/audit/` |
 | `GHOST_MCP_DEBUG` | Enable debug logging | `0` (disabled) |
 
 > **Security note:** `GHOST_MCP_TOKEN` must be set to a random secret. Generate one with:
@@ -265,6 +267,67 @@ openssl rand -hex 32
 ```
 
 Use the output as the value for `GHOST_MCP_TOKEN` in both your shell environment and your MCP client's `env` block.
+
+### 📋 Audit Logging
+
+Ghost MCP writes a tamper-evident audit trail for every event: tool invocations, authentication failures, client connections, and server lifecycle events.
+
+**Log format:** [JSON Lines](https://jsonlines.org/) (one JSON object per line), one file per UTC day.
+
+**Default location:**
+
+| Platform | Default path |
+|----------|-------------|
+| Windows | `%AppData%\ghost-mcp\audit\ghost-mcp-audit-YYYY-MM-DD.jsonl` |
+| macOS | `~/Library/Application Support/ghost-mcp/audit/ghost-mcp-audit-YYYY-MM-DD.jsonl` |
+| Linux | `~/.config/ghost-mcp/audit/ghost-mcp-audit-YYYY-MM-DD.jsonl` |
+
+Override with `GHOST_MCP_AUDIT_LOG=/your/dir`.
+
+**Example log entries:**
+
+```jsonc
+// Server startup
+{"seq":1,"timestamp":"2025-01-15T09:00:00.123Z","event":"SERVER_START","params":{"platform":"linux/amd64","version":"1.0.0"},"prev_hash":"0000...","hash":"a3f2..."}
+
+// Client connected (from MCP initialize handshake)
+{"seq":2,"timestamp":"2025-01-15T09:00:01.456Z","event":"CLIENT_CONNECTED","client_id":"claude-desktop","params":{"client_name":"claude-desktop","client_version":"1.0"},"prev_hash":"a3f2...","hash":"b7c1..."}
+
+// Tool invocation with parameters
+{"seq":3,"timestamp":"2025-01-15T09:00:05.789Z","event":"TOOL_CALL","tool":"type_text","client_id":"claude-desktop","params":{"text":"Hello world"},"prev_hash":"b7c1...","hash":"c9d4..."}
+
+// Screenshot audit trail
+{"seq":4,"timestamp":"2025-01-15T09:00:06.012Z","event":"SCREENSHOT_REQUESTED","tool":"take_screenshot","client_id":"claude-desktop","prev_hash":"c9d4...","hash":"d2e5..."}
+
+// Authentication failure
+{"seq":5,"timestamp":"2025-01-15T09:00:10.345Z","event":"AUTH_FAILURE","error":"invalid or missing GHOST_MCP_TOKEN","prev_hash":"d2e5...","hash":"e8f3..."}
+```
+
+**Tamper detection:** Each entry carries:
+- `hash` — SHA-256 of the entry's own content
+- `prev_hash` — hash of the previous entry (hash chain)
+
+If any entry is modified, deleted, or reordered, the chain breaks. Verify a log file with:
+
+```bash
+# Verify integrity of a specific log file
+# (built-in to the ghost-mcp source — see VerifyLogFile in audit.go)
+go run . verify-log /path/to/ghost-mcp-audit-2025-01-15.jsonl
+```
+
+**Logged events:**
+
+| Event | Trigger |
+|-------|---------|
+| `SERVER_START` | Server starts |
+| `SERVER_STOP` | Server shuts down |
+| `CLIENT_CONNECTED` | MCP initialize handshake completes |
+| `TOOL_CALL` | Tool invoked (includes sanitized parameters) |
+| `TOOL_SUCCESS` | Tool completed successfully |
+| `TOOL_FAILURE` | Tool returned an error result |
+| `SCREENSHOT_REQUESTED` | `take_screenshot` tool succeeded |
+| `AUTH_FAILURE` | Request rejected due to missing/invalid token |
+| `REQUEST_ERROR` | MCP-level error (unknown tool, malformed request) |
 
 ## Safety Features
 

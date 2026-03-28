@@ -675,7 +675,13 @@ func TestMakeTokenValidator_MissingToken(t *testing.T) {
 // TestCreateServer_WithToken tests that createServer succeeds with a valid token
 func TestCreateServer_WithToken(t *testing.T) {
 	t.Setenv(TokenEnvVar, "test-token")
-	srv := createServer("test-token")
+	t.Setenv(AuditEnvVar, t.TempDir())
+	al, err := NewAuditLogger()
+	if err != nil {
+		t.Fatalf("Failed to create audit logger: %v", err)
+	}
+	defer al.Close()
+	srv := createServer("test-token", al)
 	if srv == nil {
 		t.Fatal("Expected non-nil server")
 	}

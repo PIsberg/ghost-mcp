@@ -385,12 +385,15 @@ func validateStartupToken() (string, error) {
 // every incoming request against the token captured at server startup.
 // This provides defense-in-depth: even if the process environment is altered
 // after startup, requests will be rejected.
-func makeTokenValidator(expectedToken string) func(ctx context.Context, id any, message any) error {
+// Auth failures are logged directly here because onRequestInitialization errors
+// bypass the OnError hook (they short-circuit before tool dispatch).
+func makeTokenValidator(expectedToken string, al *AuditLogger) func(ctx context.Context, id any, message any) error {
 	return func(ctx context.Context, id any, message any) error {
 		currentToken := os.Getenv(TokenEnvVar)
 		if currentToken != expectedToken {
 			logError("Authentication failed: %s mismatch or missing", TokenEnvVar)
-			return fmt.Errorf("authentication required: invalid or missing %s", TokenEnvVar)
+			al.Log(EventAuthFailure, "", fmt.Sprintf("invalid or missing %s", TokenEnvVar), nil)
+			return fmt.Errorf("%w: invalid or missing %s", ErrAuthFailed, TokenEnvVar)
 		}
 		return nil
 	}
@@ -401,15 +404,14 @@ func makeTokenValidator(expectedToken string) func(ctx context.Context, id any, 
 // =============================================================================
 
 // createServer initializes and configures the MCP server with all tools.
-// The token is used to configure per-request authentication via hooks.
-func createServer(token string) *server.MCPServer {
+// token is used for per-request auth; al receives all audit events.
+func createServer(token string, al *AuditLogger) *server.MCPServer {
 	logInfo("Creating MCP server: %s v%s", ServerName, ServerVersion)
 
-	// Register authentication hook
 	hooks := &server.Hooks{}
-	hooks.AddOnRequestInitialization(makeTokenValidator(token))
+	hooks.AddOnRequestInitialization(makeTokenValidator(token, al))
+	registerAuditHooks(hooks, al)
 
-	// Create the MCP server instance
 	mcpServer := server.NewMCPServer(
 		ServerName,
 		ServerVersion,
@@ -417,9 +419,7 @@ func createServer(token string) *server.MCPServer {
 		server.WithHooks(hooks),
 	)
 
-	// Register all tools
 	registerTools(mcpServer)
-
 	return mcpServer
 }
 
@@ -502,6 +502,17 @@ func main() {
 	}
 	logInfo("Token authentication enabled (%s is set)", TokenEnvVar)
 
+	// Initialise audit logger (non-fatal — logs warning if directory unavailable)
+	auditLog, auditErr := NewAuditLogger()
+	if auditErr != nil {
+		logError("Audit log unavailable: %v", auditErr)
+	}
+	defer auditLog.Close()
+	auditLog.Log(EventServerStart, "", "", map[string]interface{}{
+		"version":  ServerVersion,
+		"platform": runtime.GOOS + "/" + runtime.GOARCH,
+	})
+
 	// Log failsafe information
 	logInfo("Failsafe position: (%d, %d) - Move mouse here to trigger emergency shutdown", FailsafeX, FailsafeY)
 
@@ -516,7 +527,7 @@ func main() {
 	}()
 
 	// Create the MCP server
-	mcpServer := createServer(token)
+	mcpServer := createServer(token, auditLog)
 
 	// Start the stdio server
 	// This blocks and uses stdout/stdin for JSON-RPC communication
@@ -525,9 +536,11 @@ func main() {
 	logInfo("stdout is reserved for MCP JSON-RPC protocol")
 
 	if err = server.ServeStdio(mcpServer); err != nil {
+		auditLog.Log(EventServerStop, "", err.Error(), nil)
 		logError("Server error: %v", err)
 		os.Exit(1)
 	}
 
+	auditLog.Log(EventServerStop, "", "", nil)
 	logInfo("Server stopped gracefully")
 }
