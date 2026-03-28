@@ -176,12 +176,29 @@ func TestHandleGetScreenSize(t *testing.T) {
 		t.Fatalf("Failed to parse result JSON: %v", err)
 	}
 
-	// Verify response contains width and height
+	// Verify response contains width, height, and scale_factor
 	if _, ok := response["width"]; !ok {
 		t.Error("Response missing 'width' field")
 	}
 	if _, ok := response["height"]; !ok {
 		t.Error("Response missing 'height' field")
+	}
+	if sf, ok := response["scale_factor"]; !ok {
+		t.Error("Response missing 'scale_factor' field")
+	} else if sf.(float64) <= 0 {
+		t.Errorf("scale_factor must be positive, got %v", sf)
+	}
+}
+
+// TestGetDPIScale tests that getDPIScale returns a positive value.
+func TestGetDPIScale(t *testing.T) {
+	scale := getDPIScale()
+	if scale <= 0 {
+		t.Errorf("getDPIScale() returned non-positive value: %f", scale)
+	}
+	// Sanity: scale factors outside 0.5–5.0 are unrealistic
+	if scale < 0.5 || scale > 5.0 {
+		t.Errorf("getDPIScale() returned implausible value: %f", scale)
 	}
 }
 

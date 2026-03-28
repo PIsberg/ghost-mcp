@@ -89,8 +89,12 @@ func initiateShutdown() {
 func handleGetScreenSize(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	logging.Debug("Handling get_screen_size request")
 	width, height := robotgo.GetScreenSize()
-	logging.Info("Screen size: %dx%d", width, height)
-	return mcp.NewToolResultText(fmt.Sprintf(`{"width": %d, "height": %d}`, width, height)), nil
+	scale := getDPIScale()
+	logging.Info("Screen size: %dx%d, DPI scale: %.2f", width, height, scale)
+	return mcp.NewToolResultText(fmt.Sprintf(
+		`{"width": %d, "height": %d, "scale_factor": %.2f}`,
+		width, height, scale,
+	)), nil
 }
 
 func handleMoveMouse(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -532,7 +536,14 @@ func registerTools(mcpServer *server.MCPServer) {
 	logging.Info("Registering tools...")
 
 	mcpServer.AddTool(mcp.NewTool("get_screen_size",
-		mcp.WithDescription("Get the screen resolution. Returns {width, height} in pixels. Call this first to understand the coordinate space before moving the mouse or taking screenshots. All coordinates use pixels with (0,0) at the top-left corner."),
+		mcp.WithDescription(`Get the screen resolution and DPI scale factor.
+
+Returns {width, height, scale_factor}.
+
+- width / height: screen dimensions in logical pixels. All ghost-mcp coordinates (mouse, screenshots, OCR) use this same logical pixel space, so you do NOT need to apply the scale factor yourself.
+- scale_factor: the OS display scaling ratio (e.g. 1.5 = 150% / "High DPI"). Informational only — useful to understand why an app's own coordinate reporter (e.g. a browser's window.devicePixelRatio or a game's cursor position) might differ from ghost-mcp coordinates.
+
+Call this first to understand the coordinate space before moving the mouse or taking screenshots. (0,0) is the top-left corner.`),
 	), handleGetScreenSize)
 
 	mcpServer.AddTool(mcp.NewTool("move_mouse",
