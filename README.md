@@ -13,9 +13,10 @@ Ghost MCP allows AI assistants like Claude to control your computer's mouse, key
 
 ## Features
 
-- 🖱️ **Mouse Control**: Move cursor, click (left/right/middle)
+- 🖱️ **Mouse Control**: Move cursor, click, double-click, scroll
 - ⌨️ **Keyboard Control**: Type text, press individual keys
 - 📸 **Screen Capture**: Take screenshots with optional region selection
+- 🔍 **OCR**: Read text and word positions from the screen with Tesseract (always built in)
 - 🔐 **Token Authentication**: Requires a secret token before the server will start
 - 📋 **Audit Logging**: Tamper-evident JSON Lines log of every tool call, auth failure, and lifecycle event
 - 🛡️ **Failsafe**: Emergency shutdown by moving mouse to top-left corner (0,0)
@@ -38,7 +39,7 @@ Ghost MCP allows AI assistants like Claude to control your computer's mouse, key
 | `read_screen_text` **(OCR)** | Read text from screen using OCR. Returns text and word positions. | `x`, `y`, `width`, `height` |
 | `find_and_click` **(OCR)** | Find text on screen with OCR and click it. Combines read_screen_text + click_at. | `text`, `button` (optional), `nth` (optional, default 1) |
 
-> **Note:** `read_screen_text` requires Tesseract OCR to be installed and `TESSDATA_PREFIX` to be set. See [Prerequisites](#prerequisites).
+> **Note:** OCR tools require Tesseract to be installed and `TESSDATA_PREFIX` to be set. The installation scripts handle this automatically. See [Prerequisites](#prerequisites).
 
 ## Prerequisites
 
@@ -48,7 +49,7 @@ If building manually, you'll need:
 
 - **Go 1.24+** - [Download Go](https://go.dev/dl/)
 - **C Compiler** - For RobotGo (GUI automation library)
-- **Tesseract OCR** - Required for `read_screen_text` (screen text recognition)
+- **Tesseract OCR + Leptonica** - Required for OCR tools (`read_screen_text`, `find_and_click`); always built in
 
 ### Platform-Specific Dependencies
 
@@ -62,7 +63,7 @@ Install via Chocolatey (recommended):
 choco install mingw -y
 ```
 
-**For OCR support**, also install Tesseract via vcpkg (the install script does this automatically):
+**Tesseract OCR** is required (always built in). Install via vcpkg (the install script does this automatically):
 ```powershell
 # Install vcpkg and Tesseract (MinGW-compatible triplet)
 git clone https://github.com/Microsoft/vcpkg.git $env:USERPROFILE\vcpkg
@@ -87,7 +88,7 @@ Invoke-WebRequest "https://github.com/tesseract-ocr/tessdata_fast/raw/main/eng.t
 # Install Xcode Command Line Tools
 xcode-select --install
 
-# For OCR support
+# Tesseract OCR (required)
 brew install tesseract leptonica
 
 # Grant accessibility permissions (required for automation)
@@ -98,22 +99,21 @@ brew install tesseract leptonica
 
 **Ubuntu/Debian:**
 ```bash
+# X11 automation libraries
 sudo apt-get install libx11-dev xorg-dev libxtst-dev libpng-dev
-# For OCR:
+# Tesseract OCR (required)
 sudo apt-get install tesseract-ocr libleptonica-dev libtesseract-dev
 ```
 
 **Fedora:**
 ```bash
 sudo dnf install libX11-devel libXtst-devel libpng-devel
-# For OCR:
 sudo dnf install tesseract tesseract-devel leptonica-devel
 ```
 
 **Arch Linux:**
 ```bash
 sudo pacman -S libx11 libxtst libpng
-# For OCR:
 sudo pacman -S tesseract tesseract-data-eng
 ```
 
@@ -132,8 +132,9 @@ We provide automated installation scripts that handle all dependencies and confi
 
 The installer will:
 - Install MinGW (GCC compiler) via Chocolatey
-- Optionally install Tesseract OCR for screen text reading
-- Build the binary
+- Install Tesseract OCR via vcpkg (x64-mingw-dynamic triplet)
+- Download English language data (`eng.traineddata`) and set `TESSDATA_PREFIX`
+- Build the binary and copy runtime DLLs
 - Generate auth token
 - Configure environment variables
 - Display MCP client configuration
@@ -147,8 +148,7 @@ chmod +x install.sh
 
 The installer will:
 - Detect your package manager (apt/dnf/yum/pacman/zypper)
-- Install GCC and X11 development libraries
-- Optionally install Tesseract OCR
+- Install GCC, X11 development libraries, and Tesseract OCR
 - Build the binary
 - Generate auth token
 - Save environment configuration to `~/.config/ghost-mcp/env`
@@ -196,7 +196,7 @@ Add this to your MCP client configuration to connect to Ghost MCP:
       "args": [],
       "env": {
         "GHOST_MCP_TOKEN": "your-secret-token-here",
-        "GHOST_MCP_DEBUG": "1"
+        "TESSDATA_PREFIX": "C:\\Users\\<you>\\vcpkg\\installed\\x64-mingw-dynamic\\share"
       }
     }
   }
@@ -212,7 +212,7 @@ Add this to your MCP client configuration to connect to Ghost MCP:
       "args": [],
       "env": {
         "GHOST_MCP_TOKEN": "your-secret-token-here",
-        "GHOST_MCP_DEBUG": "1"
+        "TESSDATA_PREFIX": "/usr/share"
       }
     }
   }
@@ -234,8 +234,12 @@ Add this to your MCP client configuration to connect to Ghost MCP:
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `GHOST_MCP_TOKEN` | **Required.** Secret authentication token. Server refuses to start without it. | *(none — must be set)* |
+| `TESSDATA_PREFIX` | **Required for OCR.** Directory containing Tesseract language data (must contain `tessdata/eng.traineddata`). | *(none — OCR will fail if unset)* |
 | `GHOST_MCP_AUDIT_LOG` | Directory for audit log files. Created automatically if absent. | `<UserConfigDir>/ghost-mcp/audit/` |
-| `GHOST_MCP_DEBUG` | Enable debug logging | `0` (disabled) |
+| `GHOST_MCP_DEBUG` | Enable debug logging (`1` = on) | `0` (disabled) |
+| `GHOST_MCP_VISUAL` | Show visual cursor pulse on mouse actions (`1` = on) | `0` (disabled) |
+| `GHOST_MCP_KEEP_SCREENSHOTS` | Keep screenshot files on disk after use (`1` = keep, default deletes them) | `0` (deleted after use) |
+| `GHOST_MCP_SCREENSHOT_DIR` | Directory where screenshot files are written | System temp directory |
 | `GHOST_MCP_TRANSPORT` | Transport mode: `stdio` or `http` | `stdio` |
 | `GHOST_MCP_HTTP_ADDR` | Listen address for HTTP/SSE mode | `localhost:8080` |
 | `GHOST_MCP_HTTP_BASE_URL` | Public base URL advertised to SSE clients | `http://<addr>` |
@@ -269,27 +273,41 @@ GHOST_MCP_DEBUG=1 ./ghost-mcp
 Once connected, AI clients can use the tools like this:
 
 ```json
-// Get screen size
+// Get screen size first — establishes coordinate space
 {
   "tool": "get_screen_size"
 }
 // Response: {"width": 1920, "height": 1080}
 
-// Move mouse to center of screen
+// Find text on screen and click it (preferred workflow)
 {
-  "tool": "move_mouse",
+  "tool": "find_and_click",
+  "arguments": {"text": "Save"}
+}
+// Response: {"success": true, "found": "Save", "x": 960, "y": 540, "button": "left", "occurrence": 1}
+
+// Move and click in one call
+{
+  "tool": "click_at",
+  "arguments": {"x": 960, "y": 540, "button": "left"}
+}
+// Response: {"success": true, "button": "left", "x": 960, "y": 540}
+
+// Double-click to open a file
+{
+  "tool": "double_click",
   "arguments": {"x": 960, "y": 540}
 }
 // Response: {"success": true, "x": 960, "y": 540}
 
-// Left click
+// Scroll down in a list
 {
-  "tool": "click",
-  "arguments": {"button": "left"}
+  "tool": "scroll",
+  "arguments": {"x": 960, "y": 540, "direction": "down", "amount": 5}
 }
-// Response: {"success": true, "button": "left", "x": 960, "y": 540}
+// Response: {"success": true, "x": 960, "y": 540, "direction": "down", "amount": 5}
 
-// Type text
+// Type text into the focused field
 {
   "tool": "type_text",
   "arguments": {"text": "Hello, World!"}
@@ -303,11 +321,18 @@ Once connected, AI clients can use the tools like this:
 }
 // Response: {"success": true, "key": "enter"}
 
-// Take screenshot
+// Take screenshot — returns JSON metadata + PNG image content
 {
   "tool": "take_screenshot"
 }
-// Response: {"success": true, "filepath": "...", "base64": "...", "width": 1920, "height": 1080}
+// Response: {"success": true, "filepath": "/tmp/ghost-mcp-screenshot-....png", "width": 1920, "height": 1080}
+// (image data returned as a separate image/png content block)
+
+// Read all text from screen with word positions
+{
+  "tool": "read_screen_text"
+}
+// Response: {"success": true, "text": "...", "words": [{"text": "Save", "x": 940, "y": 530, "width": 40, "height": 20, "confidence": 98.5}, ...]}
 ```
 
 ## Security
@@ -494,6 +519,13 @@ All application logs are written to **stderr**, never to stdout. This ensures:
 #### Screenshots Fail
 - Ensure sufficient disk space in temp directory
 - Verify write permissions to system temp folder
+
+#### OCR Fails / `read_screen_text` Returns Error
+- Ensure `TESSDATA_PREFIX` points to the **parent** directory of `tessdata/` (e.g. if the file is at `/usr/share/tessdata/eng.traineddata`, set `TESSDATA_PREFIX=/usr/share`)
+- On Windows with vcpkg: `TESSDATA_PREFIX` should be `%USERPROFILE%\vcpkg\installed\x64-mingw-dynamic\share`
+- Verify `eng.traineddata` exists: `ls $TESSDATA_PREFIX/tessdata/eng.traineddata`
+- Check the server startup log — it prints the value of `TESSDATA_PREFIX` at start
+- Set `GHOST_MCP_KEEP_SCREENSHOTS=1` to keep the image files OCR is processing for manual inspection
 
 ### Debug Mode
 
