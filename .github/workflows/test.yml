@@ -42,12 +42,20 @@ jobs:
     - name: Install dependencies (Windows)
       if: matrix.os == 'windows-latest'
       run: |
-        # Install Tesseract OCR via Chocolatey (for gosseract/leptonica headers)
-        choco install tesseract -y --no-progress
-        # Set CGO flags for Tesseract
-        echo "CGO_CXXFLAGS=-I`"C:/Program Files/Tesseract-OCR/include`"" >> $env:GITHUB_ENV
-        echo "CGO_LDFLAGS=-L`"C:/Program Files/Tesseract-OCR/lib`"" >> $env:GITHUB_ENV
-        echo "TESSDATA_PREFIX=C:/Program Files/Tesseract-OCR" >> $env:GITHUB_ENV
+        # Install MinGW
+        choco install mingw -y --no-progress
+        
+        # Install vcpkg and Tesseract development libraries
+        git clone https://github.com/Microsoft/vcpkg.git $env:USERPROFILE\vcpkg
+        cd $env:USERPROFILE\vcpkg
+        .\bootstrap-vcpkg.bat -disableMetrics
+        .\vcpkg install tesseract:x64-windows --disable-metrics
+        
+        # Set CGO flags for vcpkg
+        $vcpkgInstall = "$env:USERPROFILE\vcpkg\installed\x64-windows"
+        echo "CGO_CXXFLAGS=-I$vcpkgInstall\include" >> $env:GITHUB_ENV
+        echo "CGO_LDFLAGS=-L$vcpkgInstall\lib" >> $env:GITHUB_ENV
+        echo "CGO_ENABLED=1" >> $env:GITHUB_ENV
 
     - name: Start Xvfb (Linux)
       if: matrix.os == 'ubuntu-latest'
@@ -66,9 +74,9 @@ jobs:
       if: matrix.os != 'macos-latest'
       run: |
         if [ "${{ runner.os }}" = "Windows" ]; then
-          go build -o ghost-mcp.exe ./cmd/ghost-mcp/
+          go build -o ghost-mcp.exe -tags ocr ./cmd/ghost-mcp/
         else
-          go build -o ghost-mcp ./cmd/ghost-mcp/
+          go build -o ghost-mcp -tags ocr ./cmd/ghost-mcp/
         fi
       shell: bash
 
