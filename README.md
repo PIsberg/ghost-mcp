@@ -356,3 +356,5 @@ Contributions welcome! Please ensure:
 
 - [MCP SDK](https://github.com/mark3labs/mcp-go) - Model Context Protocol implementation
 - [RobotGo](https://github.com/go-vgo/robotgo) - Cross-platform automation library
+
+[![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/PIsberg/ghost-mcp/badge)](https://scorecard.dev/viewer/?uri=github.com/PIsberg/ghost-mcp/)
