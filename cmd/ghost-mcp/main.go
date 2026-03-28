@@ -215,6 +215,43 @@ func handleClickAt(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallT
 	return mcp.NewToolResultText(fmt.Sprintf(`{"success": true, "button": "%s", "x": %d, "y": %d}`, button, x, y)), nil
 }
 
+func handleDoubleClick(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	logging.Debug("Handling double_click request")
+
+	x, err := getIntParam(request, "x")
+	if err != nil {
+		logging.Error("Invalid x parameter: %v", err)
+		return mcp.NewToolResultError(fmt.Sprintf("invalid x parameter: %v", err)), nil
+	}
+	y, err := getIntParam(request, "y")
+	if err != nil {
+		logging.Error("Invalid y parameter: %v", err)
+		return mcp.NewToolResultError(fmt.Sprintf("invalid y parameter: %v", err)), nil
+	}
+
+	screenW, screenH := robotgo.GetScreenSize()
+	if err := validate.Coords(x, y, screenW, screenH); err != nil {
+		logging.Error("Coordinate validation failed: %v", err)
+		return mcp.NewToolResultError(fmt.Sprintf("invalid coordinates: %v", err)), nil
+	}
+
+	logging.Info("ACTION: Moving mouse to (%d, %d) for double-click", x, y)
+	robotgo.Move(x, y)
+
+	if os.Getenv("GHOST_MCP_VISUAL") == "1" {
+		visual.PulseCursor(x, y)
+	}
+
+	if err := checkFailsafe(); err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	robotgo.Click("left", true)
+	logging.Info("ACTION COMPLETE: Double-click at (%d, %d)", x, y)
+
+	return mcp.NewToolResultText(fmt.Sprintf(`{"success": true, "x": %d, "y": %d}`, x, y)), nil
+}
+
 func handleScroll(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	logging.Debug("Handling scroll request")
 
@@ -506,6 +543,14 @@ After clicking, take a screenshot to confirm the expected UI change occurred.`),
 		mcp.WithNumber("y", mcp.Description("Y coordinate in pixels from the top edge of the screen."), mcp.Required()),
 		mcp.WithString("button", mcp.Description("Mouse button: 'left' (default), 'right', or 'middle'.")),
 	), handleClickAt)
+
+	mcpServer.AddTool(mcp.NewTool("double_click",
+		mcp.WithDescription(`Move the mouse to (x, y) and perform a double-click. Use for opening files, activating items, or any UI that requires double-click.
+
+After double-clicking, take a screenshot to confirm the expected action occurred (e.g. a file opened, a word was selected).`),
+		mcp.WithNumber("x", mcp.Description("X coordinate in pixels from the left edge of the screen."), mcp.Required()),
+		mcp.WithNumber("y", mcp.Description("Y coordinate in pixels from the top edge of the screen."), mcp.Required()),
+	), handleDoubleClick)
 
 	mcpServer.AddTool(mcp.NewTool("scroll",
 		mcp.WithDescription(`Move the mouse to (x, y) and scroll the mouse wheel. Use for scrolling lists, pages, and dropdowns.

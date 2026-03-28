@@ -885,6 +885,66 @@ func TestHandleClickAt_NegativeCoords(t *testing.T) {
 }
 
 // =============================================================================
+// DOUBLE_CLICK TESTS
+// =============================================================================
+
+// TestHandleDoubleClick_MissingX tests double_click with missing x parameter
+func TestHandleDoubleClick_MissingX(t *testing.T) {
+	req := mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: map[string]interface{}{
+		"y": float64(200),
+	}}}
+	result, err := handleDoubleClick(nil, req)
+	if err != nil {
+		t.Fatalf("Handler returned unexpected Go error: %v", err)
+	}
+	if !result.IsError {
+		t.Error("Expected tool error for missing x parameter")
+	}
+}
+
+// TestHandleDoubleClick_MissingY tests double_click with missing y parameter
+func TestHandleDoubleClick_MissingY(t *testing.T) {
+	req := mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: map[string]interface{}{
+		"x": float64(100),
+	}}}
+	result, err := handleDoubleClick(nil, req)
+	if err != nil {
+		t.Fatalf("Handler returned unexpected Go error: %v", err)
+	}
+	if !result.IsError {
+		t.Error("Expected tool error for missing y parameter")
+	}
+}
+
+// TestHandleDoubleClick_NegativeCoords tests double_click rejects negative coordinates
+func TestHandleDoubleClick_NegativeCoords(t *testing.T) {
+	req := mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: map[string]interface{}{
+		"x": float64(-1), "y": float64(200),
+	}}}
+	result, err := handleDoubleClick(nil, req)
+	if err != nil {
+		t.Fatalf("Handler returned unexpected Go error: %v", err)
+	}
+	if !result.IsError {
+		t.Error("Expected tool error for negative x coordinate")
+	}
+}
+
+// TestHandleDoubleClick_FractionalCoords tests double_click rejects fractional coordinates
+func TestHandleDoubleClick_FractionalCoords(t *testing.T) {
+	req := mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: map[string]interface{}{
+		"x": 100.5, "y": float64(200),
+	}}}
+	result, err := handleDoubleClick(nil, req)
+	if err != nil {
+		t.Fatalf("Handler returned unexpected Go error: %v", err)
+	}
+	if !result.IsError {
+		t.Error("Expected tool error for fractional x coordinate")
+	}
+}
+
+// =============================================================================
 // SCROLL TESTS
 // =============================================================================
 
