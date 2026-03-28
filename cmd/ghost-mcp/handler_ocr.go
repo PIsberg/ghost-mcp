@@ -198,6 +198,7 @@ func handleFindAndClick(ctx context.Context, request mcp.CallToolRequest) (*mcp.
 				}
 
 				robotgo.Click(button, false)
+				applyClickDelay(request)
 				logging.Info("ACTION COMPLETE: find_and_click %q at (%d, %d)", searchText, cx, cy)
 
 				return mcp.NewToolResultText(fmt.Sprintf(

@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/ghost-mcp/internal/audit"
 	"github.com/ghost-mcp/internal/logging"
@@ -881,6 +882,44 @@ func TestHandleClickAt_NegativeCoords(t *testing.T) {
 	}
 	if !result.IsError {
 		t.Error("Expected tool error for negative x coordinate")
+	}
+}
+
+// TestApplyClickDelay_ZeroDelay tests that delay_ms=0 results in no sleep.
+func TestApplyClickDelay_ZeroDelay(t *testing.T) {
+	req := mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: map[string]interface{}{
+		"delay_ms": float64(0),
+	}}}
+	start := time.Now()
+	applyClickDelay(req)
+	elapsed := time.Since(start)
+	if elapsed > 20*time.Millisecond {
+		t.Errorf("Expected near-zero delay for delay_ms=0, got %v", elapsed)
+	}
+}
+
+// TestApplyClickDelay_DefaultDelay tests that missing delay_ms uses the default.
+func TestApplyClickDelay_DefaultDelay(t *testing.T) {
+	req := mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: map[string]interface{}{}}}
+	start := time.Now()
+	applyClickDelay(req)
+	elapsed := time.Since(start)
+	if elapsed < time.Duration(defaultClickDelayMs)*time.Millisecond {
+		t.Errorf("Expected at least %dms delay, got %v", defaultClickDelayMs, elapsed)
+	}
+}
+
+// TestApplyClickDelay_ExcessiveClamped tests that delay_ms > 10000 is ignored (keeps default).
+func TestApplyClickDelay_ExcessiveClamped(t *testing.T) {
+	req := mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: map[string]interface{}{
+		"delay_ms": float64(99999),
+	}}}
+	start := time.Now()
+	applyClickDelay(req)
+	elapsed := time.Since(start)
+	// Should fall back to default (100ms), not the excessive value
+	if elapsed > 500*time.Millisecond {
+		t.Errorf("Expected default delay for out-of-range delay_ms, got %v", elapsed)
 	}
 }
 

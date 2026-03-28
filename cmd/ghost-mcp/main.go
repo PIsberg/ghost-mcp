@@ -157,6 +157,7 @@ func handleClick(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToo
 	}
 
 	robotgo.Click(button, false)
+	applyClickDelay(request)
 	logging.Info("ACTION COMPLETE: %s click executed", button)
 
 	if err := checkFailsafe(); err != nil {
@@ -210,6 +211,7 @@ func handleClickAt(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallT
 	}
 
 	robotgo.Click(button, false)
+	applyClickDelay(request)
 	logging.Info("ACTION COMPLETE: %s click at (%d, %d)", button, x, y)
 
 	return mcp.NewToolResultText(fmt.Sprintf(`{"success": true, "button": "%s", "x": %d, "y": %d}`, button, x, y)), nil
@@ -247,6 +249,7 @@ func handleDoubleClick(ctx context.Context, request mcp.CallToolRequest) (*mcp.C
 	}
 
 	robotgo.Click("left", true)
+	applyClickDelay(request)
 	logging.Info("ACTION COMPLETE: Double-click at (%d, %d)", x, y)
 
 	return mcp.NewToolResultText(fmt.Sprintf(`{"success": true, "x": %d, "y": %d}`, x, y)), nil
@@ -421,6 +424,31 @@ func handleTakeScreenshot(ctx context.Context, request mcp.CallToolRequest) (*mc
 }
 
 // =============================================================================
+// CLICK DELAY HELPER
+// =============================================================================
+
+// defaultClickDelayMs is the default post-click pause.
+// Browsers and most apps need a few milliseconds to process a click event
+// and update the DOM/UI before a screenshot would reflect the change.
+// 100 ms is imperceptible to the user but enough for virtually all UIs.
+const defaultClickDelayMs = 100
+
+// applyClickDelay sleeps for the caller-requested delay (delay_ms param).
+// Falls back to defaultClickDelayMs when the parameter is absent.
+// Set delay_ms=0 to skip the delay entirely for latency-sensitive flows.
+func applyClickDelay(request mcp.CallToolRequest) {
+	ms := defaultClickDelayMs
+	if v, err := getIntParam(request, "delay_ms"); err == nil {
+		if v >= 0 && v <= 10000 {
+			ms = v
+		}
+	}
+	if ms > 0 {
+		time.Sleep(time.Duration(ms) * time.Millisecond)
+	}
+}
+
+// =============================================================================
 // PARAMETER EXTRACTION
 // =============================================================================
 
@@ -529,8 +557,11 @@ Only skip read_screen_text if the target has no text label (icon, image) — in 
 
 BEFORE CLICKING: Call take_screenshot to confirm the cursor is over the correct element. Clicking the wrong target can cause unintended actions that are hard to undo.
 
-Use right-click to open context menus. Use double-click by calling click twice rapidly. After clicking, take a screenshot to confirm the expected UI change occurred (e.g. a window opened, a button activated, a field was selected).`),
+Use right-click to open context menus. After clicking, take a screenshot to confirm the expected UI change occurred (e.g. a window opened, a button activated, a field was selected).
+
+A short delay (default 100 ms) is applied after every click so the UI has time to update before a subsequent screenshot. Use delay_ms=0 to skip it when speed is critical.`),
 		mcp.WithString("button", mcp.Description("Mouse button to click: 'left' for normal clicks and selecting items, 'right' for context menus, 'middle' for middle-click."), mcp.Required()),
+		mcp.WithNumber("delay_ms", mcp.Description("Milliseconds to wait after the click for the UI to update (default: 100). Set to 0 to skip. Max: 10000.")),
 	), handleClick)
 
 	mcpServer.AddTool(mcp.NewTool("click_at",
@@ -538,18 +569,24 @@ Use right-click to open context menus. Use double-click by calling click twice r
 
 Use read_screen_text to get bounding boxes, compute the center (x + width/2, y + height/2), then call click_at with that center.
 
-After clicking, take a screenshot to confirm the expected UI change occurred.`),
+After clicking, take a screenshot to confirm the expected UI change occurred.
+
+A short delay (default 100 ms) is applied after the click so the UI has time to update before a subsequent screenshot. Use delay_ms=0 to skip it when speed is critical.`),
 		mcp.WithNumber("x", mcp.Description("X coordinate in pixels from the left edge of the screen."), mcp.Required()),
 		mcp.WithNumber("y", mcp.Description("Y coordinate in pixels from the top edge of the screen."), mcp.Required()),
 		mcp.WithString("button", mcp.Description("Mouse button: 'left' (default), 'right', or 'middle'.")),
+		mcp.WithNumber("delay_ms", mcp.Description("Milliseconds to wait after the click for the UI to update (default: 100). Set to 0 to skip. Max: 10000.")),
 	), handleClickAt)
 
 	mcpServer.AddTool(mcp.NewTool("double_click",
 		mcp.WithDescription(`Move the mouse to (x, y) and perform a double-click. Use for opening files, activating items, or any UI that requires double-click.
 
-After double-clicking, take a screenshot to confirm the expected action occurred (e.g. a file opened, a word was selected).`),
+After double-clicking, take a screenshot to confirm the expected action occurred (e.g. a file opened, a word was selected).
+
+A short delay (default 100 ms) is applied after the double-click so the UI has time to update before a subsequent screenshot. Use delay_ms=0 to skip it.`),
 		mcp.WithNumber("x", mcp.Description("X coordinate in pixels from the left edge of the screen."), mcp.Required()),
 		mcp.WithNumber("y", mcp.Description("Y coordinate in pixels from the top edge of the screen."), mcp.Required()),
+		mcp.WithNumber("delay_ms", mcp.Description("Milliseconds to wait after the click for the UI to update (default: 100). Set to 0 to skip. Max: 10000.")),
 	), handleDoubleClick)
 
 	mcpServer.AddTool(mcp.NewTool("scroll",

@@ -45,5 +45,6 @@ If the element is not found: call take_screenshot to verify it is visible, then 
 		mcp.WithNumber("y", mcp.Description("Y coordinate of the top-left corner of the region to scan (default: 0 = full screen).")),
 		mcp.WithNumber("width", mcp.Description("Width of the region to scan in pixels (default: full screen width). Smaller regions scan faster.")),
 		mcp.WithNumber("height", mcp.Description("Height of the region to scan in pixels (default: full screen height). Smaller regions scan faster.")),
+		mcp.WithNumber("delay_ms", mcp.Description("Milliseconds to wait after the click for the UI to update (default: 100). Set to 0 to skip. Max: 10000.")),
 	), handleFindAndClick)
 }
