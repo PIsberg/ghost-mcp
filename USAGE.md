@@ -285,6 +285,12 @@ Presses a single key or key combination.
 
 The test fixture at http://localhost:8765 includes the following interactive elements for testing:
 
+### Initial Fixture Page
+
+When you first load the test fixture, you'll see the main interface with all available test areas:
+
+![Initial Test Fixture](./screenshots/01-initial-fixture.png)
+
 ### Button Click Tests
 
 Four colored buttons for testing click automation:
@@ -303,6 +309,20 @@ Four colored buttons for testing click automation:
 ```
 
 **Expected Result:** Button animates with a click flash effect, event log updates.
+
+**Fixture Screenshots:**
+
+Primary Button Clicked:
+![Primary Button Clicked](./screenshots/02-primary-button-clicked.png)
+
+Success Button Clicked:
+![Success Button Clicked](./screenshots/03-success-button-clicked.png)
+
+Warning Button Clicked:
+![Warning Button Clicked](./screenshots/04-warning-button-clicked.png)
+
+Info Button Clicked:
+![Info Button Clicked](./screenshots/05-info-button-clicked.png)
 
 ---
 
@@ -324,6 +344,14 @@ Two text input areas for testing text automation:
 
 **Expected Result:** Text appears in the input field, counter shows character count.
 
+**Fixture Screenshots:**
+
+Text Input Filled:
+![Text Input Filled](./screenshots/06-text-input-filled.png)
+
+Textarea Filled:
+![Textarea Filled](./screenshots/07-textarea-filled.png)
+
 ---
 
 ### Selection Controls
@@ -342,6 +370,11 @@ Toggle checkboxes to test state management:
 
 **Expected Result:** Checkbox toggles, event log records the state change.
 
+**Fixture Screenshot:**
+
+Checkboxes Toggled:
+![Checkboxes Toggled](./screenshots/08-checkbox-checked.png)
+
 #### Radio Buttons (3 choices: A, B, C)
 Select one option from multiple choices:
 
@@ -355,6 +388,11 @@ Select one option from multiple choices:
 ```
 
 **Expected Result:** Radio button selects, previous selection clears automatically.
+
+**Fixture Screenshot:**
+
+Radio Button Selected:
+![Radio Button Selected](./screenshots/09-radio-selected.png)
 
 ---
 
@@ -376,6 +414,11 @@ Test dropdown/select element interaction:
 
 **Expected Result:** Dropdown opens, option selects, result displays in test summary.
 
+**Fixture Screenshot:**
+
+Dropdown Option Selected:
+![Dropdown Option Selected](./screenshots/10-dropdown-selected.png)
+
 ---
 
 ### Slider (Range Input)
@@ -394,6 +437,11 @@ Test slider/range control automation:
 
 **Expected Result:** Slider moves, percentage value updates in real-time.
 
+**Fixture Screenshot:**
+
+Slider Adjusted:
+![Slider Adjusted](./screenshots/11-slider-adjusted.png)
+
 ---
 
 ### Color Picker
@@ -410,6 +458,11 @@ Test color selection automation:
 ```
 
 **Expected Result:** Color box changes to selected color, animation plays.
+
+**Fixture Screenshot:**
+
+Color Changed:
+![Color Changed](./screenshots/12-color-changed.png)
 
 ---
 
@@ -430,6 +483,11 @@ Button with persistent click counting:
 
 **Expected Result:** Counter increments to 3, test result shows "✓".
 
+**Fixture Screenshot:**
+
+Counter Incremented:
+![Counter Incremented](./screenshots/13-counter-incremented.png)
+
 ---
 
 ### Hover Detection
@@ -447,6 +505,11 @@ Zone that detects mouse hover events:
 ```
 
 **Expected Result:** Zone highlights when hovered, unhighlights when mouse leaves.
+
+**Fixture Screenshot:**
+
+Hover Detected:
+![Hover Detected](./screenshots/14-hover-detected.png)
 
 ---
 
@@ -466,6 +529,11 @@ Test keyboard key press automation:
 ```
 
 **Expected Result:** Text types, backspace removes last character, test result shows key count.
+
+**Fixture Screenshot:**
+
+Keyboard Input Tested:
+![Keyboard Input Tested](./screenshots/15-keyboard-input.png)
 
 ---
 
@@ -488,6 +556,11 @@ Real-time log of all interactions on the page.
   {"tool": "take_screenshot", "arguments": {"filepath": "./log-cleared.png"}}
 ]
 ```
+
+**Fixture Screenshot:**
+
+Event Log with All Interactions:
+![Event Log](./screenshots/16-event-log.png)
 
 ---
 
@@ -565,6 +638,22 @@ Navigate between form fields using Tab and Enter:
   {"tool": "take_screenshot", "arguments": {"filepath": "./form-submitted.png"}}
 ]
 ```
+
+---
+
+## Test Results Summary
+
+After running through all the interactive tests, the fixture displays a comprehensive summary showing which tests passed:
+
+![Test Results Summary](./screenshots/17-test-results.png)
+
+The summary panel shows:
+- ✓ **Buttons Clicked** - Number of button interactions detected
+- ✓ **Input Typed** - Character count from text inputs
+- ✓ **Checkbox Toggled** - Number of checkboxes checked
+- ✓ **Dropdown Changed** - Selected dropdown value
+- ✓ **Slider Adjusted** - Final slider percentage value
+- ✓ **Keys Pressed** - Number of keyboard events detected
 
 ---
 
