@@ -81,11 +81,11 @@ func TestValidateCoords_BothNegative(t *testing.T) {
 
 func TestValidateScreenRegion_Valid(t *testing.T) {
 	cases := []struct{ x, y, w, h int }{
-		{0, 0, testScreenW, testScreenH},             // full screen
-		{0, 0, 1, 1},                                 // minimum region
-		{100, 100, 400, 300},                         // interior region
-		{0, 0, testScreenW - 1, testScreenH - 1},     // just inside
-		{testScreenW - 1, testScreenH - 1, 1, 1},     // bottom-right 1×1
+		{0, 0, testScreenW, testScreenH},         // full screen
+		{0, 0, 1, 1},                             // minimum region
+		{100, 100, 400, 300},                     // interior region
+		{0, 0, testScreenW - 1, testScreenH - 1}, // just inside
+		{testScreenW - 1, testScreenH - 1, 1, 1}, // bottom-right 1×1
 	}
 	for _, c := range cases {
 		if err := ValidateScreenRegion(c.x, c.y, c.w, c.h, testScreenW, testScreenH); err != nil {
@@ -268,11 +268,11 @@ func TestValidateKey_FunctionKeys(t *testing.T) {
 func TestValidateKey_UnknownKey(t *testing.T) {
 	unknowns := []string{
 		"unknown_key",
-		"ENTER",      // case-sensitive: uppercase not allowed
-		"ctrl+c",     // combinations not supported via this tool
-		"",           // empty
-		"javascript", // potential injection string
-		"; rm -rf /", // shell injection attempt
+		"ENTER",         // case-sensitive: uppercase not allowed
+		"ctrl+c",        // combinations not supported via this tool
+		"",              // empty
+		"javascript",    // potential injection string
+		"; rm -rf /",    // shell injection attempt
 		"../etc/passwd", // path traversal attempt
 	}
 	for _, k := range unknowns {
@@ -447,4 +447,3 @@ func TestHandleMoveMouse_FractionalCoords(t *testing.T) {
 		t.Error("Expected tool error for fractional x coordinate")
 	}
 }
-

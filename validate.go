@@ -133,9 +133,9 @@ var allowedKeys = map[string]bool{
 	"tab": true,
 	"esc": true, "escape": true,
 	"backspace": true,
-	"delete": true, "del": true,
+	"delete":    true, "del": true,
 	"space": true,
-	"home": true, "end": true,
+	"home":  true, "end": true,
 	"pageup": true, "pagedown": true,
 	"insert": true,
 
@@ -146,7 +146,7 @@ var allowedKeys = map[string]bool{
 	"shift": true, "ctrl": true, "alt": true,
 	"cmd": true, "command": true, // macOS
 	"super": true, "windows": true, // Linux / Windows
-	"option": true,               // macOS alias for alt
+	"option": true, // macOS alias for alt
 
 	// Lock / system keys
 	"capslock": true, "numlock": true, "scrolllock": true,
@@ -155,7 +155,7 @@ var allowedKeys = map[string]bool{
 	// Numpad
 	"num0": true, "num1": true, "num2": true, "num3": true, "num4": true,
 	"num5": true, "num6": true, "num7": true, "num8": true, "num9": true,
-	"num_lock": true,
+	"num_lock":    true,
 	"num_decimal": true, "num_period": true,
 	"num_plus": true, "num_minus": true, "num_multiply": true, "num_divide": true,
 	"num_enter": true,
