@@ -231,23 +231,19 @@ build_binary() {
     
     echo ""
     
-    # Determine build tags
-    if [ "$WANT_OCR" = true ]; then
-        BUILD_TAGS="ocr"
-    else
-        BUILD_TAGS="noocr"
-    fi
+    # Tidy modules first
+    echo -e "${GRAY}  Running: go mod tidy${NC}"
+    go mod tidy
     
-    echo -e "${GRAY}  Running: go build -o ghost-mcp -tags $BUILD_TAGS ./cmd/ghost-mcp/${NC}"
-    echo -e "${GRAY}  Building with tags: $BUILD_TAGS${NC}"
+    # Note: robotgo v1.0.0+ has GetText built-in by default, no build tags needed
+    echo -e "${GRAY}  Running: go build -o ghost-mcp ./cmd/ghost-mcp/${NC}"
+    echo -e "${GRAY}  Building (OCR support included by default in robotgo v1.0.0+)...${NC}"
     
     cd "$SCRIPT_DIR"
     
-    if go build -o ghost-mcp -ldflags="-s -w" -tags "$BUILD_TAGS" ./cmd/ghost-mcp/; then
+    if go build -o ghost-mcp -ldflags="-s -w" ./cmd/ghost-mcp/; then
         echo -e "${GREEN}  Build succeeded: $BINARY_PATH${NC}"
-        if [ "$WANT_OCR" = true ]; then
-            echo -e "${GREEN}  OCR support enabled (read_screen_text tool available)${NC}"
-        fi
+        echo -e "${GREEN}  OCR support enabled (read_screen_text tool available)${NC}"
     else
         echo ""
         echo -e "${RED}  Build failed!${NC}"
@@ -278,24 +274,12 @@ build_binary() {
         elif [ "$choice" -eq 1 ]; then
             # Build with OCR
             echo -e "${GRAY}  Building with OCR support...${NC}"
-            echo -e "${YELLOW}  Installing Tesseract development libraries...${NC}"
             
-            case $PKG_MANAGER in
-                apt)
-                    sudo apt-get install -y tesseract-ocr libleptonica-dev libtesseract-dev
-                    ;;
-                dnf|yum)
-                    sudo $PKG_MANAGER install -y tesseract tesseract-devel leptonica-devel
-                    ;;
-                pacman)
-                    sudo pacman -S --noconfirm tesseract tesseract-data-eng
-                    ;;
-                zypper)
-                    sudo zypper install -y tesseract-ocr tesseract-ocr-devel
-                    ;;
-            esac
+            # Tidy modules first
+            echo -e "${GRAY}  Running: go mod tidy${NC}"
+            go mod tidy
             
-            if go build -o ghost-mcp -ldflags="-s -w" -tags ocr ./cmd/ghost-mcp/; then
+            if go build -o ghost-mcp -ldflags="-s -w" ./cmd/ghost-mcp/; then
                 echo -e "${GREEN}  Build succeeded (OCR enabled): $BINARY_PATH${NC}"
                 echo -e "${GREEN}  read_screen_text tool is now available!${NC}"
             else
@@ -305,7 +289,7 @@ build_binary() {
                     "Yes - build without OCR" \
                     "No - exit")
                 if [ "$choice" -eq 0 ]; then
-                    if go build -o ghost-mcp -ldflags="-s -w" -tags noocr ./cmd/ghost-mcp/; then
+                    if go build -o ghost-mcp -ldflags="-s -w" ./cmd/ghost-mcp/; then
                         echo -e "${GREEN}  Build succeeded (OCR disabled): $BINARY_PATH${NC}"
                     else
                         echo -e "${RED}  Build failed.${NC}"

@@ -380,7 +380,7 @@ func registerTools(mcpServer *server.MCPServer) {
 	), handlePressKey)
 
 	mcpServer.AddTool(mcp.NewTool("take_screenshot",
-		mcp.WithDescription("Capture a screenshot and return it as base64 PNG. Use optional region parameters to capture only part of the screen."),
+		mcp.WithDescription("Capture a screenshot and return it as base64 PNG. Use to see the current screen state for visual context. Combine with read_screen_text for complete understanding: read_screen_text finds text/element positions, take_screenshot shows visual layout, colors, icons. Use optional region parameters to capture only part of the screen."),
 		mcp.WithNumber("x", mcp.Description("X coordinate of region (default: 0).")),
 		mcp.WithNumber("y", mcp.Description("Y coordinate of region (default: 0).")),
 		mcp.WithNumber("width", mcp.Description("Width of region in pixels (default: full screen width).")),

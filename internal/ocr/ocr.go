@@ -1,6 +1,5 @@
-//go:build ocr
-
 // Package ocr wraps Tesseract OCR via gosseract to extract text from images.
+// Requires Tesseract OCR libraries to be installed (e.g., via vcpkg).
 package ocr
 
 import (
@@ -36,7 +35,7 @@ func ReadFile(imagePath string) (*Result, error) {
 
 	text, err := client.Text()
 	if err != nil {
-		return nil, fmt.Errorf("extract text: %w", err)
+		return nil, fmt.Errorf("extract text: %w. Make sure Tesseract OCR is installed: https://github.com/tesseract-ocr/tesseract", err)
 	}
 
 	boxes, err := client.GetBoundingBoxes(gosseract.RIL_WORD)

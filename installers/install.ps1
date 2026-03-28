@@ -130,35 +130,51 @@ function Install-Tesseract {
     Write-Host ""
     Write-Host "  Installing Tesseract OCR development libraries..." -ForegroundColor Yellow
     Write-Host "  This may take 10-15 minutes..." -ForegroundColor Gray
-    
+
     # Check if vcpkg is installed
     $vcpkgPath = "$env:USERPROFILE\vcpkg"
     if (-not (Test-Path $vcpkgPath)) {
         Write-Host "  Installing vcpkg package manager..." -ForegroundColor Gray
         git clone https://github.com/Microsoft/vcpkg.git $vcpkgPath
         Push-Location $vcpkgPath
-        & .\bootstrap-vcpkg.bat
+        & .\bootstrap-vcpkg.bat -disableMetrics
         Pop-Location
         Write-Host "  vcpkg installed." -ForegroundColor Green
     }
-    
-    # Install Tesseract via vcpkg
-    Write-Host "  Installing Tesseract OCR (this takes a while)..." -ForegroundColor Gray
+
+    # Install Tesseract and Leptonica via vcpkg using the MinGW triplet
+    Write-Host "  Installing Tesseract OCR and Leptonica (this takes a while)..." -ForegroundColor Gray
     Push-Location $vcpkgPath
-    & .\vcpkg install tesseract:x64-windows
+    & .\vcpkg install tesseract:x64-mingw-dynamic leptonica:x64-mingw-dynamic --disable-metrics
     Pop-Location
-    
-    # Set persistent environment variables for CGO
-    $vcpkgInstall = "$vcpkgPath\installed\x64-windows"
-    [System.Environment]::SetEnvironmentVariable("CGO_CXXFLAGS", "-I$vcpkgInstall\include", "User")
-    [System.Environment]::SetEnvironmentVariable("CGO_LDFLAGS", "-L$vcpkgInstall\lib", "User")
+
+    # gosseract links against -ltesseract but vcpkg installs libtesseract55.dll.a
+    $libDir = "$vcpkgPath\installed\x64-mingw-dynamic\lib"
+    $tessLib = Get-Item "$libDir\libtesseract*.dll.a" -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($tessLib -and -not (Test-Path "$libDir\libtesseract.dll.a")) {
+        Copy-Item $tessLib.FullName "$libDir\libtesseract.dll.a"
+        Write-Host "  Created libtesseract.dll.a alias." -ForegroundColor Gray
+    }
+
+    # Use forward-slash paths — CGO_CPPFLAGS applies to both C and C++ (needed for tessbridge.cpp)
+    $vcpkgInstall = ($vcpkgPath + "/installed/x64-mingw-dynamic").Replace('\', '/')
+    [System.Environment]::SetEnvironmentVariable("CGO_CPPFLAGS", "-I$vcpkgInstall/include", "User")
+    [System.Environment]::SetEnvironmentVariable("CGO_LDFLAGS", "-L$vcpkgInstall/lib", "User")
     [System.Environment]::SetEnvironmentVariable("CGO_ENABLED", "1", "User")
-    
+
+    # Add vcpkg bin to PATH so the runtime DLLs are found when running ghost-mcp.exe
+    $vcpkgBin = "$vcpkgPath\installed\x64-mingw-dynamic\bin"
+    $userPath = [System.Environment]::GetEnvironmentVariable("PATH", "User")
+    if ($userPath -notlike "*$vcpkgBin*") {
+        [System.Environment]::SetEnvironmentVariable("PATH", "$userPath;$vcpkgBin", "User")
+    }
+
     # Set for current session
-    $env:CGO_CXXFLAGS = "-I$vcpkgInstall\include"
-    $env:CGO_LDFLAGS = "-L$vcpkgInstall\lib"
-    $env:CGO_ENABLED = "1"
-    
+    $env:CGO_CPPFLAGS = "-I$vcpkgInstall/include"
+    $env:CGO_LDFLAGS  = "-L$vcpkgInstall/lib"
+    $env:CGO_ENABLED  = "1"
+    $env:PATH         = "$env:PATH;$vcpkgBin"
+
     Write-Host "  Tesseract development libraries installed." -ForegroundColor Green
     Write-Host "  CGO flags configured for vcpkg." -ForegroundColor Green
 }
@@ -185,7 +201,6 @@ Write-Host "  Checking for MinGW (GCC) compiler..." -ForegroundColor Gray
 
 $needTesseract = $false
 $needMinGW = $false
-$wantOCR = $false
 
 if (Test-GccInstalled) {
     Write-Host "  GCC found: $(gcc --version | Select-Object -First 1)" -ForegroundColor Green
@@ -194,35 +209,19 @@ if (Test-GccInstalled) {
     $needMinGW = $true
 }
 
-# Ask if user wants OCR support
-Write-Host ""
-Write-Host "  OCR Support (read_screen_text tool):" -ForegroundColor Cyan
-Write-Host "  - Reads text directly from screen (faster than screenshots)" -ForegroundColor Gray
-Write-Host "  - Requires Tesseract OCR development libraries (~500MB)" -ForegroundColor Gray
-Write-Host "  - Installation takes 10-15 minutes" -ForegroundColor Gray
-Write-Host ""
-$ocrResponse = Read-Host "  Enable OCR support? [y/N]"
-$wantOCR = $ocrResponse -match '^[Yy]'
-
-if ($wantOCR) {
-    # Check for vcpkg Tesseract installation
-    $vcpkgPath = "$env:USERPROFILE\vcpkg\installed\x64-windows\include\leptonica"
-    if (Test-Path $vcpkgPath) {
-        Write-Host "  Tesseract development libraries found." -ForegroundColor Green
-    } else {
-        Write-Host "  Tesseract development libraries not found." -ForegroundColor Yellow
-        $needTesseract = $true
-    }
+# Check if Tesseract is installed via vcpkg (x64-mingw-dynamic triplet)
+$vcpkgTessInclude = "$env:USERPROFILE\vcpkg\installed\x64-mingw-dynamic\include\tesseract"
+if (Test-Path $vcpkgTessInclude) {
+    Write-Host "  Tesseract OCR found in vcpkg." -ForegroundColor Green
+} else {
+    Write-Host "  Tesseract OCR not found. Required for read_screen_text tool." -ForegroundColor Yellow
+    $needTesseract = $true
 }
 
 if ($needMinGW -or $needTesseract) {
     Write-Host ""
-    if ($needMinGW) {
-        Write-Host "  Missing: MinGW-w64 (GCC compiler)" -ForegroundColor Yellow
-    }
-    if ($needTesseract) {
-        Write-Host "  Missing: Tesseract OCR development libraries (vcpkg)" -ForegroundColor Yellow
-    }
+    if ($needMinGW)     { Write-Host "  Missing: MinGW-w64 (GCC compiler)" -ForegroundColor Yellow }
+    if ($needTesseract) { Write-Host "  Missing: Tesseract OCR (x64-mingw-dynamic via vcpkg)" -ForegroundColor Yellow }
     Write-Host ""
 
     $chocoIdx = Prompt-Choice "How do you want to install missing dependencies?" @(
@@ -247,10 +246,6 @@ if ($needMinGW -or $needTesseract) {
             Install-MinGW
         }
 
-        if ($needTesseract) {
-            Install-Tesseract
-        }
-
         # Verify GCC installation
         if ($needMinGW) {
             if (Test-GccInstalled) {
@@ -263,6 +258,10 @@ if ($needMinGW -or $needTesseract) {
                     exit 0
                 }
             }
+        }
+
+        if ($needTesseract) {
+            Install-Tesseract
         }
     } else {
         Write-Host "  Skipping dependency installation." -ForegroundColor Yellow
@@ -278,7 +277,15 @@ Write-Header "Step 1 - Binary"
 
 $scriptDir = $PSScriptRoot
 if (-not $scriptDir) { $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path }
-$binaryPath = Join-Path $scriptDir "ghost-mcp.exe"
+
+# Resolve the project root (parent of installers directory)
+if ($scriptDir -like "*\installers") {
+    $projectRoot = Split-Path $scriptDir -Parent
+} else {
+    $projectRoot = $scriptDir
+}
+
+$binaryPath = Join-Path $projectRoot "ghost-mcp.exe"
 
 if (Test-Path $binaryPath) {
     Write-Host "  Found existing binary: $binaryPath" -ForegroundColor Green
@@ -290,101 +297,57 @@ if (Test-Path $binaryPath) {
     $buildFailed = $false  # will be set in build block
 }
 
+# Resolve the project root (parent of installers directory)
+if ($scriptDir -like "*\installers") {
+    $projectRoot = Split-Path $scriptDir -Parent
+} else {
+    $projectRoot = $scriptDir
+}
+
 if ($rebuild -eq 1) {
     Write-Host ""
-    Write-Host "  Running: go build -o ghost-mcp.exe ./cmd/ghost-mcp/" -ForegroundColor Gray
+    Write-Host "  Running: go mod tidy" -ForegroundColor Gray
+    Push-Location $projectRoot
+    & go mod tidy
+    Pop-Location
     
-    # Determine build tags
-    $buildTags = if ($wantOCR) { "ocr" } else { "noocr" }
-    Write-Host "  Building with tags: $buildTags" -ForegroundColor Gray
+    Write-Host ""
     
-    # Check if Tesseract is installed and set CGO flags
-    $vcpkgPath = "$env:USERPROFILE\vcpkg\installed\x64-windows"
-    if (Test-Path $vcpkgPath) {
-        $env:CGO_CXXFLAGS = "-I$vcpkgPath\include"
-        $env:CGO_LDFLAGS = "-L$vcpkgPath\lib"
-        $env:CGO_ENABLED = "1"
-        Write-Host "  CGO flags set for vcpkg Tesseract." -ForegroundColor Gray
-    }
-    
-    Push-Location $scriptDir
+    # Set CGO flags for vcpkg (x64-mingw-dynamic) — use forward slashes; CGO_CPPFLAGS covers C++ includes
+    $vcpkgInstall = ($env:USERPROFILE + "/vcpkg/installed/x64-mingw-dynamic").Replace('\', '/')
+    $env:CGO_CPPFLAGS = "-I$vcpkgInstall/include"
+    $env:CGO_LDFLAGS  = "-L$vcpkgInstall/lib"
+
+    Push-Location $projectRoot
     try {
         $buildFailed = $false
-        & go build -o ghost-mcp.exe -ldflags="-s -w" -tags $buildTags ./cmd/ghost-mcp/
+        & go build -o ghost-mcp.exe -ldflags="-s -w" ./cmd/ghost-mcp/
         if ($LASTEXITCODE -ne 0) { throw "go build failed (exit $LASTEXITCODE)" }
         Write-Host "  Build succeeded: $binaryPath" -ForegroundColor Green
-        if ($wantOCR) {
-            Write-Host "  OCR support enabled (read_screen_text tool available)" -ForegroundColor Green
+
+        # Copy runtime DLLs next to the exe so it works without vcpkg in PATH
+        $vcpkgBin = "$env:USERPROFILE\vcpkg\installed\x64-mingw-dynamic\bin"
+        if (Test-Path $vcpkgBin) {
+            Write-Host "  Copying runtime DLLs..." -ForegroundColor Gray
+            Copy-Item "$vcpkgBin\*.dll" $projectRoot -Force
+            Write-Host "  DLLs copied to: $projectRoot" -ForegroundColor Green
         }
     } catch {
         Write-Host ""
         Write-Host "  Build failed!" -ForegroundColor Red
         Write-Host ""
-        Write-Host "  This is likely due to missing Tesseract OCR development headers." -ForegroundColor Yellow
-        Write-Host "  The read_screen_text tool requires Tesseract + Leptonica headers." -ForegroundColor Gray
+        Write-Host "  This is likely due to missing MinGW or Tesseract OCR libraries." -ForegroundColor Yellow
+        Write-Host "  Re-run the installer from Step 0 to install missing dependencies." -ForegroundColor Gray
         Write-Host ""
         $skipBuildIdx = Prompt-Choice "How do you want to proceed?" @(
-            "Build WITHOUT OCR support (read_screen_text tool will be disabled)",
-            "Build WITH OCR support (requires vcpkg Tesseract installation)",
-            "Exit and fix dependencies manually"
+            "Exit and fix dependencies manually",
+            "Continue anyway (binary not available)"
         )
         if ($skipBuildIdx -eq 0) {
-            # Build without OCR
-            Write-Host "  Building without OCR support..." -ForegroundColor Gray
-            & go build -o ghost-mcp.exe -ldflags="-s -w" -tags noocr ./cmd/ghost-mcp/
-            if ($LASTEXITCODE -ne 0) {
-                Write-Host "  Build failed again." -ForegroundColor Red
-                $buildFailed = $true
-            } else {
-                Write-Host "  Build succeeded (OCR disabled): $binaryPath" -ForegroundColor Green
-                $buildFailed = $false
-            }
-        } elseif ($skipBuildIdx -eq 1) {
-            # Build with OCR
-            Write-Host "  Building with OCR support..." -ForegroundColor Gray
-            
-            # Check if Tesseract is installed and set CGO flags
-            $vcpkgPath = "$env:USERPROFILE\vcpkg\installed\x64-windows"
-            if (Test-Path $vcpkgPath) {
-                $env:CGO_CXXFLAGS = "-I$vcpkgPath\include"
-                $env:CGO_LDFLAGS = "-L$vcpkgPath\lib"
-                $env:CGO_ENABLED = "1"
-                Write-Host "  CGO flags set for vcpkg Tesseract." -ForegroundColor Gray
-            } else {
-                Write-Host "  WARNING: vcpkg Tesseract not found." -ForegroundColor Yellow
-                Write-Host "  Installing now..." -ForegroundColor Gray
-                Install-Tesseract
-            }
-            
-            & go build -o ghost-mcp.exe -ldflags="-s -w" -tags ocr ./cmd/ghost-mcp/
-            if ($LASTEXITCODE -ne 0) {
-                Write-Host "  Build with OCR failed." -ForegroundColor Red
-                Write-Host ""
-                $retryIdx = Prompt-Choice "Try building without OCR instead?" @(
-                    "Yes - build without OCR",
-                    "No - exit"
-                )
-                if ($retryIdx -eq 0) {
-                    & go build -o ghost-mcp.exe -ldflags="-s -w" -tags noocr ./cmd/ghost-mcp/
-                    if ($LASTEXITCODE -ne 0) {
-                        Write-Host "  Build failed." -ForegroundColor Red
-                        $buildFailed = $true
-                    } else {
-                        Write-Host "  Build succeeded (OCR disabled): $binaryPath" -ForegroundColor Green
-                        $buildFailed = $false
-                    }
-                } else {
-                    exit 1
-                }
-            } else {
-                Write-Host "  Build succeeded (OCR enabled): $binaryPath" -ForegroundColor Green
-                Write-Host "  read_screen_text tool is now available!" -ForegroundColor Green
-                $buildFailed = $false
-            }
-        } else {
             Write-Host "  Exiting." -ForegroundColor Gray
             exit 1
         }
+        $buildFailed = $true
     } finally {
         Pop-Location
     }
@@ -398,7 +361,7 @@ if ($buildFailed -and -not (Test-Path $binaryPath)) {
     Write-Host ""
     Write-Host "  Options:" -ForegroundColor Yellow
     Write-Host "   1. Install dependencies and re-run this script as Administrator" -ForegroundColor Gray
-    Write-Host "   2. Build manually: go build -tags noocr -o ghost-mcp.exe ./cmd/ghost-mcp/" -ForegroundColor Gray
+    Write-Host "   2. Build manually: go build -o ghost-mcp.exe ./cmd/ghost-mcp/" -ForegroundColor Gray
     Write-Host ""
     exit 1
 }

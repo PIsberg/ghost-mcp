@@ -35,6 +35,12 @@ jobs:
     - name: Clean Go module cache
       run: go clean -modcache
 
+    - name: Download Go modules
+      run: go mod download
+
+    - name: Tidy Go modules
+      run: go mod tidy
+
     - name: Install dependencies (Linux)
       if: matrix.os == 'ubuntu-latest'
       run: |
@@ -48,18 +54,37 @@ jobs:
       run: |
         # Install MinGW
         choco install mingw -y --no-progress
-        
-        # Install vcpkg and Tesseract development libraries
+
+        # Add MinGW to PATH immediately so vcpkg can detect the compiler
+        $mingwBin = "C:\ProgramData\mingw64\mingw64\bin"
+        if (Test-Path $mingwBin) {
+          $env:PATH = "$mingwBin;$env:PATH"
+          echo "$mingwBin" >> $env:GITHUB_PATH
+        }
+
+        # Install vcpkg and Tesseract/Leptonica for MinGW
         git clone https://github.com/Microsoft/vcpkg.git $env:USERPROFILE\vcpkg
-        cd $env:USERPROFILE\vcpkg
+        Set-Location $env:USERPROFILE\vcpkg
         .\bootstrap-vcpkg.bat -disableMetrics
-        .\vcpkg install tesseract:x64-windows --disable-metrics
-        
-        # Set CGO flags for vcpkg
-        $vcpkgInstall = "$env:USERPROFILE\vcpkg\installed\x64-windows"
-        echo "CGO_CXXFLAGS=-I$vcpkgInstall\include" >> $env:GITHUB_ENV
-        echo "CGO_LDFLAGS=-L$vcpkgInstall\lib" >> $env:GITHUB_ENV
+        $env:CC  = "$mingwBin\gcc.exe"
+        $env:CXX = "$mingwBin\g++.exe"
+        .\vcpkg install tesseract:x64-mingw-dynamic leptonica:x64-mingw-dynamic --disable-metrics
+
+        # gosseract links against -ltesseract but vcpkg installs libtesseract55.dll.a
+        $libDir = "$env:USERPROFILE\vcpkg\installed\x64-mingw-dynamic\lib"
+        $tessLib = Get-Item "$libDir\libtesseract*.dll.a" | Select-Object -First 1
+        if ($tessLib -and -not (Test-Path "$libDir\libtesseract.dll.a")) {
+          Copy-Item $tessLib.FullName "$libDir\libtesseract.dll.a"
+        }
+
+        # Set CGO flags — use forward slashes; CGO_CPPFLAGS applies to both C and C++ (needed for tessbridge.cpp)
+        $vcpkgInstall = ($env:USERPROFILE + "/vcpkg/installed/x64-mingw-dynamic").Replace('\', '/')
+        echo "CGO_CPPFLAGS=-I$vcpkgInstall/include" >> $env:GITHUB_ENV
+        echo "CGO_LDFLAGS=-L$vcpkgInstall/lib" >> $env:GITHUB_ENV
         echo "CGO_ENABLED=1" >> $env:GITHUB_ENV
+
+        # Add vcpkg bin to PATH so runtime DLLs are found when running ghost-mcp.exe
+        echo "$env:USERPROFILE\vcpkg\installed\x64-mingw-dynamic\bin" >> $env:GITHUB_PATH
 
     - name: Start Xvfb (Linux)
       if: matrix.os == 'ubuntu-latest'
@@ -78,11 +103,18 @@ jobs:
       if: matrix.os != 'macos-latest'
       run: |
         if [ "${{ runner.os }}" = "Windows" ]; then
-          go build -o ghost-mcp.exe -tags ocr ./cmd/ghost-mcp/
+          go build -o ghost-mcp.exe ./cmd/ghost-mcp/
         else
-          go build -o ghost-mcp -tags ocr ./cmd/ghost-mcp/
+          go build -o ghost-mcp ./cmd/ghost-mcp/
         fi
       shell: bash
+
+    - name: Copy runtime DLLs (Windows)
+      if: matrix.os == 'windows-latest'
+      run: |
+        $vcpkgBin = "$env:USERPROFILE\vcpkg\installed\x64-mingw-dynamic\bin"
+        Copy-Item "$vcpkgBin\*.dll" . -Force
+        Write-Host "Copied DLLs from $vcpkgBin"
 
     - name: Build (macOS) - unit tests only
       if: matrix.os == 'macos-latest'
