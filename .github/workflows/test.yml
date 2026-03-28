@@ -90,17 +90,8 @@ jobs:
           exit 1
         fi
 
-    - name: Run format check (Windows)
-      if: runner.os == 'Windows'
-      run: |
-        $unformatted = @(gofmt -l .)
-        if ($unformatted.Count -gt 0) {
-          echo "Go files are not formatted:"
-          gofmt -d .
-          exit 1
-        }
 
-    - name: Test coverage (Linux only)
+- name: Test coverage (Linux only)
       if: matrix.os == 'ubuntu-latest'
       run: |
         go test -v -short -coverprofile=coverage.out ./...
