@@ -77,11 +77,19 @@ jobs:
           Copy-Item $tessLib.FullName "$libDir\libtesseract.dll.a"
         }
 
+        # Download English language data for Tesseract
+        $tessdataDir = "$env:USERPROFILE\vcpkg\installed\x64-mingw-dynamic\share\tessdata"
+        New-Item -ItemType Directory -Force -Path $tessdataDir | Out-Null
+        Invoke-WebRequest "https://github.com/tesseract-ocr/tessdata_fast/raw/main/eng.traineddata" -OutFile "$tessdataDir\eng.traineddata"
+
         # Set CGO flags — use forward slashes; CGO_CPPFLAGS applies to both C and C++ (needed for tessbridge.cpp)
         $vcpkgInstall = ($env:USERPROFILE + "/vcpkg/installed/x64-mingw-dynamic").Replace('\', '/')
         echo "CGO_CPPFLAGS=-I$vcpkgInstall/include" >> $env:GITHUB_ENV
         echo "CGO_LDFLAGS=-L$vcpkgInstall/lib" >> $env:GITHUB_ENV
         echo "CGO_ENABLED=1" >> $env:GITHUB_ENV
+
+        # TESSDATA_PREFIX must point to the directory that directly contains eng.traineddata
+        echo "TESSDATA_PREFIX=$env:USERPROFILE\vcpkg\installed\x64-mingw-dynamic\share\tessdata" >> $env:GITHUB_ENV
 
         # Add vcpkg bin to PATH so runtime DLLs are found when running ghost-mcp.exe
         echo "$env:USERPROFILE\vcpkg\installed\x64-mingw-dynamic\bin" >> $env:GITHUB_PATH
@@ -91,6 +99,10 @@ jobs:
       run: |
         Xvfb :99 -screen 0 1024x768x24 &
         echo "DISPLAY=:99" >> $GITHUB_ENV
+        # TESSDATA_PREFIX must point to the directory that directly contains eng.traineddata
+        TESSDATA=$(find /usr/share/tesseract-ocr -name eng.traineddata 2>/dev/null | head -1 | xargs dirname 2>/dev/null)
+        if [ -z "$TESSDATA" ]; then TESSDATA=/usr/share/tessdata; fi
+        echo "TESSDATA_PREFIX=$TESSDATA" >> $GITHUB_ENV
 
     - name: Install dependencies (macOS)
       if: matrix.os == 'macos-latest'

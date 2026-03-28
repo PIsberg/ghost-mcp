@@ -173,8 +173,8 @@ function Install-Tesseract {
     [System.Environment]::SetEnvironmentVariable("CGO_LDFLAGS", "-L$vcpkgInstall/lib", "User")
     [System.Environment]::SetEnvironmentVariable("CGO_ENABLED", "1", "User")
 
-    # TESSDATA_PREFIX must point to the directory containing the tessdata folder
-    $tessPrefix = "$vcpkgPath\installed\x64-mingw-dynamic\share"
+    # TESSDATA_PREFIX must point to the directory that directly contains eng.traineddata
+    $tessPrefix = "$vcpkgPath\installed\x64-mingw-dynamic\share\tessdata"
     [System.Environment]::SetEnvironmentVariable("TESSDATA_PREFIX", $tessPrefix, "User")
 
     # Add vcpkg bin to PATH so the runtime DLLs are found when running ghost-mcp.exe

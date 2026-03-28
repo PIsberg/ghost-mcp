@@ -78,7 +78,7 @@ $tessdata = "$env:USERPROFILE\vcpkg\installed\x64-mingw-dynamic\share\tessdata"
 Invoke-WebRequest "https://github.com/tesseract-ocr/tessdata_fast/raw/main/eng.traineddata" -OutFile "$tessdata\eng.traineddata"
 
 # Set required environment variables (persist across reboots)
-[System.Environment]::SetEnvironmentVariable("TESSDATA_PREFIX", "$env:USERPROFILE\vcpkg\installed\x64-mingw-dynamic\share", "User")
+[System.Environment]::SetEnvironmentVariable("TESSDATA_PREFIX", "$env:USERPROFILE\vcpkg\installed\x64-mingw-dynamic\share\tessdata", "User")
 [System.Environment]::SetEnvironmentVariable("CGO_CPPFLAGS", "-I$env:USERPROFILE/vcpkg/installed/x64-mingw-dynamic/include", "User")
 [System.Environment]::SetEnvironmentVariable("CGO_LDFLAGS",  "-L$env:USERPROFILE/vcpkg/installed/x64-mingw-dynamic/lib", "User")
 ```
@@ -196,7 +196,7 @@ Add this to your MCP client configuration to connect to Ghost MCP:
       "args": [],
       "env": {
         "GHOST_MCP_TOKEN": "your-secret-token-here",
-        "TESSDATA_PREFIX": "C:\\Users\\<you>\\vcpkg\\installed\\x64-mingw-dynamic\\share"
+        "TESSDATA_PREFIX": "C:\\Users\\<you>\\vcpkg\\installed\\x64-mingw-dynamic\\share\\tessdata"
       }
     }
   }
@@ -212,7 +212,7 @@ Add this to your MCP client configuration to connect to Ghost MCP:
       "args": [],
       "env": {
         "GHOST_MCP_TOKEN": "your-secret-token-here",
-        "TESSDATA_PREFIX": "/usr/share"
+        "TESSDATA_PREFIX": "/usr/share/tesseract-ocr/5/tessdata"
       }
     }
   }
@@ -234,7 +234,7 @@ Add this to your MCP client configuration to connect to Ghost MCP:
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `GHOST_MCP_TOKEN` | **Required.** Secret authentication token. Server refuses to start without it. | *(none — must be set)* |
-| `TESSDATA_PREFIX` | **Required for OCR.** Directory containing Tesseract language data (must contain `tessdata/eng.traineddata`). | *(none — OCR will fail if unset)* |
+| `TESSDATA_PREFIX` | **Required for OCR.** Directory that directly contains `eng.traineddata` (NOT its parent). | *(none — OCR will fail if unset)* |
 | `GHOST_MCP_AUDIT_LOG` | Directory for audit log files. Created automatically if absent. | `<UserConfigDir>/ghost-mcp/audit/` |
 | `GHOST_MCP_DEBUG` | Enable debug logging (`1` = on) | `0` (disabled) |
 | `GHOST_MCP_VISUAL` | Show visual cursor pulse on mouse actions (`1` = on) | `0` (disabled) |
@@ -521,9 +521,10 @@ All application logs are written to **stderr**, never to stdout. This ensures:
 - Verify write permissions to system temp folder
 
 #### OCR Fails / `read_screen_text` Returns Error
-- Ensure `TESSDATA_PREFIX` points to the **parent** directory of `tessdata/` (e.g. if the file is at `/usr/share/tessdata/eng.traineddata`, set `TESSDATA_PREFIX=/usr/share`)
-- On Windows with vcpkg: `TESSDATA_PREFIX` should be `%USERPROFILE%\vcpkg\installed\x64-mingw-dynamic\share`
-- Verify `eng.traineddata` exists: `ls $TESSDATA_PREFIX/tessdata/eng.traineddata`
+- `TESSDATA_PREFIX` must point to the directory that **directly contains** `eng.traineddata` (not its parent)
+- On Windows with vcpkg: `TESSDATA_PREFIX` = `%USERPROFILE%\vcpkg\installed\x64-mingw-dynamic\share\tessdata`
+- On Linux: `TESSDATA_PREFIX` = `/usr/share/tesseract-ocr/5/tessdata` (verify with `find /usr/share -name eng.traineddata`)
+- Verify: `ls $TESSDATA_PREFIX\eng.traineddata` should find the file
 - Check the server startup log — it prints the value of `TESSDATA_PREFIX` at start
 - Set `GHOST_MCP_KEEP_SCREENSHOTS=1` to keep the image files OCR is processing for manual inspection
 

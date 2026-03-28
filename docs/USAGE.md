@@ -680,7 +680,7 @@ On Windows, Tesseract must be installed via vcpkg (not Chocolatey) and `TESSDATA
 $tessdata = "$env:USERPROFILE\vcpkg\installed\x64-mingw-dynamic\share\tessdata"
 Invoke-WebRequest "https://github.com/tesseract-ocr/tessdata_fast/raw/main/eng.traineddata" -OutFile "$tessdata\eng.traineddata"
 # Set env var
-[System.Environment]::SetEnvironmentVariable("TESSDATA_PREFIX", "$env:USERPROFILE\vcpkg\installed\x64-mingw-dynamic\share", "User")
+[System.Environment]::SetEnvironmentVariable("TESSDATA_PREFIX", "$env:USERPROFILE\vcpkg\installed\x64-mingw-dynamic\share\tessdata", "User")
 ```
 
 On macOS/Linux:
@@ -689,9 +689,9 @@ brew install tesseract          # macOS
 sudo apt install tesseract-ocr  # Ubuntu/Debian
 ```
 
-Check `TESSDATA_PREFIX` points to the **parent** of `tessdata/`:
+Check `TESSDATA_PREFIX` points to the directory that **directly contains** `eng.traineddata`:
 ```bash
-ls $TESSDATA_PREFIX/tessdata/eng.traineddata
+ls $TESSDATA_PREFIX/eng.traineddata   # must find the file
 ```
 
 ### Fixture Port Already in Use
