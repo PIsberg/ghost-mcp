@@ -2,9 +2,12 @@
 
 **The Ghost in the Machine** - An MCP (Model Context Protocol) server that exposes OS-level UI automation capabilities to AI clients.
 
+
 ## Overview
 
 Ghost MCP allows AI assistants like Claude to control your computer's mouse, keyboard, and screen. This enables automation of legacy applications, GUI testing, and any task that requires interacting with applications that don't have APIs.
+
+![ghost-mcp-1](https://github.com/user-attachments/assets/2e36118e-8dcd-4cdf-b7c2-552ca66bff80)
 
 ## Features
 
