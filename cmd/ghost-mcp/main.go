@@ -119,6 +119,10 @@ func handleMoveMouse(ctx context.Context, request mcp.CallToolRequest) (*mcp.Cal
 
 	robotgo.MoveSmooth(x, y)
 
+	if os.Getenv("GHOST_MCP_VISUAL") == "1" {
+		visual.PulseCursor(x, y)
+	}
+
 	if err := checkFailsafe(); err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -262,13 +266,18 @@ func handleTakeScreenshot(ctx context.Context, request mcp.CallToolRequest) (*mc
 		return mcp.NewToolResultError(fmt.Sprintf("failed to read screenshot: %v", readErr)), nil
 	}
 
-	os.Remove(fpath)
-	logging.Debug("Temporary screenshot file cleaned up")
+	if os.Getenv("GHOST_MCP_KEEP_SCREENSHOTS") != "1" {
+		os.Remove(fpath)
+		logging.Debug("Temporary screenshot file cleaned up")
+	} else {
+		logging.Info("Screenshot kept at: %s", fpath)
+	}
 
-	return mcp.NewToolResultText(fmt.Sprintf(
-		`{"success": true, "filepath": "%s", "base64": "%s", "width": %d, "height": %d}`,
-		fpath, base64.StdEncoding.EncodeToString(data), width, height,
-	)), nil
+	return mcp.NewToolResultImage(
+		fmt.Sprintf(`{"success": true, "filepath": "%s", "width": %d, "height": %d}`, fpath, width, height),
+		base64.StdEncoding.EncodeToString(data),
+		"image/png",
+	), nil
 }
 
 // =============================================================================
@@ -355,41 +364,109 @@ func registerTools(mcpServer *server.MCPServer) {
 	logging.Info("Registering tools...")
 
 	mcpServer.AddTool(mcp.NewTool("get_screen_size",
-		mcp.WithDescription("Get the screen resolution. Returns {width, height}. Call this first to know valid coordinate ranges."),
+		mcp.WithDescription("Get the screen resolution. Returns {width, height} in pixels. Call this first to understand the coordinate space before moving the mouse or taking screenshots. All coordinates use pixels with (0,0) at the top-left corner."),
 	), handleGetScreenSize)
 
 	mcpServer.AddTool(mcp.NewTool("move_mouse",
-		mcp.WithDescription("Move the mouse cursor to absolute screen coordinates. Origin (0,0) is top-left. Use get_screen_size first to know valid ranges."),
-		mcp.WithNumber("x", mcp.Description("X coordinate (pixels from left edge). Required."), mcp.Required()),
-		mcp.WithNumber("y", mcp.Description("Y coordinate (pixels from top edge). Required."), mcp.Required()),
+		mcp.WithDescription(`Move the mouse cursor to absolute screen coordinates. (0,0) is the top-left corner.
+
+RECOMMENDED WORKFLOW to click a UI element:
+1. Call read_screen_text to find the element by its label/text — it returns word bounding boxes {x, y, width, height} where x,y is the TOP-LEFT corner of each word.
+2. Compute the CENTER of the element: move_x = word.x + word.width/2, move_y = word.y + word.height/2. Always aim for the center, not the corner.
+3. Call move_mouse with the computed center coordinates.
+4. Call take_screenshot to visually verify the cursor landed on the right target.
+5. Call click only after verifying position.
+
+If read_screen_text cannot find the element (e.g. it is an icon or image), use take_screenshot to see the screen and estimate coordinates visually.`),
+		mcp.WithNumber("x", mcp.Description("X coordinate in pixels from the left edge of the screen. Must be within screen bounds."), mcp.Required()),
+		mcp.WithNumber("y", mcp.Description("Y coordinate in pixels from the top edge of the screen. Must be within screen bounds."), mcp.Required()),
 	), handleMoveMouse)
 
 	mcpServer.AddTool(mcp.NewTool("click",
-		mcp.WithDescription("Click the mouse at the current cursor position. Call move_mouse first to position the cursor."),
-		mcp.WithString("button", mcp.Description("Mouse button: 'left' (default), 'right', or 'middle'."), mcp.Required()),
+		mcp.WithDescription(`Click the mouse button at the current cursor position. Always call move_mouse first to position the cursor over the target.
+
+BEFORE CLICKING: Call take_screenshot to confirm the cursor is over the correct element. Clicking the wrong target can cause unintended actions that are hard to undo.
+
+Use right-click to open context menus. Use double-click by calling click twice rapidly. After clicking, take a screenshot to confirm the expected UI change occurred (e.g. a window opened, a button activated, a field was selected).`),
+		mcp.WithString("button", mcp.Description("Mouse button to click: 'left' for normal clicks and selecting items, 'right' for context menus, 'middle' for middle-click."), mcp.Required()),
 	), handleClick)
 
 	mcpServer.AddTool(mcp.NewTool("type_text",
-		mcp.WithDescription("Type text via keyboard input. Use for entering text into focused input fields."),
-		mcp.WithString("text", mcp.Description("The exact text to type. Special characters are supported."), mcp.Required()),
+		mcp.WithDescription(`Type text as keyboard input into the currently focused element. Click the target input field first to ensure it has focus before typing.
+
+For text fields: click the field, then call type_text. For special characters or control sequences (Enter, Tab, Ctrl+C), use press_key instead. After typing, take a screenshot to verify the text was entered correctly.`),
+		mcp.WithString("text", mcp.Description("The exact text string to type. Supports Unicode. Do not include control characters — use press_key for Enter, Tab, Backspace etc."), mcp.Required()),
 	), handleTypeText)
 
 	mcpServer.AddTool(mcp.NewTool("press_key",
-		mcp.WithDescription("Press a single keyboard key. Use for special keys like Enter, Tab, Escape, or keyboard shortcuts."),
-		mcp.WithString("key", mcp.Description("Key name: 'enter', 'tab', 'esc', 'space', 'ctrl', 'alt', 'shift', 'backspace', 'delete', arrow keys ('up','down','left','right'), or any letter."), mcp.Required()),
+		mcp.WithDescription(`Press a single keyboard key or key combination. Use for control keys, navigation, and shortcuts.
+
+Common uses: 'enter' to confirm/submit, 'tab' to move between fields, 'esc' to cancel/close, 'backspace'/'delete' to erase, arrow keys to navigate lists. For shortcuts use modifier keys: 'ctrl', 'alt', 'shift', 'cmd' (macOS).`),
+		mcp.WithString("key", mcp.Description("Key name: 'enter', 'tab', 'esc', 'space', 'backspace', 'delete', 'up', 'down', 'left', 'right', 'ctrl', 'alt', 'shift', 'win' (Windows key), 'cmd' (macOS), 'f1'–'f12', or any single letter/digit."), mcp.Required()),
 	), handlePressKey)
 
 	mcpServer.AddTool(mcp.NewTool("take_screenshot",
-		mcp.WithDescription("Capture a screenshot and return it as base64 PNG. Use to see the current screen state for visual context. Combine with read_screen_text for complete understanding: read_screen_text finds text/element positions, take_screenshot shows visual layout, colors, icons. Use optional region parameters to capture only part of the screen."),
-		mcp.WithNumber("x", mcp.Description("X coordinate of region (default: 0).")),
-		mcp.WithNumber("y", mcp.Description("Y coordinate of region (default: 0).")),
-		mcp.WithNumber("width", mcp.Description("Width of region in pixels (default: full screen width).")),
-		mcp.WithNumber("height", mcp.Description("Height of region in pixels (default: full screen height).")),
+		mcp.WithDescription(`Capture the screen and return it as a base64-encoded PNG image. Use this to understand the current visual state of the screen.
+
+WHEN TO USE:
+- At the start of a task to see what is on screen.
+- After move_mouse to verify the cursor is over the correct target before clicking.
+- After any click or key press to confirm the expected UI change happened.
+- When read_screen_text cannot find an element (icons, images, graphical buttons).
+
+Use the region parameters (x, y, width, height) to zoom in on a specific area for higher detail — e.g. capture just a dialog box or toolbar instead of the full screen.`),
+		mcp.WithNumber("x", mcp.Description("X coordinate of the top-left corner of the capture region in pixels (default: 0).")),
+		mcp.WithNumber("y", mcp.Description("Y coordinate of the top-left corner of the capture region in pixels (default: 0).")),
+		mcp.WithNumber("width", mcp.Description("Width of the capture region in pixels (default: full screen width).")),
+		mcp.WithNumber("height", mcp.Description("Height of the capture region in pixels (default: full screen height).")),
 	), handleTakeScreenshot)
 
 	registerOCRTools(mcpServer)
 
 	logging.Info("All tools registered successfully")
+}
+
+// =============================================================================
+// STARTUP CONFIG LOGGING
+// =============================================================================
+
+func logEnvConfig() {
+	type envVar struct {
+		name     string
+		secret   bool   // mask value
+		fallback string // shown when unset
+	}
+	vars := []envVar{
+		{TokenEnvVar, true, "(not set — server will exit)"},
+		{"GHOST_MCP_TRANSPORT", false, "stdio"},
+		{"GHOST_MCP_DEBUG", false, "0 (off)"},
+		{"GHOST_MCP_VISUAL", false, "0 (off)"},
+		{"GHOST_MCP_KEEP_SCREENSHOTS", false, "0 (screenshots deleted after use)"},
+		{"GHOST_MCP_SCREENSHOT_DIR", false, os.TempDir()},
+		{"GHOST_MCP_AUDIT_LOG", false, "<UserConfigDir>/ghost-mcp/audit"},
+		{"TESSDATA_PREFIX", false, "(not set — OCR will fail)"},
+		{"GHOST_MCP_HTTP_ADDR", false, "localhost:8080"},
+		{"GHOST_MCP_HTTP_BASE_URL", false, ""},
+	}
+	logging.Info("--- Configuration ---")
+	for _, v := range vars {
+		val := os.Getenv(v.name)
+		if val == "" {
+			logging.Info("  %-30s = %s", v.name, v.fallback)
+		} else if v.secret {
+			logging.Info("  %-30s = %s****", v.name, val[:min(8, len(val))])
+		} else {
+			logging.Info("  %-30s = %s", v.name, val)
+		}
+	}
+	logging.Info("---------------------")
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
 
 // =============================================================================
@@ -411,6 +488,9 @@ func main() {
 		os.Exit(1)
 	}
 	logging.Info("Token authentication enabled (%s is set)", TokenEnvVar)
+
+	// Print configuration so it's visible in logs at startup.
+	logEnvConfig()
 
 	auditLog, auditErr := audit.New()
 	if auditErr != nil {

@@ -156,11 +156,26 @@ function Install-Tesseract {
         Write-Host "  Created libtesseract.dll.a alias." -ForegroundColor Gray
     }
 
+    # Download English language data — Tesseract cannot run without it
+    $tessdataDir = "$vcpkgPath\installed\x64-mingw-dynamic\share\tessdata"
+    $engData = "$tessdataDir\eng.traineddata"
+    if (-not (Test-Path $engData)) {
+        Write-Host "  Downloading Tesseract English language data..." -ForegroundColor Gray
+        Invoke-WebRequest "https://github.com/tesseract-ocr/tessdata_fast/raw/main/eng.traineddata" -OutFile $engData
+        Write-Host "  Language data downloaded." -ForegroundColor Green
+    } else {
+        Write-Host "  Tesseract language data already present." -ForegroundColor Green
+    }
+
     # Use forward-slash paths — CGO_CPPFLAGS applies to both C and C++ (needed for tessbridge.cpp)
     $vcpkgInstall = ($vcpkgPath + "/installed/x64-mingw-dynamic").Replace('\', '/')
     [System.Environment]::SetEnvironmentVariable("CGO_CPPFLAGS", "-I$vcpkgInstall/include", "User")
     [System.Environment]::SetEnvironmentVariable("CGO_LDFLAGS", "-L$vcpkgInstall/lib", "User")
     [System.Environment]::SetEnvironmentVariable("CGO_ENABLED", "1", "User")
+
+    # TESSDATA_PREFIX must point to the directory containing the tessdata folder
+    $tessPrefix = "$vcpkgPath\installed\x64-mingw-dynamic\share"
+    [System.Environment]::SetEnvironmentVariable("TESSDATA_PREFIX", $tessPrefix, "User")
 
     # Add vcpkg bin to PATH so the runtime DLLs are found when running ghost-mcp.exe
     $vcpkgBin = "$vcpkgPath\installed\x64-mingw-dynamic\bin"
@@ -170,10 +185,11 @@ function Install-Tesseract {
     }
 
     # Set for current session
-    $env:CGO_CPPFLAGS = "-I$vcpkgInstall/include"
-    $env:CGO_LDFLAGS  = "-L$vcpkgInstall/lib"
-    $env:CGO_ENABLED  = "1"
-    $env:PATH         = "$env:PATH;$vcpkgBin"
+    $env:CGO_CPPFLAGS    = "-I$vcpkgInstall/include"
+    $env:CGO_LDFLAGS     = "-L$vcpkgInstall/lib"
+    $env:CGO_ENABLED     = "1"
+    $env:TESSDATA_PREFIX = $tessPrefix
+    $env:PATH            = "$env:PATH;$vcpkgBin"
 
     Write-Host "  Tesseract development libraries installed." -ForegroundColor Green
     Write-Host "  CGO flags configured for vcpkg." -ForegroundColor Green

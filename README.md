@@ -34,7 +34,7 @@ Ghost MCP allows AI assistants like Claude to control your computer's mouse, key
 | `take_screenshot` | Capture screen as base64 PNG. Optional region parameters. | `x`, `y`, `width`, `height` |
 | `read_screen_text` **(OCR)** | Read text from screen using OCR. Returns text and word positions. | `x`, `y`, `width`, `height` |
 
-> **Note:** `read_screen_text` requires OCR support. Build with `-tags ocr` or enable during installation.
+> **Note:** `read_screen_text` requires Tesseract OCR to be installed and `TESSDATA_PREFIX` to be set. See [Prerequisites](#prerequisites).
 
 ## Prerequisites
 
@@ -44,7 +44,7 @@ If building manually, you'll need:
 
 - **Go 1.24+** - [Download Go](https://go.dev/dl/)
 - **C Compiler** - For RobotGo (GUI automation library)
-- **Tesseract OCR** (optional) - For screen text reading feature
+- **Tesseract OCR** - Required for `read_screen_text` (screen text recognition)
 
 ### Platform-Specific Dependencies
 
@@ -58,13 +58,24 @@ Install via Chocolatey (recommended):
 choco install mingw -y
 ```
 
-**For OCR support**, also install:
+**For OCR support**, also install Tesseract via vcpkg (the install script does this automatically):
 ```powershell
-# The install.ps1 script handles this automatically
+# Install vcpkg and Tesseract (MinGW-compatible triplet)
 git clone https://github.com/Microsoft/vcpkg.git $env:USERPROFILE\vcpkg
 cd $env:USERPROFILE\vcpkg
-.\bootstrap-vcpkg.bat
-.\vcpkg install tesseract:x64-windows
+.\bootstrap-vcpkg.bat -disableMetrics
+$env:CC  = "C:\ProgramData\mingw64\mingw64\bin\gcc.exe"
+$env:CXX = "C:\ProgramData\mingw64\mingw64\bin\g++.exe"
+.\vcpkg install tesseract:x64-mingw-dynamic leptonica:x64-mingw-dynamic
+
+# Download English language data for Tesseract
+$tessdata = "$env:USERPROFILE\vcpkg\installed\x64-mingw-dynamic\share\tessdata"
+Invoke-WebRequest "https://github.com/tesseract-ocr/tessdata_fast/raw/main/eng.traineddata" -OutFile "$tessdata\eng.traineddata"
+
+# Set required environment variables (persist across reboots)
+[System.Environment]::SetEnvironmentVariable("TESSDATA_PREFIX", "$env:USERPROFILE\vcpkg\installed\x64-mingw-dynamic\share", "User")
+[System.Environment]::SetEnvironmentVariable("CGO_CPPFLAGS", "-I$env:USERPROFILE/vcpkg/installed/x64-mingw-dynamic/include", "User")
+[System.Environment]::SetEnvironmentVariable("CGO_LDFLAGS",  "-L$env:USERPROFILE/vcpkg/installed/x64-mingw-dynamic/lib", "User")
 ```
 
 #### macOS
@@ -139,14 +150,9 @@ The installer will:
 - Save environment configuration to `~/.config/ghost-mcp/env`
 - Display MCP client configuration
 
-#### Optional: OCR Support
+#### OCR Support
 
-During installation, you'll be asked if you want OCR (Optical Character Recognition) support:
-
-- **With OCR**: The `read_screen_text` tool can read text directly from the screen (faster than screenshots)
-- **Without OCR**: Use `take_screenshot` and let the AI visually parse the screen
-
-OCR requires Tesseract OCR development libraries (~500MB, 10-15 min installation).
+OCR (`read_screen_text`) is always built in. The installer sets up Tesseract automatically, including downloading the English language data file and setting `TESSDATA_PREFIX`.
 
 ### Manual Build
 
@@ -159,13 +165,16 @@ cd ghost-mcp
 # Download dependencies
 go mod download
 
-# Build without OCR (faster, no Tesseract needed)
-go build -tags noocr -o ghost-mcp.exe ./cmd/ghost-mcp/    # Windows
-go build -tags noocr -o ghost-mcp ./cmd/ghost-mcp/        # macOS/Linux
+# Build (Windows — requires MinGW and Tesseract via vcpkg, see Prerequisites)
+go build -o ghost-mcp.exe ./cmd/ghost-mcp/
 
-# Build with OCR (requires Tesseract dev libraries)
-go build -tags ocr -o ghost-mcp.exe ./cmd/ghost-mcp/      # Windows
-go build -tags ocr -o ghost-mcp ./cmd/ghost-mcp/          # macOS/Linux
+# Build (macOS/Linux)
+go build -o ghost-mcp ./cmd/ghost-mcp/
+```
+
+On Windows, set `CGO_CPPFLAGS` and `CGO_LDFLAGS` before building (see the Windows prerequisites section above). Also copy the runtime DLLs next to the binary:
+```powershell
+Copy-Item "$env:USERPROFILE\vcpkg\installed\x64-mingw-dynamic\bin\*.dll" . -Force
 ```
 
 ## Configuration

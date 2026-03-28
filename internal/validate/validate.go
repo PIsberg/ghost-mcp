@@ -141,7 +141,7 @@ var allowedKeys = map[string]bool{
 	// Modifier keys
 	"shift": true, "ctrl": true, "alt": true,
 	"cmd": true, "command": true, // macOS
-	"super": true, "windows": true, // Linux / Windows
+	"super": true, "windows": true, "win": true, // Linux / Windows
 	"option": true, // macOS alias for alt
 
 	// Lock / system keys
