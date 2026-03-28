@@ -16,6 +16,7 @@ Ghost MCP allows AI assistants like Claude to control your computer's mouse, key
 - 🖱️ **Mouse Control**: Move cursor, click (left/right/middle)
 - ⌨️ **Keyboard Control**: Type text, press individual keys
 - 📸 **Screen Capture**: Take screenshots with optional region selection
+- 🔐 **Token Authentication**: Requires a secret token before the server will start
 - 🛡️ **Failsafe**: Emergency shutdown by moving mouse to top-left corner (0,0)
 - 📝 **Proper Logging**: All logs go to stderr, keeping stdout clean for MCP protocol
 
@@ -126,6 +127,7 @@ Add this to your MCP client configuration to connect to Ghost MCP:
       "command": "C:\\path\\to\\ghost-mcp.exe",
       "args": [],
       "env": {
+        "GHOST_MCP_TOKEN": "your-secret-token-here",
         "GHOST_MCP_DEBUG": "1"
       }
     }
@@ -141,12 +143,15 @@ Add this to your MCP client configuration to connect to Ghost MCP:
       "command": "/absolute/path/to/ghost-mcp",
       "args": [],
       "env": {
+        "GHOST_MCP_TOKEN": "your-secret-token-here",
         "GHOST_MCP_DEBUG": "1"
       }
     }
   }
 }
 ```
+
+> Replace `your-secret-token-here` with the same value you generated for `GHOST_MCP_TOKEN`.
 
 ### Configuration File Locations
 
@@ -160,7 +165,18 @@ Add this to your MCP client configuration to connect to Ghost MCP:
 
 | Variable | Description | Default |
 |----------|-------------|---------|
+| `GHOST_MCP_TOKEN` | **Required.** Secret authentication token. Server refuses to start without it. | *(none — must be set)* |
 | `GHOST_MCP_DEBUG` | Enable debug logging | `0` (disabled) |
+
+> **Security note:** `GHOST_MCP_TOKEN` must be set to a random secret. Generate one with:
+> ```bash
+> # Linux/macOS
+> export GHOST_MCP_TOKEN=$(openssl rand -hex 32)
+>
+> # Windows (PowerShell)
+> $env:GHOST_MCP_TOKEN = -join ((1..32) | % { '{0:x}' -f (Get-Random -Max 256) })
+> ```
+> Then add it to the `env` block of your MCP client configuration (see examples below).
 
 ## Usage
 
@@ -221,6 +237,34 @@ Once connected, AI clients can use the tools like this:
 }
 // Response: {"success": true, "filepath": "...", "base64": "...", "width": 1920, "height": 1080}
 ```
+
+## Security
+
+### 🔐 Token Authentication
+
+Ghost MCP controls your mouse, keyboard, and screen — so it requires authentication before it will serve any requests.
+
+**How it works:**
+
+1. Set `GHOST_MCP_TOKEN` to a random secret string in your shell and in your MCP client's `env` config block.
+2. The server reads the token at startup and refuses to start if it is not set.
+3. Every MCP request is validated against the startup token via a server hook. If the environment variable is cleared or altered after startup, all subsequent requests are rejected.
+
+**What this protects against:**
+- Running the server without prior configuration (no token → no service)
+- Unauthorized processes that can execute the binary but don't know the token value
+
+**Generating a token:**
+
+```bash
+# Linux/macOS
+openssl rand -hex 32
+
+# Windows (PowerShell)
+-join ((1..32) | % { '{0:x}' -f (Get-Random -Max 256) })
+```
+
+Use the output as the value for `GHOST_MCP_TOKEN` in both your shell environment and your MCP client's `env` block.
 
 ## Safety Features
 

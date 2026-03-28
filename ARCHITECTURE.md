@@ -17,21 +17,28 @@ The Ghost MCP server sits between an AI client (like Claude) and the operating s
 The entry point orchestrates server initialization:
 
 1. **Logging Setup**: Initializes stderr-based logging
-2. **Signal Handling**: Registers handlers for SIGINT/SIGTERM
-3. **Server Creation**: Calls `createServer()` to build the MCP server
-4. **Blocking Serve**: Calls `server.ServeStdio()` which blocks until shutdown
+2. **Token Validation**: Reads `GHOST_MCP_TOKEN`; exits with error if not set
+3. **Signal Handling**: Registers handlers for SIGINT/SIGTERM
+4. **Server Creation**: Calls `createServer(token)` to build the MCP server
+5. **Blocking Serve**: Calls `server.ServeStdio()` which blocks until shutdown
 
-### 2. MCP Server (`createServer()`)
+### 2. MCP Server (`createServer(token)`)
 
-Creates and configures the MCP server instance:
+Creates and configures the MCP server instance with an authentication hook:
 
 ```go
+hooks := &server.Hooks{}
+hooks.AddOnRequestInitialization(makeTokenValidator(token))
+
 mcpServer := server.NewMCPServer(
     ServerName,     // "ghost-mcp"
     ServerVersion,  // "1.0.0"
     server.WithResourceCapabilities(true, true),
+    server.WithHooks(hooks),
 )
 ```
+
+The `OnRequestInitialization` hook runs before every MCP request and rejects calls where `GHOST_MCP_TOKEN` no longer matches the token captured at startup.
 
 ### 3. Tool Registration (`registerTools()`)
 

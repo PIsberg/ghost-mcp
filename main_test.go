@@ -619,3 +619,64 @@ func TestLoggingFunctions(t *testing.T) {
 	t.Setenv("GHOST_MCP_DEBUG", "1")
 	logDebug("Test debug message with debug enabled")
 }
+
+// =============================================================================
+// TOKEN AUTHENTICATION TESTS
+// =============================================================================
+
+// TestValidateStartupToken_Missing tests that missing token returns error
+func TestValidateStartupToken_Missing(t *testing.T) {
+	t.Setenv(TokenEnvVar, "")
+	_, err := validateStartupToken()
+	if err == nil {
+		t.Error("Expected error when token is not set, got nil")
+	}
+}
+
+// TestValidateStartupToken_Present tests that a set token is returned correctly
+func TestValidateStartupToken_Present(t *testing.T) {
+	t.Setenv(TokenEnvVar, "my-secret-token")
+	token, err := validateStartupToken()
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	}
+	if token != "my-secret-token" {
+		t.Errorf("Expected 'my-secret-token', got '%s'", token)
+	}
+}
+
+// TestMakeTokenValidator_ValidToken tests that a matching token passes validation
+func TestMakeTokenValidator_ValidToken(t *testing.T) {
+	t.Setenv(TokenEnvVar, "valid-token")
+	validator := makeTokenValidator("valid-token")
+	if err := validator(context.Background(), 1, nil); err != nil {
+		t.Errorf("Expected valid token to pass, got error: %v", err)
+	}
+}
+
+// TestMakeTokenValidator_WrongToken tests that a mismatched token is rejected
+func TestMakeTokenValidator_WrongToken(t *testing.T) {
+	t.Setenv(TokenEnvVar, "wrong-token")
+	validator := makeTokenValidator("expected-token")
+	if err := validator(context.Background(), 1, nil); err == nil {
+		t.Error("Expected error for mismatched token, got nil")
+	}
+}
+
+// TestMakeTokenValidator_MissingToken tests that a cleared token is rejected
+func TestMakeTokenValidator_MissingToken(t *testing.T) {
+	t.Setenv(TokenEnvVar, "")
+	validator := makeTokenValidator("expected-token")
+	if err := validator(context.Background(), 1, nil); err == nil {
+		t.Error("Expected error for missing token, got nil")
+	}
+}
+
+// TestCreateServer_WithToken tests that createServer succeeds with a valid token
+func TestCreateServer_WithToken(t *testing.T) {
+	t.Setenv(TokenEnvVar, "test-token")
+	srv := createServer("test-token")
+	if srv == nil {
+		t.Fatal("Expected non-nil server")
+	}
+}

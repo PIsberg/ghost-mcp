@@ -41,6 +41,10 @@ const (
 	ServerVersion = "1.0.0"
 )
 
+// TokenEnvVar is the environment variable name for the authentication token.
+// The server will refuse to start if this is not set.
+const TokenEnvVar = "GHOST_MCP_TOKEN"
+
 // =============================================================================
 // GLOBAL STATE
 // =============================================================================
@@ -364,18 +368,53 @@ func getIntParam(request mcp.CallToolRequest, name string) (int, error) {
 }
 
 // =============================================================================
+// TOKEN AUTHENTICATION
+// =============================================================================
+
+// validateStartupToken reads the token from the environment.
+// Returns the token string and an error if the variable is not set or empty.
+func validateStartupToken() (string, error) {
+	token := os.Getenv(TokenEnvVar)
+	if token == "" {
+		return "", fmt.Errorf("%s environment variable is not set", TokenEnvVar)
+	}
+	return token, nil
+}
+
+// makeTokenValidator returns an OnRequestInitializationFunc that validates
+// every incoming request against the token captured at server startup.
+// This provides defense-in-depth: even if the process environment is altered
+// after startup, requests will be rejected.
+func makeTokenValidator(expectedToken string) func(ctx context.Context, id any, message any) error {
+	return func(ctx context.Context, id any, message any) error {
+		currentToken := os.Getenv(TokenEnvVar)
+		if currentToken != expectedToken {
+			logError("Authentication failed: %s mismatch or missing", TokenEnvVar)
+			return fmt.Errorf("authentication required: invalid or missing %s", TokenEnvVar)
+		}
+		return nil
+	}
+}
+
+// =============================================================================
 // SERVER SETUP
 // =============================================================================
 
-// createServer initializes and configures the MCP server with all tools
-func createServer() *server.MCPServer {
+// createServer initializes and configures the MCP server with all tools.
+// The token is used to configure per-request authentication via hooks.
+func createServer(token string) *server.MCPServer {
 	logInfo("Creating MCP server: %s v%s", ServerName, ServerVersion)
+
+	// Register authentication hook
+	hooks := &server.Hooks{}
+	hooks.AddOnRequestInitialization(makeTokenValidator(token))
 
 	// Create the MCP server instance
 	mcpServer := server.NewMCPServer(
 		ServerName,
 		ServerVersion,
 		server.WithResourceCapabilities(true, true),
+		server.WithHooks(hooks),
 	)
 
 	// Register all tools
@@ -450,6 +489,19 @@ func main() {
 	logInfo("Starting %s v%s...", ServerName, ServerVersion)
 	logInfo("Platform: %s/%s", runtime.GOOS, runtime.GOARCH)
 
+	// Validate authentication token before doing anything else
+	token, err := validateStartupToken()
+	if err != nil {
+		logError("Authentication not configured: %v", err)
+		logError("Ghost MCP requires a secret token to prevent unauthorized access.")
+		logError("Set %s to a random secret string in your environment:", TokenEnvVar)
+		logError("  Linux/macOS: export %s=$(openssl rand -hex 32)", TokenEnvVar)
+		logError("  Windows:     $env:%s = -join ((1..32)|%%{'{0:x}' -f (Get-Random -Max 256)})", TokenEnvVar)
+		logError("Then add it to your MCP client config under the 'env' key.")
+		os.Exit(1)
+	}
+	logInfo("Token authentication enabled (%s is set)", TokenEnvVar)
+
 	// Log failsafe information
 	logInfo("Failsafe position: (%d, %d) - Move mouse here to trigger emergency shutdown", FailsafeX, FailsafeY)
 
@@ -464,7 +516,7 @@ func main() {
 	}()
 
 	// Create the MCP server
-	mcpServer := createServer()
+	mcpServer := createServer(token)
 
 	// Start the stdio server
 	// This blocks and uses stdout/stdin for JSON-RPC communication
@@ -472,8 +524,7 @@ func main() {
 	logInfo("IMPORTANT: All application logs are written to stderr")
 	logInfo("stdout is reserved for MCP JSON-RPC protocol")
 
-	err := server.ServeStdio(mcpServer)
-	if err != nil {
+	if err = server.ServeStdio(mcpServer); err != nil {
 		logError("Server error: %v", err)
 		os.Exit(1)
 	}

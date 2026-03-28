@@ -582,6 +582,12 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 
+	// Set up authentication token for integration tests.
+	// The server subprocess inherits this via os.Environ() in mcpclient.NewClient.
+	if os.Getenv("GHOST_MCP_TOKEN") == "" {
+		os.Setenv("GHOST_MCP_TOKEN", "ghost-mcp-integration-test-token")
+	}
+
 	// Set environment for tests
 	os.Setenv("GHOST_MCP_BINARY", binaryPath)
 
