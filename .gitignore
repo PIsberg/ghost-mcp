@@ -30,3 +30,4 @@ Thumbs.db
 # Go workspace file
 go.work
 .qwen/
+.claude/

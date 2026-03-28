@@ -20,7 +20,7 @@ import (
 // TestGetStringParamMissing tests that missing string parameters return an error
 func TestGetStringParamMissing(t *testing.T) {
 	request := mcp.CallToolRequest{
-		Params: mcp.CallToolRequestParams{
+		Params: mcp.CallToolParams{
 			Arguments: map[string]interface{}{},
 		},
 	}
@@ -39,7 +39,7 @@ func TestGetStringParamMissing(t *testing.T) {
 // TestGetStringParamInvalidType tests that non-string parameters return an error
 func TestGetStringParamInvalidType(t *testing.T) {
 	request := mcp.CallToolRequest{
-		Params: mcp.CallToolRequestParams{
+		Params: mcp.CallToolParams{
 			Arguments: map[string]interface{}{
 				"test_param": 123, // Integer instead of string
 			},
@@ -55,7 +55,7 @@ func TestGetStringParamInvalidType(t *testing.T) {
 // TestGetStringParamValid tests that valid string parameters are extracted correctly
 func TestGetStringParamValid(t *testing.T) {
 	request := mcp.CallToolRequest{
-		Params: mcp.CallToolRequestParams{
+		Params: mcp.CallToolParams{
 			Arguments: map[string]interface{}{
 				"test_param": "hello world",
 			},
@@ -75,7 +75,7 @@ func TestGetStringParamValid(t *testing.T) {
 // TestGetIntParamMissing tests that missing integer parameters return an error
 func TestGetIntParamMissing(t *testing.T) {
 	request := mcp.CallToolRequest{
-		Params: mcp.CallToolRequestParams{
+		Params: mcp.CallToolParams{
 			Arguments: map[string]interface{}{},
 		},
 	}
@@ -89,7 +89,7 @@ func TestGetIntParamMissing(t *testing.T) {
 // TestGetIntParamFloat64 tests that float64 values (JSON numbers) are converted to int
 func TestGetIntParamFloat64(t *testing.T) {
 	request := mcp.CallToolRequest{
-		Params: mcp.CallToolRequestParams{
+		Params: mcp.CallToolParams{
 			Arguments: map[string]interface{}{
 				"test_param": float64(42),
 			},
@@ -109,7 +109,7 @@ func TestGetIntParamFloat64(t *testing.T) {
 // TestGetIntParamInt64 tests that int64 values are converted to int
 func TestGetIntParamInt64(t *testing.T) {
 	request := mcp.CallToolRequest{
-		Params: mcp.CallToolRequestParams{
+		Params: mcp.CallToolParams{
 			Arguments: map[string]interface{}{
 				"test_param": int64(100),
 			},
@@ -129,7 +129,7 @@ func TestGetIntParamInt64(t *testing.T) {
 // TestGetIntParamInvalidType tests that invalid types return an error
 func TestGetIntParamInvalidType(t *testing.T) {
 	request := mcp.CallToolRequest{
-		Params: mcp.CallToolRequestParams{
+		Params: mcp.CallToolParams{
 			Arguments: map[string]interface{}{
 				"test_param": "not a number",
 			},
@@ -149,7 +149,7 @@ func TestGetIntParamInvalidType(t *testing.T) {
 // TestHandleGetScreenSize tests the get_screen_size tool handler
 func TestHandleGetScreenSize(t *testing.T) {
 	request := mcp.CallToolRequest{
-		Params: mcp.CallToolRequestParams{
+		Params: mcp.CallToolParams{
 			Arguments: map[string]interface{}{},
 		},
 	}
@@ -167,7 +167,7 @@ func TestHandleGetScreenSize(t *testing.T) {
 
 	// Parse the JSON response
 	var response map[string]interface{}
-	if err := json.Unmarshal([]byte(result.Content[0].Text), &response); err != nil {
+	if err := json.Unmarshal([]byte(result.Content[0].(mcp.TextContent).Text), &response); err != nil {
 		t.Fatalf("Failed to parse result JSON: %v", err)
 	}
 
@@ -183,7 +183,7 @@ func TestHandleGetScreenSize(t *testing.T) {
 // TestHandleMoveMouseValid tests the move_mouse tool with valid parameters
 func TestHandleMoveMouseValid(t *testing.T) {
 	request := mcp.CallToolRequest{
-		Params: mcp.CallToolRequestParams{
+		Params: mcp.CallToolParams{
 			Arguments: map[string]interface{}{
 				"x": float64(100),
 				"y": float64(200),
@@ -204,7 +204,7 @@ func TestHandleMoveMouseValid(t *testing.T) {
 
 	// Parse the JSON response
 	var response map[string]interface{}
-	if err := json.Unmarshal([]byte(result.Content[0].Text), &response); err != nil {
+	if err := json.Unmarshal([]byte(result.Content[0].(mcp.TextContent).Text), &response); err != nil {
 		t.Fatalf("Failed to parse result JSON: %v", err)
 	}
 
@@ -217,7 +217,7 @@ func TestHandleMoveMouseValid(t *testing.T) {
 // TestHandleMoveMouseMissingX tests move_mouse with missing x parameter
 func TestHandleMoveMouseMissingX(t *testing.T) {
 	request := mcp.CallToolRequest{
-		Params: mcp.CallToolRequestParams{
+		Params: mcp.CallToolParams{
 			Arguments: map[string]interface{}{
 				"y": float64(200),
 			},
@@ -244,7 +244,7 @@ func TestHandleMoveMouseMissingX(t *testing.T) {
 // TestHandleMoveMouseMissingY tests move_mouse with missing y parameter
 func TestHandleMoveMouseMissingY(t *testing.T) {
 	request := mcp.CallToolRequest{
-		Params: mcp.CallToolRequestParams{
+		Params: mcp.CallToolParams{
 			Arguments: map[string]interface{}{
 				"x": float64(100),
 			},
@@ -280,7 +280,7 @@ func TestHandleClickValid(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.button, func(t *testing.T) {
 			request := mcp.CallToolRequest{
-				Params: mcp.CallToolRequestParams{
+				Params: mcp.CallToolParams{
 					Arguments: map[string]interface{}{
 						"button": tc.button,
 					},
@@ -300,7 +300,7 @@ func TestHandleClickValid(t *testing.T) {
 
 			// Parse the JSON response
 			var response map[string]interface{}
-			if err := json.Unmarshal([]byte(result.Content[0].Text), &response); err != nil {
+			if err := json.Unmarshal([]byte(result.Content[0].(mcp.TextContent).Text), &response); err != nil {
 				t.Fatalf("Failed to parse result JSON: %v", err)
 			}
 
@@ -314,7 +314,7 @@ func TestHandleClickValid(t *testing.T) {
 // TestHandleClickInvalidButton tests click with an invalid button value
 func TestHandleClickInvalidButton(t *testing.T) {
 	request := mcp.CallToolRequest{
-		Params: mcp.CallToolRequestParams{
+		Params: mcp.CallToolParams{
 			Arguments: map[string]interface{}{
 				"button": "invalid_button",
 			},
@@ -340,7 +340,7 @@ func TestHandleClickInvalidButton(t *testing.T) {
 // TestHandleClickMissingButton tests click with missing button parameter
 func TestHandleClickMissingButton(t *testing.T) {
 	request := mcp.CallToolRequest{
-		Params: mcp.CallToolRequestParams{
+		Params: mcp.CallToolParams{
 			Arguments: map[string]interface{}{},
 		},
 	}
@@ -364,7 +364,7 @@ func TestHandleClickMissingButton(t *testing.T) {
 // TestHandleTypeTextValid tests the type_text tool with valid parameters
 func TestHandleTypeTextValid(t *testing.T) {
 	request := mcp.CallToolRequest{
-		Params: mcp.CallToolRequestParams{
+		Params: mcp.CallToolParams{
 			Arguments: map[string]interface{}{
 				"text": "Hello, World!",
 			},
@@ -384,7 +384,7 @@ func TestHandleTypeTextValid(t *testing.T) {
 
 	// Parse the JSON response
 	var response map[string]interface{}
-	if err := json.Unmarshal([]byte(result.Content[0].Text), &response); err != nil {
+	if err := json.Unmarshal([]byte(result.Content[0].(mcp.TextContent).Text), &response); err != nil {
 		t.Fatalf("Failed to parse result JSON: %v", err)
 	}
 
@@ -401,7 +401,7 @@ func TestHandleTypeTextValid(t *testing.T) {
 // TestHandleTypeTextMissingText tests type_text with missing text parameter
 func TestHandleTypeTextMissingText(t *testing.T) {
 	request := mcp.CallToolRequest{
-		Params: mcp.CallToolRequestParams{
+		Params: mcp.CallToolParams{
 			Arguments: map[string]interface{}{},
 		},
 	}
@@ -429,7 +429,7 @@ func TestHandlePressKeyValid(t *testing.T) {
 	for _, key := range testCases {
 		t.Run(key, func(t *testing.T) {
 			request := mcp.CallToolRequest{
-				Params: mcp.CallToolRequestParams{
+				Params: mcp.CallToolParams{
 					Arguments: map[string]interface{}{
 						"key": key,
 					},
@@ -449,7 +449,7 @@ func TestHandlePressKeyValid(t *testing.T) {
 
 			// Parse the JSON response
 			var response map[string]interface{}
-			if err := json.Unmarshal([]byte(result.Content[0].Text), &response); err != nil {
+			if err := json.Unmarshal([]byte(result.Content[0].(mcp.TextContent).Text), &response); err != nil {
 				t.Fatalf("Failed to parse result JSON: %v", err)
 			}
 
@@ -463,7 +463,7 @@ func TestHandlePressKeyValid(t *testing.T) {
 // TestHandlePressKeyMissingKey tests press_key with missing key parameter
 func TestHandlePressKeyMissingKey(t *testing.T) {
 	request := mcp.CallToolRequest{
-		Params: mcp.CallToolRequestParams{
+		Params: mcp.CallToolParams{
 			Arguments: map[string]interface{}{},
 		},
 	}
@@ -487,7 +487,7 @@ func TestHandlePressKeyMissingKey(t *testing.T) {
 // TestHandleTakeScreenshotValid tests the take_screenshot tool
 func TestHandleTakeScreenshotValid(t *testing.T) {
 	request := mcp.CallToolRequest{
-		Params: mcp.CallToolRequestParams{
+		Params: mcp.CallToolParams{
 			Arguments: map[string]interface{}{},
 		},
 	}
@@ -505,7 +505,7 @@ func TestHandleTakeScreenshotValid(t *testing.T) {
 
 	// Parse the JSON response
 	var response map[string]interface{}
-	if err := json.Unmarshal([]byte(result.Content[0].Text), &response); err != nil {
+	if err := json.Unmarshal([]byte(result.Content[0].(mcp.TextContent).Text), &response); err != nil {
 		t.Fatalf("Failed to parse result JSON: %v", err)
 	}
 
@@ -526,7 +526,7 @@ func TestHandleTakeScreenshotValid(t *testing.T) {
 // TestHandleTakeScreenshotWithRegion tests take_screenshot with custom region
 func TestHandleTakeScreenshotWithRegion(t *testing.T) {
 	request := mcp.CallToolRequest{
-		Params: mcp.CallToolRequestParams{
+		Params: mcp.CallToolParams{
 			Arguments: map[string]interface{}{
 				"x":      float64(0),
 				"y":      float64(0),
@@ -549,7 +549,7 @@ func TestHandleTakeScreenshotWithRegion(t *testing.T) {
 
 	// Parse the JSON response
 	var response map[string]interface{}
-	if err := json.Unmarshal([]byte(result.Content[0].Text), &response); err != nil {
+	if err := json.Unmarshal([]byte(result.Content[0].(mcp.TextContent).Text), &response); err != nil {
 		t.Fatalf("Failed to parse result JSON: %v", err)
 	}
 

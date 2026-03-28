@@ -328,7 +328,7 @@ func handleTakeScreenshot(ctx context.Context, request mcp.CallToolRequest) (*mc
 
 // getStringParam extracts a string parameter from the request
 func getStringParam(request mcp.CallToolRequest, name string) (string, error) {
-	val, ok := request.Params.Arguments[name]
+	val, ok := request.GetArguments()[name]
 	if !ok {
 		return "", fmt.Errorf("missing required parameter: %s", name)
 	}
@@ -341,7 +341,7 @@ func getStringParam(request mcp.CallToolRequest, name string) (string, error) {
 
 // getIntParam extracts an integer parameter from the request
 func getIntParam(request mcp.CallToolRequest, name string) (int, error) {
-	val, ok := request.Params.Arguments[name]
+	val, ok := request.GetArguments()[name]
 	if !ok {
 		return 0, fmt.Errorf("missing required parameter: %s", name)
 	}
@@ -400,8 +400,8 @@ func registerTools(mcpServer *server.MCPServer) {
 	mcpServer.AddTool(mcp.NewTool(
 		"move_mouse",
 		mcp.WithDescription("Moves the mouse cursor to the specified coordinates"),
-		mcp.WithInt32("x", mcp.Description("Target X coordinate"), mcp.Required()),
-		mcp.WithInt32("y", mcp.Description("Target Y coordinate"), mcp.Required()),
+		mcp.WithNumber("x", mcp.Description("Target X coordinate"), mcp.Required()),
+		mcp.WithNumber("y", mcp.Description("Target Y coordinate"), mcp.Required()),
 	), handleMoveMouse)
 	logDebug("Registered tool: move_mouse")
 
@@ -433,10 +433,10 @@ func registerTools(mcpServer *server.MCPServer) {
 	mcpServer.AddTool(mcp.NewTool(
 		"take_screenshot",
 		mcp.WithDescription("Captures the screen and returns a base64-encoded PNG"),
-		mcp.WithInt32("x", mcp.Description("X coordinate of screenshot region (default: 0)")),
-		mcp.WithInt32("y", mcp.Description("Y coordinate of screenshot region (default: 0)")),
-		mcp.WithInt32("width", mcp.Description("Width of screenshot region (default: full screen)")),
-		mcp.WithInt32("height", mcp.Description("Height of screenshot region (default: full screen)")),
+		mcp.WithNumber("x", mcp.Description("X coordinate of screenshot region (default: 0)")),
+		mcp.WithNumber("y", mcp.Description("Y coordinate of screenshot region (default: 0)")),
+		mcp.WithNumber("width", mcp.Description("Width of screenshot region (default: full screen)")),
+		mcp.WithNumber("height", mcp.Description("Height of screenshot region (default: full screen)")),
 	), handleTakeScreenshot)
 	logDebug("Registered tool: take_screenshot")
 
