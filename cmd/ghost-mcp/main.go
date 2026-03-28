@@ -117,7 +117,7 @@ func handleMoveMouse(ctx context.Context, request mcp.CallToolRequest) (*mcp.Cal
 	currentX, currentY := robotgo.GetMousePos()
 	logging.Info("ACTION: Moving mouse from (%d, %d) to (%d, %d)", currentX, currentY, x, y)
 
-	robotgo.MoveSmooth(x, y)
+	robotgo.Move(x, y)
 
 	if os.Getenv("GHOST_MCP_VISUAL") == "1" {
 		visual.PulseCursor(x, y)
@@ -370,14 +370,16 @@ func registerTools(mcpServer *server.MCPServer) {
 	mcpServer.AddTool(mcp.NewTool("move_mouse",
 		mcp.WithDescription(`Move the mouse cursor to absolute screen coordinates. (0,0) is the top-left corner.
 
-RECOMMENDED WORKFLOW to click a UI element:
-1. Call read_screen_text to find the element by its label/text — it returns word bounding boxes {x, y, width, height} where x,y is the TOP-LEFT corner of each word.
-2. Compute the CENTER of the element: move_x = word.x + word.width/2, move_y = word.y + word.height/2. Always aim for the center, not the corner.
-3. Call move_mouse with the computed center coordinates.
-4. Call take_screenshot to visually verify the cursor landed on the right target.
-5. Call click only after verifying position.
+ALWAYS use read_screen_text first to locate the target element by its text label before calling this tool. Do not guess coordinates.
 
-If read_screen_text cannot find the element (e.g. it is an icon or image), use take_screenshot to see the screen and estimate coordinates visually.`),
+WORKFLOW:
+1. read_screen_text → finds word bounding boxes {x, y, width, height} where x,y is the TOP-LEFT corner.
+2. Compute center: move_x = word.x + word.width/2, move_y = word.y + word.height/2.
+3. move_mouse to the center coordinates.
+4. take_screenshot to verify the cursor is over the correct target.
+5. click.
+
+Only skip read_screen_text if the target has no text label (icon, image) — in that case use take_screenshot to estimate coordinates visually.`),
 		mcp.WithNumber("x", mcp.Description("X coordinate in pixels from the left edge of the screen. Must be within screen bounds."), mcp.Required()),
 		mcp.WithNumber("y", mcp.Description("Y coordinate in pixels from the top edge of the screen. Must be within screen bounds."), mcp.Required()),
 	), handleMoveMouse)
@@ -406,15 +408,17 @@ Common uses: 'enter' to confirm/submit, 'tab' to move between fields, 'esc' to c
 	), handlePressKey)
 
 	mcpServer.AddTool(mcp.NewTool("take_screenshot",
-		mcp.WithDescription(`Capture the screen and return it as a base64-encoded PNG image. Use this to understand the current visual state of the screen.
+		mcp.WithDescription(`Capture the screen and return it as a PNG image. Use this to see the current visual state.
 
-WHEN TO USE:
-- At the start of a task to see what is on screen.
-- After move_mouse to verify the cursor is over the correct target before clicking.
-- After any click or key press to confirm the expected UI change happened.
-- When read_screen_text cannot find an element (icons, images, graphical buttons).
+NOTE: For finding where to click, prefer read_screen_text — it returns exact pixel coordinates for every word on screen, which is faster and more precise than estimating from a screenshot.
 
-Use the region parameters (x, y, width, height) to zoom in on a specific area for higher detail — e.g. capture just a dialog box or toolbar instead of the full screen.`),
+WHEN TO USE take_screenshot:
+- At the start of a task to get a visual overview.
+- After move_mouse to verify the cursor landed on the correct target before clicking.
+- After a click or key press to confirm the expected UI change occurred.
+- When the target has no text (icon, image, progress bar) and read_screen_text cannot locate it.
+
+Use region parameters (x, y, width, height) to zoom in on a specific area for higher detail.`),
 		mcp.WithNumber("x", mcp.Description("X coordinate of the top-left corner of the capture region in pixels (default: 0).")),
 		mcp.WithNumber("y", mcp.Description("Y coordinate of the top-left corner of the capture region in pixels (default: 0).")),
 		mcp.WithNumber("width", mcp.Description("Width of the capture region in pixels (default: full screen width).")),

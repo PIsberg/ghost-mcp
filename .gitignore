@@ -4,8 +4,8 @@
 *.dll
 *.so
 *.dylib
-ghost-mcp
-ghost-mcp.exe
+/ghost-mcp
+/ghost-mcp.exe
 
 # Test binary
 *.test
