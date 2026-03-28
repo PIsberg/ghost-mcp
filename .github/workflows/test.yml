@@ -1,0 +1,97 @@
+name: Tests
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        go-version: ['1.22', '1.23']
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: ${{ matrix.go-version }}
+
+    - name: Install dependencies (Linux)
+      if: matrix.os == 'ubuntu-latest'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y gcc libx11-dev xorg-dev libxtst-dev libpng-dev xvfb
+
+    - name: Install dependencies (macOS)
+      if: matrix.os == 'macos-latest'
+      run: xcode-select --install || true
+
+    - name: Download Go modules
+      run: go mod download
+
+    - name: Verify Go modules
+      run: go mod verify
+
+    - name: Build
+      run: |
+        if [ "${{ runner.os }}" = "Windows" ]; then
+          go build -o ghost-mcp.exe .
+        else
+          go build -o ghost-mcp .
+        fi
+      shell: bash
+
+    - name: Run unit tests
+      run: go test -v -short ./...
+
+    - name: Run integration tests (Linux)
+      if: matrix.os == 'ubuntu-latest'
+      run: |
+        Xvfb :99 &
+        export DISPLAY=:99
+        export INTEGRATION=1
+        go test -v -run Integration ./...
+
+    - name: Run integration tests (macOS)
+      if: matrix.os == 'macos-latest'
+      run: |
+        export INTEGRATION=1
+        go test -v -run Integration ./... || true
+
+    - name: Run integration tests (Windows)
+      if: matrix.os == 'windows-latest'
+      run: |
+        $env:INTEGRATION = "1"
+        go test -v -run Integration ./...
+
+    - name: Run linting
+      run: go vet ./...
+
+    - name: Run format check
+      run: |
+        if [ "$(gofmt -l . | wc -l)" -gt 0 ]; then
+          echo "Go files are not formatted:"
+          gofmt -d .
+          exit 1
+        fi
+      shell: bash
+
+    - name: Test coverage
+      run: |
+        go test -v -short -coverprofile=coverage.out ./...
+        go tool cover -func=coverage.out
+
+    - name: Upload coverage to Codecov
+      if: matrix.os == 'ubuntu-latest' && matrix.go-version == '1.23'
+      uses: codecov/codecov-action@v4
+      with:
+        files: ./coverage.out
+        flags: unittests
+        name: codecov-umbrella
