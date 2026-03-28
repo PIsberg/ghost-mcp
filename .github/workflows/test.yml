@@ -30,6 +30,10 @@ jobs:
       uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
       with:
         go-version: ${{ matrix.go-version }}
+        cache: false
+
+    - name: Clean Go module cache
+      run: go clean -modcache
 
     - name: Install dependencies (Linux)
       if: matrix.os == 'ubuntu-latest'

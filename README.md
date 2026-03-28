@@ -26,17 +26,25 @@ Ghost MCP allows AI assistants like Claude to control your computer's mouse, key
 
 | Tool | Description | Parameters |
 |------|-------------|------------|
-| `get_screen_size` | Returns primary monitor dimensions | None |
-| `move_mouse` | Moves cursor to coordinates | `x`, `y` |
-| `click` | Clicks at current position | `button` (left/right/middle) |
-| `type_text` | Types text via keyboard | `text` |
-| `press_key` | Presses a single key | `key` |
-| `take_screenshot` | Captures screen as base64 PNG | `x`, `y`, `width`, `height` (optional) |
+| `get_screen_size` | Get screen resolution. Call this first to know valid coordinate ranges. | None |
+| `move_mouse` | Move mouse cursor to absolute coordinates. Origin (0,0) is top-left. | `x`, `y` |
+| `click` | Click mouse at current cursor position. Use `move_mouse` first. | `button` (left/right/middle) |
+| `type_text` | Type text via keyboard. Use for input fields. | `text` |
+| `press_key` | Press a single key. Use for Enter, Tab, shortcuts, etc. | `key` |
+| `take_screenshot` | Capture screen as base64 PNG. Optional region parameters. | `x`, `y`, `width`, `height` |
+| `read_screen_text` **(OCR)** | Read text from screen using OCR. Returns text and word positions. | `x`, `y`, `width`, `height` |
+
+> **Note:** `read_screen_text` requires OCR support. Build with `-tags ocr` or enable during installation.
 
 ## Prerequisites
 
-- **Go 1.22+** - [Download Go](https://go.dev/dl/)
-- **RobotGo Dependencies** - See platform-specific requirements below
+**The installation scripts (`install.ps1` for Windows, `install.sh` for Linux) automatically install all required dependencies.**
+
+If building manually, you'll need:
+
+- **Go 1.24+** - [Download Go](https://go.dev/dl/)
+- **C Compiler** - For RobotGo (GUI automation library)
+- **Tesseract OCR** (optional) - For screen text reading feature
 
 ### Platform-Specific Dependencies
 
@@ -44,28 +52,19 @@ Ghost MCP allows AI assistants like Claude to control your computer's mouse, key
 
 **Required: MinGW-w64 GCC Compiler**
 
-RobotGo requires a C compiler. Install MinGW-w64:
-
-**Option A: Using Chocolatey (Recommended)**
+Install via Chocolatey (recommended):
 ```powershell
-# Install Chocolatey first (if not installed)
-# Run PowerShell as Administrator
-Set-ExecutionPolicy Bypass -Scope Process -Force; [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))
-
-# Install MinGW
+# Run as Administrator
 choco install mingw -y
 ```
 
-**Option B: Manual Install**
-1. Download MinGW-w64 from [https://www.mingw-w64.org/](https://www.mingw-w64.org/)
-2. Add `C:\Program Files\mingw-w64\bin` (or your install path) to PATH
-3. Verify installation: `gcc --version`
-
-**Option C: Using MSYS2**
+**For OCR support**, also install:
 ```powershell
-# Install MSYS2 from https://www.msys2.org/
-# Then run in MSYS2 terminal:
-pacman -S mingw-w64-x86_64-gcc
+# The install.ps1 script handles this automatically
+git clone https://github.com/Microsoft/vcpkg.git $env:USERPROFILE\vcpkg
+cd $env:USERPROFILE\vcpkg
+.\bootstrap-vcpkg.bat
+.\vcpkg install tesseract:x64-windows
 ```
 
 #### macOS
@@ -73,25 +72,85 @@ pacman -S mingw-w64-x86_64-gcc
 # Install Xcode Command Line Tools
 xcode-select --install
 
+# For OCR support
+brew install tesseract leptonica
+
 # Grant accessibility permissions (required for automation)
 # System Settings → Privacy & Security → Accessibility → Add Terminal/your IDE
 ```
 
 #### Linux
+
+**Ubuntu/Debian:**
 ```bash
-# Ubuntu/Debian
 sudo apt-get install libx11-dev xorg-dev libxtst-dev libpng-dev
+# For OCR:
+sudo apt-get install tesseract-ocr libleptonica-dev libtesseract-dev
+```
 
-# Fedora
+**Fedora:**
+```bash
 sudo dnf install libX11-devel libXtst-devel libpng-devel
+# For OCR:
+sudo dnf install tesseract tesseract-devel leptonica-devel
+```
 
-# Arch Linux
+**Arch Linux:**
+```bash
 sudo pacman -S libx11 libxtst libpng
+# For OCR:
+sudo pacman -S tesseract tesseract-data-eng
 ```
 
 ## Installation
 
-### 1. Clone and Build
+### Quick Install (Recommended)
+
+We provide automated installation scripts that handle all dependencies and configuration:
+
+#### Windows
+
+```powershell
+# Run PowerShell as Administrator
+.\install.ps1
+```
+
+The installer will:
+- Install MinGW (GCC compiler) via Chocolatey
+- Optionally install Tesseract OCR for screen text reading
+- Build the binary
+- Generate auth token
+- Configure environment variables
+- Display MCP client configuration
+
+#### Linux
+
+```bash
+chmod +x install.sh
+./install.sh
+```
+
+The installer will:
+- Detect your package manager (apt/dnf/yum/pacman/zypper)
+- Install GCC and X11 development libraries
+- Optionally install Tesseract OCR
+- Build the binary
+- Generate auth token
+- Save environment configuration to `~/.config/ghost-mcp/env`
+- Display MCP client configuration
+
+#### Optional: OCR Support
+
+During installation, you'll be asked if you want OCR (Optical Character Recognition) support:
+
+- **With OCR**: The `read_screen_text` tool can read text directly from the screen (faster than screenshots)
+- **Without OCR**: Use `take_screenshot` and let the AI visually parse the screen
+
+OCR requires Tesseract OCR development libraries (~500MB, 10-15 min installation).
+
+### Manual Build
+
+If you prefer to build manually:
 
 ```bash
 # Clone or navigate to the project directory
@@ -100,19 +159,13 @@ cd ghost-mcp
 # Download dependencies
 go mod download
 
-# Build the binary
-go build -o ghost-mcp.exe ./cmd/ghost-mcp/    # Windows
-go build -o ghost-mcp ./cmd/ghost-mcp/        # macOS/Linux
-```
+# Build without OCR (faster, no Tesseract needed)
+go build -tags noocr -o ghost-mcp.exe ./cmd/ghost-mcp/    # Windows
+go build -tags noocr -o ghost-mcp ./cmd/ghost-mcp/        # macOS/Linux
 
-### 2. Verify the Build
-
-```bash
-# Run tests
-go test -v ./...
-
-# Check the binary exists
-ls -la ghost-mcp*  # or dir ghost-mcp* on Windows
+# Build with OCR (requires Tesseract dev libraries)
+go build -tags ocr -o ghost-mcp.exe ./cmd/ghost-mcp/      # Windows
+go build -tags ocr -o ghost-mcp ./cmd/ghost-mcp/          # macOS/Linux
 ```
 
 ## Configuration
