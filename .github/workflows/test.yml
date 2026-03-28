@@ -90,8 +90,7 @@ jobs:
           exit 1
         fi
 
-
-- name: Test coverage (Linux only)
+    - name: Test coverage (Linux only)
       if: matrix.os == 'ubuntu-latest'
       run: |
         go test -v -short -coverprofile=coverage.out ./...
