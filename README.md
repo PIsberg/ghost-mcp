@@ -2,6 +2,8 @@
 
 **The Ghost in the Machine** - An MCP (Model Context Protocol) server that exposes OS-level UI automation capabilities to AI clients.
 
+**License:** Free for personal and hobby use ([PolyForm Noncommercial](LICENSE)). Commercial use requires a license — contact [Peter Isberg](mailto:isberg.peter+gm@gmail.com).
+
 
 ## Overview
 
@@ -339,7 +341,7 @@ See [ARCHITECTURE.md](./ARCHITECTURE.md) for detailed information about:
 
 ## License
 
-MIT License - See LICENSE file for details.
+See LICENSE file for details.
 
 ## Contributing
 
