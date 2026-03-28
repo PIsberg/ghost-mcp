@@ -336,6 +336,7 @@ See [ARCHITECTURE.md](./ARCHITECTURE.md) for detailed information about:
 | Document | Description |
 |----------|-------------|
 | [README.md](./README.md) | Getting started and usage |
+| [USAGE.md](./USAGE.md) | Interactive examples and API reference |
 | [ARCHITECTURE.md](./ARCHITECTURE.md) | System design and internals |
 | [TESTING.md](./TESTING.md) | Testing guide and fixture docs |
 
