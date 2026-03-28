@@ -74,6 +74,7 @@ jobs:
         go test -v -run Integration ./...
 
     - name: Run linting
+      if: matrix.os != 'macos-latest'
       run: go vet ./... || true
 
     - name: Run format check (Linux/macOS)
