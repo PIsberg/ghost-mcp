@@ -147,6 +147,20 @@ func TestToGrayscaleContrast_ColoredBackground(t *testing.T) {
 	}
 }
 
+// TestGetClient_ReturnsSameInstance verifies that getClient() returns the same
+// *Client pointer on every call — i.e. the singleton is actually shared and
+// tessdata is only loaded once per process.
+func TestGetClient_ReturnsSameInstance(t *testing.T) {
+	c1, err1 := getClient()
+	c2, err2 := getClient()
+	if err1 != nil && err2 != nil {
+		t.Skip("Tesseract not available:", err1)
+	}
+	if c1 != c2 {
+		t.Error("getClient() returned different pointers — singleton broken, tessdata will reload on every call")
+	}
+}
+
 // TestOptions_DefaultIsGrayscale verifies the zero value of Options selects
 // grayscale mode (Color == false), preserving backward-compatible behaviour.
 func TestOptions_DefaultIsGrayscale(t *testing.T) {
