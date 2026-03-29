@@ -256,6 +256,45 @@ func TestOptions_ColorMode(t *testing.T) {
 	}
 }
 
+// TestReadImage_WhiteImage verifies ReadImage works end-to-end with an
+// in-memory image (no file I/O path).
+func TestReadImage_WhiteImage(t *testing.T) {
+	skipIfNoTesseract(t)
+
+	img := whiteImage(200, 100)
+	result, err := ReadImage(img, Options{})
+	if err != nil {
+		t.Fatalf("ReadImage: %v", err)
+	}
+	if result == nil {
+		t.Fatal("Expected non-nil result")
+	}
+	if result.Words == nil {
+		t.Error("Expected non-nil Words slice")
+	}
+	if len(result.Words) != 0 {
+		t.Errorf("Expected no words from white image, got %d", len(result.Words))
+	}
+}
+
+// TestReadImage_ColorMode verifies ReadImage accepts Color=true without error.
+func TestReadImage_ColorMode(t *testing.T) {
+	img := whiteImage(200, 100)
+	_, err := ReadImage(img, Options{Color: true})
+	if err != nil && !strings.Contains(err.Error(), "tessdata") {
+		t.Errorf("ReadImage with Color=true returned unexpected error: %v", err)
+	}
+}
+
+// TestReadImage_InvertedMode verifies ReadImage accepts Inverted=true without error.
+func TestReadImage_InvertedMode(t *testing.T) {
+	img := whiteImage(200, 100)
+	_, err := ReadImage(img, Options{Inverted: true})
+	if err != nil && !strings.Contains(err.Error(), "tessdata") {
+		t.Errorf("ReadImage with Inverted=true returned unexpected error: %v", err)
+	}
+}
+
 // BenchmarkToGrayscaleContrast_RGBA benchmarks the fast path (input is
 // *image.RGBA, the type returned by robotgo screen captures).
 func BenchmarkToGrayscaleContrast_RGBA(b *testing.B) {

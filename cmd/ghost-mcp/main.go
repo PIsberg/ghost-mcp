@@ -24,6 +24,7 @@ import (
 
 	"github.com/ghost-mcp/internal/audit"
 	"github.com/ghost-mcp/internal/logging"
+	"github.com/ghost-mcp/internal/ocr"
 	"github.com/ghost-mcp/internal/transport"
 	"github.com/ghost-mcp/internal/validate"
 	"github.com/ghost-mcp/internal/visual"
@@ -282,15 +283,17 @@ func handleDoubleClick(ctx context.Context, request mcp.CallToolRequest) (*mcp.C
 func handleScroll(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	logging.Debug("Handling scroll request")
 
-	x, err := getIntParam(request, "x")
-	if err != nil {
-		logging.Error("Invalid x parameter: %v", err)
-		return mcp.NewToolResultError(fmt.Sprintf("invalid x parameter: %v", err)), nil
+	screenW, screenH := robotgo.GetScreenSize()
+
+	// x and y are optional — default to screen centre so callers can omit them
+	// for standard page scrolling.
+	x := screenW / 2
+	y := screenH / 2
+	if v, err := getIntParam(request, "x"); err == nil {
+		x = v
 	}
-	y, err := getIntParam(request, "y")
-	if err != nil {
-		logging.Error("Invalid y parameter: %v", err)
-		return mcp.NewToolResultError(fmt.Sprintf("invalid y parameter: %v", err)), nil
+	if v, err := getIntParam(request, "y"); err == nil {
+		y = v
 	}
 
 	direction, err := getStringParam(request, "direction")
@@ -314,7 +317,6 @@ func handleScroll(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallTo
 		amount = a
 	}
 
-	screenW, screenH := robotgo.GetScreenSize()
 	if err := validate.Coords(x, y, screenW, screenH); err != nil {
 		logging.Error("Coordinate validation failed: %v", err)
 		return mcp.NewToolResultError(fmt.Sprintf("invalid coordinates: %v", err)), nil
@@ -330,7 +332,25 @@ func handleScroll(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallTo
 	robotgo.ScrollDir(amount, direction)
 	logging.Info("ACTION COMPLETE: Scrolled %s by %d at (%d, %d)", direction, amount, x, y)
 
-	return mcp.NewToolResultText(fmt.Sprintf(`{"success": true, "x": %d, "y": %d, "direction": "%s", "amount": %d}`, x, y, direction, amount)), nil
+	// Run a quick OCR pass on the centre half of the screen so the AI knows
+	// what is now visible without needing a separate screenshot + read_screen_text call.
+	visibleText := ""
+	stripY := screenH / 4
+	stripH := screenH / 2
+	if img, captureErr := robotgo.CaptureImg(0, stripY, screenW, stripH); captureErr == nil {
+		if ocrResult, ocrErr := ocr.ReadImage(img, ocr.Options{}); ocrErr == nil {
+			visibleText = ocrResult.Text
+		} else {
+			logging.Debug("scroll OCR failed (non-fatal): %v", ocrErr)
+		}
+	} else {
+		logging.Debug("scroll capture failed (non-fatal): %v", captureErr)
+	}
+
+	return mcp.NewToolResultText(fmt.Sprintf(
+		`{"success": true, "x": %d, "y": %d, "direction": "%s", "amount": %d, "visible_text": %q}`,
+		x, y, direction, amount, visibleText,
+	)), nil
 }
 
 func handleTypeText(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -661,9 +681,13 @@ A short delay (default 100 ms) is applied after the double-click so the UI has t
 	mcpServer.AddTool(mcp.NewTool("scroll",
 		mcp.WithDescription(`Move the mouse to (x, y) and scroll the mouse wheel. Use for scrolling lists, pages, and dropdowns.
 
-Scroll 'down' to reveal content below, 'up' to go back up. For horizontal content use 'left' or 'right'. After scrolling, take a screenshot to see the new content.`),
-		mcp.WithNumber("x", mcp.Description("X coordinate to scroll at (pixels from left edge)."), mcp.Required()),
-		mcp.WithNumber("y", mcp.Description("Y coordinate to scroll at (pixels from top edge)."), mcp.Required()),
+Scroll 'down' to reveal content below, 'up' to go back up. For horizontal content use 'left' or 'right'.
+
+The response includes visible_text — the OCR text of the centre half of the screen after scrolling. Use this to know what is now on screen WITHOUT needing a separate read_screen_text or take_screenshot call.
+
+x and y are optional and default to the screen centre, which is correct for most page scrolling. Only specify them when scrolling a specific widget (e.g. a side panel or dropdown list).`),
+		mcp.WithNumber("x", mcp.Description("X coordinate to scroll at (pixels from left edge). Defaults to screen centre.")),
+		mcp.WithNumber("y", mcp.Description("Y coordinate to scroll at (pixels from top edge). Defaults to screen centre.")),
 		mcp.WithString("direction", mcp.Description("Scroll direction: 'up', 'down', 'left', or 'right'."), mcp.Required()),
 		mcp.WithNumber("amount", mcp.Description("Number of scroll steps (default: 3). Higher values scroll further.")),
 	), handleScroll)

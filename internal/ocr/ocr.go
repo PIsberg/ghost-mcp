@@ -157,18 +157,61 @@ func ReadFile(imagePath string, opts Options) (*Result, error) {
 	return &Result{Text: sb.String(), Words: words}, nil
 }
 
+// ReadImage runs OCR on an already-decoded image and returns structured output.
+// It skips all file I/O — useful when the caller already has an image in memory
+// (e.g. from a screen capture) and does not want to pay the cost of writing a
+// temp file just to read it back.
+func ReadImage(img image.Image, opts Options) (*Result, error) {
+	client, err := getClient()
+	if err != nil {
+		return nil, fmt.Errorf("tesseract unavailable: %w. Make sure Tesseract OCR is installed: https://github.com/tesseract-ocr/tesseract", err)
+	}
+
+	sharedClientMu.Lock()
+	defer sharedClientMu.Unlock()
+
+	imgBytes, prepErr := encodeForOCR(img, ScaleFactor, !opts.Color, opts.Inverted)
+	if prepErr == nil {
+		if err := client.SetImageFromBytes(imgBytes); err != nil {
+			return nil, fmt.Errorf("set image from bytes: %w", err)
+		}
+	} else {
+		return nil, fmt.Errorf("preprocess image: %w", prepErr)
+	}
+
+	boxes, err := client.GetBoundingBoxes(gosseract.RIL_WORD)
+	if err != nil {
+		return nil, fmt.Errorf("get bounding boxes: %w", err)
+	}
+
+	words := make([]Word, 0, len(boxes))
+	for _, b := range boxes {
+		if b.Word == "" || b.Confidence < MinConfidence {
+			continue
+		}
+		words = append(words, Word{
+			Text:       b.Word,
+			X:          b.Box.Min.X / ScaleFactor,
+			Y:          b.Box.Min.Y / ScaleFactor,
+			Width:      (b.Box.Max.X - b.Box.Min.X) / ScaleFactor,
+			Height:     (b.Box.Max.Y - b.Box.Min.Y) / ScaleFactor,
+			Confidence: b.Confidence,
+		})
+	}
+
+	var sb strings.Builder
+	for i, w := range words {
+		if i > 0 {
+			sb.WriteByte(' ')
+		}
+		sb.WriteString(w.Text)
+	}
+	return &Result{Text: sb.String(), Words: words}, nil
+}
+
 // preprocessToBytes loads the image at src, applies optional preprocessing,
 // upscales by factor, and returns PNG-encoded bytes ready for Tesseract.
 // Using bytes avoids writing a temp file and the subsequent Tesseract disk read.
-//
-// When grayscale is true the following steps run in order:
-//  1. Grayscale conversion (ITU-R BT.709) + linear contrast stretch.
-//  2. Inversion (255-x per pixel) — only when inverted is true. Converts
-//     white-on-dark text (e.g. CSS buttons with white text on a gradient
-//     background) to dark-on-light, which Tesseract handles far better.
-//  3. Bilinear upscale by factor.
-//
-// When grayscale is false colour is preserved and only the upscale is applied.
 func preprocessToBytes(src string, factor int, grayscale, inverted bool) ([]byte, error) {
 	f, err := os.Open(src)
 	if err != nil {
@@ -181,6 +224,20 @@ func preprocessToBytes(src string, factor int, grayscale, inverted bool) ([]byte
 		return nil, err
 	}
 
+	return encodeForOCR(img, factor, grayscale, inverted)
+}
+
+// encodeForOCR applies preprocessing to img and returns PNG-encoded bytes
+// suitable for Tesseract. It is the shared core used by both preprocessToBytes
+// (file path input) and ReadImage (in-memory image input).
+//
+// When grayscale is true:
+//  1. Grayscale conversion (ITU-R BT.709) + linear contrast stretch.
+//  2. Inversion (255-x) — only when inverted is true.
+//  3. Bilinear upscale by factor.
+//
+// When grayscale is false colour is preserved and only the upscale is applied.
+func encodeForOCR(img image.Image, factor int, grayscale, inverted bool) ([]byte, error) {
 	var scaledImg image.Image
 	if grayscale {
 		preprocessed := toGrayscaleContrast(img)
