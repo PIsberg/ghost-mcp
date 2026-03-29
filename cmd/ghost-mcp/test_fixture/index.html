@@ -87,6 +87,20 @@
             50% { opacity: 0.5; }
         }
 
+        /* Last Action Display - High contrast for OCR */
+        .last-action {
+            background: #ffffff;
+            color: #000000;
+            padding: 8px 15px;
+            border-radius: 6px;
+            font-family: 'Consolas', 'Courier New', monospace;
+            font-size: 14px;
+            font-weight: bold;
+            min-width: 300px;
+            text-align: center;
+            border: 2px solid #00d9ff;
+        }
+
         /* Button Test Area */
         .button-grid {
             display: grid;
@@ -435,6 +449,11 @@
             </div>
         </div>
 
+        <!-- Last Action Display - High contrast for OCR verification -->
+        <div class="last-action" id="lastAction">
+            Last Action: None
+        </div>
+
         <!-- Button Test Panel -->
         <div class="panel">
             <h2>🔘 Button Click Tests</h2>
@@ -673,6 +692,11 @@
             document.getElementById('activeDot').classList.toggle('active', active);
         }
 
+        // Update last action display (high contrast for OCR)
+        function updateLastAction(action) {
+            document.getElementById('lastAction').textContent = `Last Action: ${action}`;
+        }
+
         // Update test results
         function updateResult(id, passed, value) {
             const el = document.getElementById(id);
@@ -686,8 +710,9 @@
             const button = document.querySelector(`[data-btn="${btn}"]`);
             button.classList.add('clicked');
             setTimeout(() => button.classList.remove('clicked'), 300);
-            
+
             logEvent('BUTTON_CLICK', `Button "${btn}" clicked`);
+            updateLastAction(`Clicked ${btn.toUpperCase()} button`);
             updateResult('resultButtons', true, `${state.buttonsClicked.length} clicks`);
         }
 
@@ -695,6 +720,7 @@
         function handleInput(type, value) {
             state.inputTyped = true;
             logEvent('INPUT', `${type}: "${value.substring(0, 30)}${value.length > 30 ? '...' : ''}"`);
+            updateLastAction(`Typed ${value.length} chars in ${type}`);
             updateResult('resultInput', true, `${value.length} chars`);
         }
 
@@ -702,12 +728,14 @@
             document.getElementById('textInput').value = '';
             document.getElementById('textArea').value = '';
             logEvent('INPUT_CLEARED', 'All inputs cleared');
+            updateLastAction('Cleared all inputs');
         }
 
         // Checkbox handler
         function handleCheckbox(id, checked) {
             state.checkboxesToggled.push({ id, checked, time: Date.now() });
             logEvent('CHECKBOX', `${id}: ${checked ? 'checked' : 'unchecked'}`);
+            updateLastAction(`${id} ${checked ? 'checked' : 'unchecked'}`);
             updateResult('resultCheckbox', true, `${state.checkboxesToggled.filter(c => c.checked).length} checked`);
         }
 
@@ -715,12 +743,14 @@
         function handleRadio(value) {
             state.radioSelected = value;
             logEvent('RADIO', `Selected: ${value}`);
+            updateLastAction(`Selected radio ${value}`);
         }
 
         // Select handler
         function handleSelect(value) {
             state.dropdownChanged = true;
             logEvent('DROPDOWN', `Selected: ${value || '(none)'}`);
+            updateLastAction(`Dropdown: ${value || 'none'}`);
             updateResult('resultSelect', true, value || 'none');
         }
 
@@ -729,6 +759,7 @@
             state.sliderAdjusted = true;
             document.getElementById('sliderValue').textContent = value;
             logEvent('SLIDER', `Value: ${value}%`);
+            updateLastAction(`Slider: ${value}%`);
             updateResult('resultSlider', true, `${value}%`);
         }
 
@@ -736,6 +767,7 @@
         function changeColor(color) {
             document.getElementById('colorBox').style.background = color;
             logEvent('COLOR_CHANGE', `Changed to: ${color}`);
+            updateLastAction(`Color: ${color}`);
         }
 
         // Counter handler
@@ -743,6 +775,7 @@
             state.totalClicks++;
             document.getElementById('clickCounter').textContent = state.totalClicks;
             logEvent('COUNTER', `Click count: ${state.totalClicks}`);
+            updateLastAction(`Counter: ${state.totalClicks} clicks`);
         }
 
         // Hover handler
@@ -751,6 +784,7 @@
             const zone = document.getElementById('hoverZone');
             zone.classList.toggle('hovered', entered);
             logEvent('HOVER', entered ? 'Mouse entered zone' : 'Mouse left zone');
+            updateLastAction(entered ? 'Mouse in hover zone' : 'Mouse left hover zone');
         }
 
         // Key handler

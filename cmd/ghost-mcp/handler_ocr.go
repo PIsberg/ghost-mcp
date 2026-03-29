@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -330,4 +331,239 @@ func findAndClickWord(ocrResult *ocr.Result, searchText string, nth, regionX, re
 		searchText, minX, minY, maxX-minX, maxY-minY, cx, cy, finalX, finalY, button, nth,
 	))
 	return result
+}
+
+// handleFindAndClickAll finds and clicks multiple text labels in sequence.
+// This is an atomic operation — either all clicks succeed or it returns an error.
+// Use this when you need to click multiple buttons (e.g., "Primary", "Success", "Warning")
+// without verification loops between each click.
+func handleFindAndClickAll(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	logging.Debug("Handling find_and_click_all request")
+
+	texts, err := getStringArrayParam(request, "texts")
+	if err != nil {
+		logging.Error("Invalid texts parameter: %v", err)
+		return mcp.NewToolResultError(fmt.Sprintf("invalid texts parameter: %v", err)), nil
+	}
+	if len(texts) == 0 {
+		return mcp.NewToolResultError("texts array must not be empty"), nil
+	}
+
+	button, _ := getStringParam(request, "button")
+	if button == "" {
+		button = "left"
+	}
+
+	delayMS := 100
+	if d, err := getIntParam(request, "delay_ms"); err == nil {
+		delayMS = d
+	}
+
+	screenW, screenH := robotgo.GetScreenSize()
+
+	// Capture screen once for all lookups
+	img, captureErr := robotgo.CaptureImg(0, 0, screenW, screenH)
+	if captureErr != nil {
+		logging.Error("Failed to capture screen: %v", captureErr)
+		return mcp.NewToolResultError(fmt.Sprintf("failed to capture screen: %v", captureErr)), nil
+	}
+
+	screenshotDir := os.Getenv("GHOST_MCP_SCREENSHOT_DIR")
+	if screenshotDir == "" {
+		screenshotDir = os.TempDir()
+	}
+
+	filename := fmt.Sprintf("ghost-mcp-findclickall-%d.png", time.Now().UnixNano())
+	fpath := filepath.Join(screenshotDir, filename)
+
+	if saveErr := robotgo.SavePng(img, fpath); saveErr != nil {
+		logging.Error("Failed to save screenshot: %v", saveErr)
+		return mcp.NewToolResultError(fmt.Sprintf("failed to save screenshot: %v", saveErr)), nil
+	}
+	if os.Getenv("GHOST_MCP_KEEP_SCREENSHOTS") != "1" {
+		defer os.Remove(fpath)
+	}
+
+	// Run OCR once
+	ocrResult, ocrErr := ocr.ReadFile(fpath, ocr.Options{Color: true})
+	if ocrErr != nil {
+		logging.Error("OCR failed: %v", ocrErr)
+		return mcp.NewToolResultError(fmt.Sprintf("OCR failed: %v", ocrErr)), nil
+	}
+
+	// Click each text in sequence
+	clicks := make([]map[string]interface{}, 0, len(texts))
+	for _, text := range texts {
+		minX, minY, maxX, maxY, found := findButtonBounds(ocrResult, text, 1)
+		if !found {
+			// Try inverted OCR for this text
+			invertedResult, invertedErr := ocr.ReadFile(fpath, ocr.Options{Inverted: true})
+			if invertedErr == nil {
+				minX, minY, maxX, maxY, found = findButtonBounds(invertedResult, text, 1)
+			}
+		}
+
+		if !found {
+			logging.Info("find_and_click_all: text %q not found, stopping", text)
+			return mcp.NewToolResultError(fmt.Sprintf("text %q not found on screen", text)), nil
+		}
+
+		cx := (minX + maxX) / 2
+		cy := (minY + maxY) / 2
+
+		logging.Info("ACTION: Clicking %q at (%d, %d)", text, cx, cy)
+		robotgo.Move(cx, cy)
+		time.Sleep(10 * time.Millisecond) // Small delay for mouse movement
+		robotgo.Click(button, false)
+
+		if delayMS > 0 {
+			time.Sleep(time.Duration(min(delayMS, 10000)) * time.Millisecond)
+		}
+
+		finalX, finalY := robotgo.GetMousePos()
+		clicks = append(clicks, map[string]interface{}{
+			"text":        text,
+			"box":         map[string]int{"x": minX, "y": minY, "width": maxX - minX, "height": maxY - minY},
+			"clicked_x":   cx,
+			"clicked_y":   cy,
+			"actual_x":    finalX,
+			"actual_y":    finalY,
+			"button":      button,
+		})
+	}
+
+	logging.Info("ACTION COMPLETE: find_and_click_all clicked %d buttons", len(clicks))
+
+	// Build JSON response
+	clicksJSON := "["
+	for i, c := range clicks {
+		if i > 0 {
+			clicksJSON += ","
+		}
+		clicksJSON += fmt.Sprintf(
+			`{"text":%q,"box":{"x":%d,"y":%d,"width":%d,"height":%d},"clicked_x":%d,"clicked_y":%d,"actual_x":%d,"actual_y":%d,"button":%q}`,
+			c["text"],
+			c["box"].(map[string]int)["x"], c["box"].(map[string]int)["y"],
+			c["box"].(map[string]int)["width"], c["box"].(map[string]int)["height"],
+			c["clicked_x"], c["clicked_y"], c["actual_x"], c["actual_y"], c["button"],
+		)
+	}
+	clicksJSON += "]"
+
+	return mcp.NewToolResultText(fmt.Sprintf(
+		`{"success":true,"clicked_count":%d,"clicks":%s}`,
+		len(clicks), clicksJSON,
+	)), nil
+}
+
+// handleWaitForText waits for text to appear or disappear from the screen.
+// Use this to verify UI state changes after clicking a button.
+func handleWaitForText(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	logging.Debug("Handling wait_for_text request")
+
+	text, err := getStringParam(request, "text")
+	if err != nil {
+		logging.Error("Invalid text parameter: %v", err)
+		return mcp.NewToolResultError(fmt.Sprintf("invalid text parameter: %v", err)), nil
+	}
+
+	timeoutMS := 5000
+	if t, err := getIntParam(request, "timeout_ms"); err == nil {
+		timeoutMS = t
+	}
+	if timeoutMS > 30000 {
+		timeoutMS = 30000
+	}
+
+	visible := getBoolParam(request, "visible", true)
+
+	regionX, regionY := 0, 0
+	regionW, regionH := robotgo.GetScreenSize()
+	if x, err := getIntParam(request, "x"); err == nil {
+		regionX = x
+	}
+	if y, err := getIntParam(request, "y"); err == nil {
+		regionY = y
+	}
+	if w, err := getIntParam(request, "width"); err == nil {
+		regionW = w
+	}
+	if h, err := getIntParam(request, "height"); err == nil {
+		regionH = h
+	}
+
+	startTime := time.Now()
+	intervalMS := 500 // Check every 500ms
+
+	for time.Since(startTime) < time.Duration(timeoutMS)*time.Millisecond {
+		img, captureErr := robotgo.CaptureImg(regionX, regionY, regionW, regionH)
+		if captureErr == nil {
+			ocrResult, ocrErr := ocr.ReadImage(img, ocr.Options{})
+			if ocrErr == nil {
+				_, _, _, _, found := findButtonBounds(ocrResult, text, 1)
+				if visible && found {
+					logging.Info("wait_for_text: text %q appeared after %v", text, time.Since(startTime))
+					return mcp.NewToolResultText(fmt.Sprintf(
+						`{"success":true,"text":%q,"visible":true,"waited_ms":%d}`,
+						text, time.Since(startTime).Milliseconds(),
+					)), nil
+				}
+				if !visible && !found {
+					logging.Info("wait_for_text: text %q disappeared after %v", text, time.Since(startTime))
+					return mcp.NewToolResultText(fmt.Sprintf(
+						`{"success":true,"text":%q,"visible":false,"waited_ms":%d}`,
+						text, time.Since(startTime).Milliseconds(),
+					)), nil
+				}
+			}
+		}
+
+		time.Sleep(time.Duration(intervalMS) * time.Millisecond)
+	}
+
+	logging.Info("wait_for_text: timeout waiting for %q (visible=%v)", text, visible)
+	return mcp.NewToolResultError(fmt.Sprintf("timeout waiting for text %q (visible=%v) after %dms", text, visible, timeoutMS)), nil
+}
+
+// getStringArrayParam extracts a string array parameter from the request
+func getStringArrayParam(request mcp.CallToolRequest, name string) ([]string, error) {
+	args := request.Params.Arguments
+	if args == nil {
+		return nil, fmt.Errorf("missing required parameter: %s", name)
+	}
+
+	// Type assert to map[string]interface{}
+	argsMap, ok := args.(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("invalid arguments format")
+	}
+
+	val, ok := argsMap[name]
+	if !ok {
+		return nil, fmt.Errorf("missing required parameter: %s", name)
+	}
+
+	// Case 1: Already an array []interface{}
+	if arr, ok := val.([]interface{}); ok {
+		result := make([]string, 0, len(arr))
+		for _, v := range arr {
+			if s, ok := v.(string); ok {
+				result = append(result, s)
+			} else {
+				return nil, fmt.Errorf("parameter %s must be an array of strings", name)
+			}
+		}
+		return result, nil
+	}
+
+	// Case 2: JSON string that needs parsing
+	if str, ok := val.(string); ok {
+		var arr []string
+		if err := json.Unmarshal([]byte(str), &arr); err != nil {
+			return nil, fmt.Errorf("parameter %s must be a valid JSON array string (e.g., [\"Button1\", \"Button2\"]): %v", name, err)
+		}
+		return arr, nil
+	}
+
+	return nil, fmt.Errorf("parameter %s must be an array or JSON array string", name)
 }
