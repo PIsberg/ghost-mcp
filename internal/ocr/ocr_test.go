@@ -171,6 +171,22 @@ func TestOptions_ColorMode(t *testing.T) {
 	}
 }
 
+// BenchmarkToGrayscaleContrast_RGBA benchmarks the fast path (input is
+// *image.RGBA, the type returned by robotgo screen captures).
+func BenchmarkToGrayscaleContrast_RGBA(b *testing.B) {
+	img := image.NewRGBA(image.Rect(0, 0, 1920, 1080))
+	// Fill with non-uniform data so the contrast stretch actually runs.
+	for y := 0; y < 1080; y++ {
+		for x := 0; x < 1920; x++ {
+			img.SetRGBA(x, y, color.RGBA{R: uint8(x), G: uint8(y), B: uint8(x + y), A: 255})
+		}
+	}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		toGrayscaleContrast(img)
+	}
+}
+
 // =============================================================================
 // Error handling tests
 // =============================================================================

@@ -5,7 +5,6 @@ package ocr
 import (
 	"fmt"
 	"image"
-	"image/color"
 	"image/png"
 	"os"
 	"strings"
@@ -176,28 +175,61 @@ func scaleImage(src string, factor int, grayscale bool) (string, func(), error) 
 }
 
 // toGrayscaleContrast converts img to grayscale and applies linear contrast
-// stretching. The result is an *image.Gray with pixel values mapped so that
-// the darkest original pixel becomes 0 and the brightest becomes 255.
-// If the image has less than 10 levels of variation (nearly uniform — e.g. a
-// solid colour swatch) the stretch is skipped to avoid amplifying noise.
+// stretching in a single allocation. The result is an *image.Gray with pixel
+// values mapped so that the darkest original pixel becomes 0 and the brightest
+// becomes 255. If the image has less than 10 levels of variation (nearly
+// uniform — e.g. a solid colour swatch) the stretch is skipped to avoid
+// amplifying noise.
+//
+// Performance notes:
+//   - *image.RGBA (the type returned by robotgo) takes a fast path that reads
+//     the underlying Pix byte slice directly, avoiding per-pixel interface
+//     dispatch and the intermediate RGBA() conversion.
+//   - Contrast stretch is applied in-place on the single output Gray.Pix
+//     slice, so no second allocation is needed even when stretching.
 func toGrayscaleContrast(img image.Image) *image.Gray {
 	b := img.Bounds()
-	gray := image.NewGray(b)
+	out := image.NewGray(b)
+	w, h := b.Dx(), b.Dy()
 
 	var minL, maxL uint8 = 255, 0
-	for y := b.Min.Y; y < b.Max.Y; y++ {
-		for x := b.Min.X; x < b.Max.X; x++ {
-			r, g, bl, _ := img.At(x, y).RGBA() // 16-bit per channel
-			// ITU-R BT.709 luminance: 0.2126R + 0.7152G + 0.0722B
-			// Shift right 8 to convert from 16-bit range to 8-bit.
-			lum := (19595*r + 38470*g + 7471*bl + 1<<15) >> 24
-			l := uint8(lum)
-			gray.SetGray(x, y, color.Gray{Y: l})
-			if l < minL {
-				minL = l
+
+	// Fast path for *image.RGBA — direct Pix slice access, no interface calls.
+	if rgba, ok := img.(*image.RGBA); ok {
+		for y := 0; y < h; y++ {
+			srcRow := rgba.Pix[y*rgba.Stride : y*rgba.Stride+w*4]
+			dstOff := y * out.Stride
+			for x := 0; x < w; x++ {
+				r := uint32(srcRow[x*4])
+				g := uint32(srcRow[x*4+1])
+				bl := uint32(srcRow[x*4+2])
+				// ITU-R BT.709 coefficients for 8-bit input → 8-bit output.
+				// (19595 + 38470 + 7471) == 65536, so white maps to exactly 255.
+				l := uint8((19595*r + 38470*g + 7471*bl + 1<<15) >> 16)
+				out.Pix[dstOff+x] = l
+				if l < minL {
+					minL = l
+				}
+				if l > maxL {
+					maxL = l
+				}
 			}
-			if l > maxL {
-				maxL = l
+		}
+	} else {
+		// Slow path: interface dispatch fallback for any other image type.
+		for y := b.Min.Y; y < b.Max.Y; y++ {
+			dstOff := (y-b.Min.Y)*out.Stride - b.Min.X
+			for x := b.Min.X; x < b.Max.X; x++ {
+				r, g, bl, _ := img.At(x, y).RGBA() // 16-bit per channel
+				lum := (19595*r + 38470*g + 7471*bl + 1<<15) >> 24
+				l := uint8(lum)
+				out.Pix[dstOff+x] = l
+				if l < minL {
+					minL = l
+				}
+				if l > maxL {
+					maxL = l
+				}
 			}
 		}
 	}
@@ -205,16 +237,12 @@ func toGrayscaleContrast(img image.Image) *image.Gray {
 	span := int(maxL) - int(minL)
 	if span < 10 {
 		// Nearly uniform image — contrast stretch would amplify noise.
-		return gray
+		return out
 	}
 
-	stretched := image.NewGray(b)
-	for y := b.Min.Y; y < b.Max.Y; y++ {
-		for x := b.Min.X; x < b.Max.X; x++ {
-			l := gray.GrayAt(x, y).Y
-			s := uint8((int(l-minL) * 255) / span)
-			stretched.SetGray(x, y, color.Gray{Y: s})
-		}
+	// In-place contrast stretch on the single output Pix slice — no second allocation.
+	for i, l := range out.Pix {
+		out.Pix[i] = uint8((int(l-minL) * 255) / span)
 	}
-	return stretched
+	return out
 }
