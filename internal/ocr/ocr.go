@@ -5,6 +5,7 @@ package ocr
 import (
 	"fmt"
 	"image"
+	"image/color"
 	"image/png"
 	"os"
 	"strings"
@@ -104,8 +105,21 @@ func ReadFile(imagePath string) (*Result, error) {
 	return &Result{Text: sb.String(), Words: words}, nil
 }
 
-// scaleImage writes a scaled copy of the image to a temp file and returns
-// its path along with a cleanup function. The caller must call cleanup().
+// scaleImage preprocesses and upscales the image for OCR. It applies three
+// steps in a single pass to avoid extra temp files:
+//
+//  1. Grayscale conversion (ITU-R BT.709 luminance weights) — removes
+//     color-induced confusion. Tesseract is trained on grayscale and
+//     silently converts color images itself, but explicit conversion lets
+//     us also apply contrast stretching before that happens.
+//
+//  2. Linear contrast stretch — maps the darkest pixel to 0 and the
+//     brightest to 255. This makes text pop against its background
+//     regardless of the original palette (e.g. white text on a blue
+//     button becomes near-white on near-black after stretching).
+//
+//  3. Bilinear upscale by factor — brings 96 DPI screen captures into
+//     Tesseract's optimal ~288 DPI range.
 func scaleImage(src string, factor int) (string, func(), error) {
 	f, err := os.Open(src)
 	if err != nil {
@@ -118,9 +132,11 @@ func scaleImage(src string, factor int) (string, func(), error) {
 		return "", nil, err
 	}
 
-	b := img.Bounds()
-	scaled := image.NewRGBA(image.Rect(0, 0, b.Dx()*factor, b.Dy()*factor))
-	draw.BiLinear.Scale(scaled, scaled.Bounds(), img, b, draw.Over, nil)
+	preprocessed := toGrayscaleContrast(img)
+
+	b := preprocessed.Bounds()
+	scaled := image.NewGray(image.Rect(0, 0, b.Dx()*factor, b.Dy()*factor))
+	draw.BiLinear.Scale(scaled, scaled.Bounds(), preprocessed, b, draw.Over, nil)
 
 	tmp, err := os.CreateTemp("", "ghost-mcp-ocr-scaled-*.png")
 	if err != nil {
@@ -135,4 +151,48 @@ func scaleImage(src string, factor int) (string, func(), error) {
 
 	cleanup := func() { os.Remove(tmp.Name()) }
 	return tmp.Name(), cleanup, nil
+}
+
+// toGrayscaleContrast converts img to grayscale and applies linear contrast
+// stretching. The result is an *image.Gray with pixel values mapped so that
+// the darkest original pixel becomes 0 and the brightest becomes 255.
+// If the image has less than 10 levels of variation (nearly uniform — e.g. a
+// solid colour swatch) the stretch is skipped to avoid amplifying noise.
+func toGrayscaleContrast(img image.Image) *image.Gray {
+	b := img.Bounds()
+	gray := image.NewGray(b)
+
+	var minL, maxL uint8 = 255, 0
+	for y := b.Min.Y; y < b.Max.Y; y++ {
+		for x := b.Min.X; x < b.Max.X; x++ {
+			r, g, bl, _ := img.At(x, y).RGBA() // 16-bit per channel
+			// ITU-R BT.709 luminance: 0.2126R + 0.7152G + 0.0722B
+			// Shift right 8 to convert from 16-bit range to 8-bit.
+			lum := (19595*r + 38470*g + 7471*bl + 1<<15) >> 24
+			l := uint8(lum)
+			gray.SetGray(x, y, color.Gray{Y: l})
+			if l < minL {
+				minL = l
+			}
+			if l > maxL {
+				maxL = l
+			}
+		}
+	}
+
+	span := int(maxL) - int(minL)
+	if span < 10 {
+		// Nearly uniform image — contrast stretch would amplify noise.
+		return gray
+	}
+
+	stretched := image.NewGray(b)
+	for y := b.Min.Y; y < b.Max.Y; y++ {
+		for x := b.Min.X; x < b.Max.X; x++ {
+			l := gray.GrayAt(x, y).Y
+			s := uint8((int(l-minL) * 255) / span)
+			stretched.SetGray(x, y, color.Gray{Y: s})
+		}
+	}
+	return stretched
 }
