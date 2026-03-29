@@ -39,6 +39,15 @@ type Options struct {
 	// button"). Default false: grayscale + contrast stretch is applied, which
 	// gives the best recognition accuracy for most UI text.
 	Color bool
+
+	// Inverted flips pixel brightness (255-x) after grayscale conversion.
+	// Use this as a fallback when white text on a dark/coloured background
+	// is not detected: CSS buttons with white text on gradient backgrounds
+	// are invisible to Tesseract after normal preprocessing because the white
+	// page background and white button text both map to the same brightness.
+	// Inversion makes button text dark on a lighter button background, which
+	// is what Tesseract is trained on. Ignored when Color is true.
+	Inverted bool
 }
 
 // MinConfidence is the minimum word confidence (0–100) to include in results.
@@ -99,7 +108,7 @@ func ReadFile(imagePath string, opts Options) (*Result, error) {
 	// Preprocess + upscale into an in-memory PNG buffer and hand it to Tesseract
 	// via SetImageFromBytes. This avoids writing a temp file to disk and the
 	// subsequent disk read by Tesseract — two fewer disk round trips per call.
-	imgBytes, prepErr := preprocessToBytes(imagePath, ScaleFactor, !opts.Color)
+	imgBytes, prepErr := preprocessToBytes(imagePath, ScaleFactor, !opts.Color, opts.Inverted)
 	if prepErr == nil {
 		if err := client.SetImageFromBytes(imgBytes); err != nil {
 			return nil, fmt.Errorf("set image from bytes: %w", err)
@@ -148,16 +157,19 @@ func ReadFile(imagePath string, opts Options) (*Result, error) {
 	return &Result{Text: sb.String(), Words: words}, nil
 }
 
-// preprocessToBytes loads the image at src, applies optional grayscale +
-// contrast stretching, upscales by factor, and returns PNG-encoded bytes.
+// preprocessToBytes loads the image at src, applies optional preprocessing,
+// upscales by factor, and returns PNG-encoded bytes ready for Tesseract.
 // Using bytes avoids writing a temp file and the subsequent Tesseract disk read.
 //
-// When grayscale is true:
-//  1. Grayscale conversion (ITU-R BT.709) — removes colour-induced confusion.
-//  2. Linear contrast stretch — makes text pop regardless of background colour.
+// When grayscale is true the following steps run in order:
+//  1. Grayscale conversion (ITU-R BT.709) + linear contrast stretch.
+//  2. Inversion (255-x per pixel) — only when inverted is true. Converts
+//     white-on-dark text (e.g. CSS buttons with white text on a gradient
+//     background) to dark-on-light, which Tesseract handles far better.
+//  3. Bilinear upscale by factor.
 //
-// When grayscale is false, colour is preserved (bilinear upscale only).
-func preprocessToBytes(src string, factor int, grayscale bool) ([]byte, error) {
+// When grayscale is false colour is preserved and only the upscale is applied.
+func preprocessToBytes(src string, factor int, grayscale, inverted bool) ([]byte, error) {
 	f, err := os.Open(src)
 	if err != nil {
 		return nil, err
@@ -172,6 +184,9 @@ func preprocessToBytes(src string, factor int, grayscale bool) ([]byte, error) {
 	var scaledImg image.Image
 	if grayscale {
 		preprocessed := toGrayscaleContrast(img)
+		if inverted {
+			invertGray(preprocessed)
+		}
 		b := preprocessed.Bounds()
 		dst := image.NewGray(image.Rect(0, 0, b.Dx()*factor, b.Dy()*factor))
 		draw.BiLinear.Scale(dst, dst.Bounds(), preprocessed, b, draw.Over, nil)
@@ -188,6 +203,13 @@ func preprocessToBytes(src string, factor int, grayscale bool) ([]byte, error) {
 		return nil, err
 	}
 	return buf.Bytes(), nil
+}
+
+// invertGray flips every pixel in-place: new = 255 - old.
+func invertGray(img *image.Gray) {
+	for i, v := range img.Pix {
+		img.Pix[i] = 255 - v
+	}
 }
 
 // toGrayscaleContrast converts img to grayscale and applies linear contrast

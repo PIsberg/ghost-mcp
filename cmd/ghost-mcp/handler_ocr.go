@@ -170,13 +170,41 @@ func handleFindAndClick(ctx context.Context, request mcp.CallToolRequest) (*mcp.
 	}
 
 	grayscale := getBoolParam(request, "grayscale", true)
+
+	// Pass 1: normal preprocessing (dark text on light backgrounds).
 	ocrResult, ocrErr := ocr.ReadFile(fpath, ocr.Options{Color: !grayscale})
 	if ocrErr != nil {
 		logging.Error("OCR failed: %v", ocrErr)
 		return mcp.NewToolResultError(fmt.Sprintf("OCR failed: %v", ocrErr)), nil
 	}
 
-	// Find the nth word whose text contains searchText (case-insensitive)
+	if result := findAndClickWord(ocrResult, searchText, nth, regionX, regionY, screenW, screenH, button, request); result != nil {
+		return result, nil
+	}
+
+	// Pass 2 (inverted): white text on dark/coloured backgrounds becomes dark
+	// text on a lighter background — the pattern Tesseract is trained on.
+	// CSS buttons with white text on gradient backgrounds are the classic case.
+	// Only runs in grayscale mode; colour mode already preserves all info.
+	if grayscale {
+		logging.Info("find_and_click: %q not found on normal pass, retrying with inverted image", searchText)
+		invertedResult, invertedErr := ocr.ReadFile(fpath, ocr.Options{Inverted: true})
+		if invertedErr == nil {
+			if result := findAndClickWord(invertedResult, searchText, nth, regionX, regionY, screenW, screenH, button, request); result != nil {
+				return result, nil
+			}
+			logging.Info("find_and_click: %q not found on inverted pass either (%d words)", searchText, len(invertedResult.Words))
+		}
+	}
+
+	logging.Info("Text %q (occurrence %d) not found on screen", searchText, nth)
+	return mcp.NewToolResultError(fmt.Sprintf("text %q not found on screen (occurrence %d)", searchText, nth)), nil
+}
+
+// findAndClickWord searches ocrResult for the nth case-insensitive occurrence
+// of searchText, clicks its center, and returns the MCP result. Returns nil if
+// the text is not found (caller should try a different OCR pass or give up).
+func findAndClickWord(ocrResult *ocr.Result, searchText string, nth, regionX, regionY, screenW, screenH int, button string, request mcp.CallToolRequest) *mcp.CallToolResult {
 	needle := strings.ToLower(searchText)
 	matchCount := 0
 	for _, w := range ocrResult.Words {
@@ -188,7 +216,8 @@ func handleFindAndClick(ctx context.Context, request mcp.CallToolRequest) (*mcp.
 				cy := regionY + w.Y + w.Height/2
 
 				if err := validate.Coords(cx, cy, screenW, screenH); err != nil {
-					return mcp.NewToolResultError(fmt.Sprintf("found text but center out of bounds: %v", err)), nil
+					result := mcp.NewToolResultError(fmt.Sprintf("found text but center out of bounds: %v", err))
+					return result
 				}
 
 				logging.Info("ACTION: Found %q (occurrence %d) at (%d,%d), clicking center (%d,%d) with %s",
@@ -196,7 +225,8 @@ func handleFindAndClick(ctx context.Context, request mcp.CallToolRequest) (*mcp.
 				robotgo.Move(cx, cy)
 
 				if err := checkFailsafe(); err != nil {
-					return mcp.NewToolResultError(err.Error()), nil
+					result := mcp.NewToolResultError(err.Error())
+					return result
 				}
 
 				robotgo.Click(button, false)
@@ -208,14 +238,13 @@ func handleFindAndClick(ctx context.Context, request mcp.CallToolRequest) (*mcp.
 				}
 				logging.Info("ACTION COMPLETE: find_and_click %q at (%d, %d)", searchText, finalX, finalY)
 
-				return mcp.NewToolResultText(fmt.Sprintf(
+				result := mcp.NewToolResultText(fmt.Sprintf(
 					`{"success":true,"found":%q,"requested_x":%d,"requested_y":%d,"actual_x":%d,"actual_y":%d,"button":%q,"occurrence":%d}`,
 					w.Text, cx, cy, finalX, finalY, button, nth,
-				)), nil
+				))
+				return result
 			}
 		}
 	}
-
-	logging.Info("Text %q (occurrence %d) not found on screen", searchText, nth)
-	return mcp.NewToolResultError(fmt.Sprintf("text %q not found on screen (occurrence %d, %d words scanned)", searchText, nth, len(ocrResult.Words))), nil
+	return nil
 }

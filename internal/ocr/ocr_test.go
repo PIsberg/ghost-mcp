@@ -161,6 +161,77 @@ func TestGetClient_ReturnsSameInstance(t *testing.T) {
 	}
 }
 
+// TestInvertGray verifies that invertGray flips every pixel value.
+func TestInvertGray(t *testing.T) {
+	img := image.NewGray(image.Rect(0, 0, 3, 1))
+	img.Pix[0] = 0
+	img.Pix[1] = 128
+	img.Pix[2] = 255
+
+	invertGray(img)
+
+	if img.Pix[0] != 255 {
+		t.Errorf("Pix[0]: got %d want 255", img.Pix[0])
+	}
+	if img.Pix[1] != 127 {
+		t.Errorf("Pix[1]: got %d want 127", img.Pix[1])
+	}
+	if img.Pix[2] != 0 {
+		t.Errorf("Pix[2]: got %d want 0", img.Pix[2])
+	}
+}
+
+// TestOptions_Inverted_WhiteTextOnDark simulates the button scenario:
+// white text (255) on a dark coloured background (~100). After normal
+// grayscale+contrast the text and background are both high-valued on a
+// page with a white background — Tesseract can't see it. After inversion
+// the text becomes dark (0) on a lighter button background, which is what
+// Tesseract is trained on.
+func TestOptions_Inverted_WhiteTextOnDark(t *testing.T) {
+	// Simulate: mostly-white page (200,200,200), dark button region (80,80,200),
+	// white button text (255,255,255).
+	img := image.NewRGBA(image.Rect(0, 0, 30, 10))
+	pageColor := color.RGBA{R: 200, G: 200, B: 200, A: 255}
+	btnColor := color.RGBA{R: 80, G: 80, B: 200, A: 255}
+	textColor := color.RGBA{R: 255, G: 255, B: 255, A: 255}
+	for y := 0; y < 10; y++ {
+		for x := 0; x < 30; x++ {
+			if x >= 10 && x < 20 {
+				if x == 15 {
+					img.Set(x, y, textColor) // "text" pixel in button centre
+				} else {
+					img.Set(x, y, btnColor) // button background
+				}
+			} else {
+				img.Set(x, y, pageColor) // page background
+			}
+		}
+	}
+
+	gray := toGrayscaleContrast(img)
+
+	// Before inversion: text pixel and page background are near 255 → indistinct.
+	textBefore := gray.GrayAt(15, 5).Y
+	bgBefore := gray.GrayAt(0, 5).Y
+	// Both should be high (near 255) — that is the problem we are solving.
+	if textBefore < 200 || bgBefore < 200 {
+		t.Logf("Before inversion: text=%d, page bg=%d (both should be near 255)", textBefore, bgBefore)
+	}
+
+	invertGray(gray)
+
+	// After inversion: text pixel should be near 0 (dark), button background
+	// should be lighter than the page background.
+	textAfter := gray.GrayAt(15, 5).Y
+	btnAfter := gray.GrayAt(12, 5).Y
+	if textAfter >= btnAfter {
+		t.Errorf("After inversion: text (%d) should be darker than button background (%d)", textAfter, btnAfter)
+	}
+	if textAfter > 50 {
+		t.Errorf("After inversion: text pixel = %d; want near 0 (dark text on lighter background)", textAfter)
+	}
+}
+
 // TestOptions_DefaultIsGrayscale verifies the zero value of Options selects
 // grayscale mode (Color == false), preserving backward-compatible behaviour.
 func TestOptions_DefaultIsGrayscale(t *testing.T) {
