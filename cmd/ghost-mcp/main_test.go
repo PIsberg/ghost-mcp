@@ -506,7 +506,7 @@ func TestHandlePressKeyMissingKey(t *testing.T) {
 	}
 }
 
-// TestHandleTakeScreenshotValid tests the take_screenshot tool
+// TestHandleTakeScreenshotValid tests the take_screenshot tool (PNG mode).
 func TestHandleTakeScreenshotValid(t *testing.T) {
 	request := mcp.CallToolRequest{
 		Params: mcp.CallToolParams{
@@ -520,28 +520,78 @@ func TestHandleTakeScreenshotValid(t *testing.T) {
 	if err != nil {
 		t.Errorf("Unexpected error: %v", err)
 	}
-
 	if result == nil {
 		t.Fatal("Expected non-nil result")
 	}
 
-	// Content[0] is the JSON metadata, Content[1] is the PNG image
+	// Content[0] is JSON metadata, Content[1] is the image.
+	if len(result.Content) < 2 {
+		t.Fatal("Expected at least 2 content items (metadata + image)")
+	}
+
 	var response map[string]interface{}
 	if err := json.Unmarshal([]byte(result.Content[0].(mcp.TextContent).Text), &response); err != nil {
 		t.Fatalf("Failed to parse result JSON: %v", err)
 	}
-
 	if success, ok := response["success"].(bool); !ok || !success {
 		t.Error("Expected success to be true")
 	}
+	// Default (no quality param) should produce PNG.
+	if fmt, ok := response["format"].(string); !ok || fmt != "image/png" {
+		t.Errorf("Expected format=image/png, got %q", response["format"])
+	}
+	// filepath is no longer returned (no disk write unless GHOST_MCP_KEEP_SCREENSHOTS=1).
+	if _, ok := response["filepath"]; ok {
+		t.Error("Response should not contain 'filepath' (disk write only happens when GHOST_MCP_KEEP_SCREENSHOTS=1)")
+	}
+}
 
-	if _, ok := response["filepath"]; !ok {
-		t.Error("Response missing 'filepath' field")
+// TestHandleTakeScreenshotJPEG tests the JPEG quality path.
+func TestHandleTakeScreenshotJPEG(t *testing.T) {
+	request := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{
+			Arguments: map[string]interface{}{
+				"x":       float64(0),
+				"y":       float64(0),
+				"width":   float64(100),
+				"height":  float64(100),
+				"quality": float64(85),
+			},
+		},
 	}
 
-	// Image data is in Content[1] as ImageContent
+	ctx := context.Background()
+	result, err := handleTakeScreenshot(ctx, request)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+	if result == nil {
+		t.Fatal("Expected non-nil result")
+	}
 	if len(result.Content) < 2 {
-		t.Error("Expected at least 2 content items (metadata + image)")
+		t.Fatal("Expected at least 2 content items (metadata + image)")
+	}
+
+	var response map[string]interface{}
+	if err := json.Unmarshal([]byte(result.Content[0].(mcp.TextContent).Text), &response); err != nil {
+		t.Fatalf("Failed to parse result JSON: %v", err)
+	}
+	if success, ok := response["success"].(bool); !ok || !success {
+		t.Error("Expected success to be true")
+	}
+	if fmt, ok := response["format"].(string); !ok || fmt != "image/jpeg" {
+		t.Errorf("Expected format=image/jpeg, got %q", response["format"])
+	}
+	// JPEG image content should be non-empty.
+	img, ok := result.Content[1].(mcp.ImageContent)
+	if !ok {
+		t.Fatal("Content[1] is not ImageContent")
+	}
+	if img.MIMEType != "image/jpeg" {
+		t.Errorf("ImageContent.MIMEType = %q; want image/jpeg", img.MIMEType)
+	}
+	if len(img.Data) == 0 {
+		t.Error("ImageContent.Data is empty")
 	}
 }
 

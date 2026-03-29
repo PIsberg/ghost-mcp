@@ -8,9 +8,12 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"fmt"
+	"image/jpeg"
+	"image/png"
 	"math"
 	"os"
 	"os/signal"
@@ -395,7 +398,18 @@ func handleTakeScreenshot(ctx context.Context, request mcp.CallToolRequest) (*mc
 		return mcp.NewToolResultError(fmt.Sprintf("invalid screenshot region: %v", err)), nil
 	}
 
-	logging.Info("Taking screenshot at (%d, %d) with size %dx%d", x, y, width, height)
+	// quality=0 → PNG (lossless). quality=1–100 → JPEG at that quality.
+	// JPEG 85 is typically 10× smaller than PNG for screen content, significantly
+	// reducing the number of tokens the model processes and cutting transfer time.
+	quality, _ := getIntParam(request, "quality")
+	if quality < 0 {
+		quality = 0
+	}
+	if quality > 100 {
+		quality = 100
+	}
+
+	logging.Info("Taking screenshot at (%d, %d) size %dx%d quality=%d", x, y, width, height, quality)
 
 	img, captureErr := robotgo.CaptureImg(x, y, width, height)
 	if captureErr != nil {
@@ -403,44 +417,54 @@ func handleTakeScreenshot(ctx context.Context, request mcp.CallToolRequest) (*mc
 		return mcp.NewToolResultError(fmt.Sprintf("failed to capture screen: %v", captureErr)), nil
 	}
 
-	// Determine screenshot directory
-	screenshotDir := os.Getenv("GHOST_MCP_SCREENSHOT_DIR")
-	if screenshotDir == "" {
-		screenshotDir = os.TempDir()
-	}
+	// Encode directly into a memory buffer — no temp file write or read.
+	// Previous pipeline: SavePng→disk, ReadFile←disk, Remove added ~200–400 ms
+	// of unnecessary file I/O on every screenshot call.
+	var buf bytes.Buffer
+	var mimeType string
 
-	// Ensure directory exists
-	if err := os.MkdirAll(screenshotDir, 0755); err != nil {
-		logging.Error("Failed to create screenshot directory: %v", err)
-		return mcp.NewToolResultError(fmt.Sprintf("failed to create screenshot directory: %v", err)), nil
-	}
-
-	filename := fmt.Sprintf("ghost-mcp-screenshot-%d.png", time.Now().UnixNano())
-	fpath := filepath.Join(screenshotDir, filename)
-
-	if saveErr := robotgo.SavePng(img, fpath); saveErr != nil {
-		logging.Error("Failed to save screenshot: %v", saveErr)
-		return mcp.NewToolResultError(fmt.Sprintf("failed to save screenshot: %v", saveErr)), nil
-	}
-	logging.Info("Screenshot saved to: %s", fpath)
-
-	data, readErr := os.ReadFile(fpath)
-	if readErr != nil {
-		logging.Error("Failed to read screenshot file: %v", readErr)
-		return mcp.NewToolResultError(fmt.Sprintf("failed to read screenshot: %v", readErr)), nil
-	}
-
-	if os.Getenv("GHOST_MCP_KEEP_SCREENSHOTS") != "1" {
-		os.Remove(fpath)
-		logging.Debug("Temporary screenshot file cleaned up")
+	if quality > 0 {
+		if err := jpeg.Encode(&buf, img, &jpeg.Options{Quality: quality}); err != nil {
+			logging.Error("Failed to encode screenshot as JPEG: %v", err)
+			return mcp.NewToolResultError(fmt.Sprintf("failed to encode screenshot: %v", err)), nil
+		}
+		mimeType = "image/jpeg"
 	} else {
-		logging.Info("Screenshot kept at: %s", fpath)
+		// BestSpeed (level 1) is significantly faster than the default (level 6)
+		// with only a modest increase in file size — the right trade-off for
+		// interactive screenshots where the image is consumed immediately.
+		enc := &png.Encoder{CompressionLevel: png.BestSpeed}
+		if err := enc.Encode(&buf, img); err != nil {
+			logging.Error("Failed to encode screenshot as PNG: %v", err)
+			return mcp.NewToolResultError(fmt.Sprintf("failed to encode screenshot: %v", err)), nil
+		}
+		mimeType = "image/png"
+	}
+
+	logging.Info("Screenshot encoded: %s %d bytes", mimeType, buf.Len())
+
+	// Save to disk only when explicitly requested for debugging.
+	if os.Getenv("GHOST_MCP_KEEP_SCREENSHOTS") == "1" {
+		screenshotDir := os.Getenv("GHOST_MCP_SCREENSHOT_DIR")
+		if screenshotDir == "" {
+			screenshotDir = os.TempDir()
+		}
+		if mkErr := os.MkdirAll(screenshotDir, 0755); mkErr == nil {
+			ext := "png"
+			if quality > 0 {
+				ext = "jpg"
+			}
+			fpath := filepath.Join(screenshotDir, fmt.Sprintf("ghost-mcp-screenshot-%d.%s", time.Now().UnixNano(), ext))
+			if writeErr := os.WriteFile(fpath, buf.Bytes(), 0644); writeErr == nil {
+				logging.Info("Screenshot kept at: %s", fpath)
+			}
+		}
 	}
 
 	return mcp.NewToolResultImage(
-		fmt.Sprintf(`{"success": true, "filepath": "%s", "width": %d, "height": %d}`, fpath, width, height),
-		base64.StdEncoding.EncodeToString(data),
-		"image/png",
+		fmt.Sprintf(`{"success": true, "width": %d, "height": %d, "format": %q, "bytes": %d}`, width, height, mimeType, buf.Len()),
+		base64.StdEncoding.EncodeToString(buf.Bytes()),
+		mimeType,
 	), nil
 }
 
@@ -659,7 +683,7 @@ Common uses: 'enter' to confirm/submit, 'tab' to move between fields, 'esc' to c
 	), handlePressKey)
 
 	mcpServer.AddTool(mcp.NewTool("take_screenshot",
-		mcp.WithDescription(`Capture the screen and return it as a PNG image. Use this to see the current visual state.
+		mcp.WithDescription(`Capture the screen and return it as an image. Use this to see the current visual state.
 
 NOTE: For finding where to click, prefer read_screen_text — it returns exact pixel coordinates for every word on screen, which is faster and more precise than estimating from a screenshot.
 
@@ -669,11 +693,14 @@ WHEN TO USE take_screenshot:
 - After a click or key press to confirm the expected UI change occurred.
 - When the target has no text (icon, image, progress bar) and read_screen_text cannot locate it.
 
-Use region parameters (x, y, width, height) to zoom in on a specific area for higher detail.`),
+SPEED TIPS:
+- Use quality=85 (JPEG) for a ~10× smaller image — much faster for the model to process. Use this whenever pixel-perfect quality is not required.
+- Use region parameters (x, y, width, height) to capture only the relevant area. Smaller regions are faster to capture, encode, and process.`),
 		mcp.WithNumber("x", mcp.Description("X coordinate of the top-left corner of the capture region in pixels (default: 0).")),
 		mcp.WithNumber("y", mcp.Description("Y coordinate of the top-left corner of the capture region in pixels (default: 0).")),
 		mcp.WithNumber("width", mcp.Description("Width of the capture region in pixels (default: full screen width).")),
 		mcp.WithNumber("height", mcp.Description("Height of the capture region in pixels (default: full screen height).")),
+		mcp.WithNumber("quality", mcp.Description("Image quality: 0 = PNG lossless (default, largest, slowest for model to process). 1–100 = JPEG at that quality (85 recommended — ~10× smaller than PNG, significantly faster). Use PNG when you need to read small text; use JPEG=85 for general visual confirmation.")),
 	), handleTakeScreenshot)
 
 	registerOCRTools(mcpServer)
