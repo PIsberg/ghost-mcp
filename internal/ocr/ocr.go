@@ -55,6 +55,14 @@ func ReadFile(imagePath string) (*Result, error) {
 	client := gosseract.NewClient()
 	defer client.Close()
 
+	// PSM_SPARSE_TEXT finds text wherever it appears without imposing document
+	// layout assumptions (columns, paragraphs). This is the right mode for UI
+	// screenshots which contain scattered labels, buttons, and menu items rather
+	// than structured prose.
+	if err := client.SetPageSegMode(gosseract.PSM_SPARSE_TEXT); err != nil {
+		return nil, fmt.Errorf("set page seg mode: %w", err)
+	}
+
 	if err := client.SetImage(scaledPath); err != nil {
 		return nil, fmt.Errorf("set image: %w", err)
 	}

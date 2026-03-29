@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/otiai10/gosseract/v2"
 )
 
 // writePNG creates a temporary PNG file and returns its path.
@@ -39,6 +41,21 @@ func whiteImage(w, h int) image.Image {
 // =============================================================================
 // Constants tests
 // =============================================================================
+
+// TestPageSegMode_SparseText documents why PSM_SPARSE_TEXT is used for UI
+// screenshots. UI screens contain scattered labels, buttons, and menu items
+// rather than structured prose, so Tesseract's default PSM_AUTO (which assumes
+// document-style columns and paragraphs) misses or misplaces UI text.
+// PSM_SPARSE_TEXT (11) finds text wherever it appears with no layout assumptions.
+func TestPageSegMode_SparseText(t *testing.T) {
+	// PSM_SPARSE_TEXT == 11 per gosseract's PageSegMode iota.
+	// We assert on the integer value so a future gosseract upgrade that shifts
+	// the iota would be caught here.
+	const wantPSM = 11
+	if int(gosseract.PSM_SPARSE_TEXT) != wantPSM {
+		t.Errorf("gosseract.PSM_SPARSE_TEXT = %d; want %d — iota may have shifted", int(gosseract.PSM_SPARSE_TEXT), wantPSM)
+	}
+}
 
 // TestScaleFactor_AtLeastThree ensures the scale factor is high enough to
 // bring a 96 DPI screen capture into Tesseract's optimal ~288–300 DPI range.
