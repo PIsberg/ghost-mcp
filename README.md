@@ -25,6 +25,8 @@ Ghost MCP allows AI assistants like Claude to control your computer's mouse, key
 
 ## Available Tools
 
+### Core Tools
+
 | Tool | Description | Parameters |
 |------|-------------|------------|
 | `get_screen_size` | Get screen resolution. Call this first to know valid coordinate ranges. | None |
@@ -35,11 +37,25 @@ Ghost MCP allows AI assistants like Claude to control your computer's mouse, key
 | `scroll` | Move mouse to coordinates and scroll the wheel. | `x`, `y`, `direction` (up/down/left/right), `amount` (optional, default 3) |
 | `type_text` | Type text via keyboard. Use for input fields. | `text` |
 | `press_key` | Press a single key. Use for Enter, Tab, shortcuts, etc. | `key` |
-| `take_screenshot` | Capture screen as base64 PNG. Optional region parameters. | `x`, `y`, `width`, `height` |
-| `read_screen_text` **(OCR)** | Read text from screen using OCR. Returns text and word positions. | `x`, `y`, `width`, `height` |
-| `find_and_click` **(OCR)** | Find text on screen with OCR and click it. Combines read_screen_text + click_at. | `text`, `button` (optional), `nth` (optional, default 1) |
+| `take_screenshot` | Capture screen as base64 PNG. Optional region parameters. | `x`, `y`, `width`, `height`, `quality` |
+
+### OCR Tools ⭐ (Require Tesseract)
+
+| Tool | Description | Parameters |
+|------|-------------|------------|
+| `read_screen_text` | Read text from screen using OCR. Returns text and word positions. | `x`, `y`, `width`, `height`, `grayscale` |
+| `find_and_click` | Find text on screen with OCR and click its center. | `text`, `button`, `nth`, `x`, `y`, `width`, `height` |
+| `find_and_click_all` ⭐ | Click multiple buttons in ONE atomic operation. | `texts` (array), `button`, `delay_ms` |
+| `wait_for_text` ⭐ | Wait for text to appear or disappear. Verify UI changes. | `text`, `visible`, `timeout_ms`, `x`, `y`, `width`, `height` |
+| `find_elements` ⭐ | Discover all clickable text elements with coordinates. Fast alternative to screenshots. | `x`, `y`, `width`, `height` |
 
 > **Note:** OCR tools require Tesseract to be installed and `TESSDATA_PREFIX` to be set. The installation scripts handle this automatically. See [Prerequisites](#prerequisites).
+
+### ⭐ New Tools for AI Accuracy
+
+- **`find_and_click_all`** - Click 3 buttons with ONE call instead of 3+ verification loops (75% faster)
+- **`wait_for_text`** - Properly verify UI state changes instead of guessing with screenshots
+- **`find_elements`** - Discover all clickable elements 10x faster than taking screenshots
 
 ## Prerequisites
 

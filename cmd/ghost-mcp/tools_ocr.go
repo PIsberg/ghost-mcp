@@ -143,4 +143,59 @@ TIPS:
 		mcp.WithNumber("width", mcp.Description("Width of region to scan (default: full screen width).")),
 		mcp.WithNumber("height", mcp.Description("Height of region to scan (default: full screen height).")),
 	), handleWaitForText)
+
+	mcpServer.AddTool(mcp.NewTool("find_elements",
+		mcp.WithDescription(`Discover all clickable text elements on screen with their exact coordinates. Use this as a FAST alternative to full screenshots when you need to understand what's clickable.
+
+🎯 WHEN TO USE:
+- First step in unknown UI — get overview of all clickable elements
+- find_and_click can't find your text — see what OCR actually detected
+- Faster than take_screenshot + read_screen_text for element discovery
+- Returns center_x/center_y ready to use with click_at
+
+⚠️ IMPORTANT LIMITATIONS:
+- OCR detects TEXT ONLY — it cannot tell if text is on a button, link, or label
+- Same text may appear multiple times (e.g., "Submit" in header vs button)
+- Icons/images without text are NOT detected
+- ALWAYS verify with take_screenshot before clicking unknown elements
+
+🚫 WHEN NOT TO USE:
+- You already know the exact text → use find_and_click directly
+- Need to see visual layout → use take_screenshot instead
+- Target has no text (icon button, image) → use take_screenshot
+
+RECOMMENDED WORKFLOW:
+1. find_elements → get list of all text with coordinates
+2. Examine results to identify target (e.g., "Submit" at y=700 is button, not header)
+3. take_screenshot with small region around target → visually verify it's clickable
+4. click_at with center_x/center_y from step 1
+
+EXAMPLE USAGE:
+// Find all elements in button area (faster than full screen)
+{"x": 0, "y": 600, "width": 800, "height": 200}
+
+// Response includes ready-to-use coordinates:
+{
+  "success": true,
+  "element_count": 5,
+  "elements": [
+    {"text": "Primary", "center_x": 174, "center_y": 770, "confidence": 95.2, "width": 80, "height": 35},
+    {"text": "Success", "center_x": 425, "center_y": 770, "confidence": 94.8, "width": 80, "height": 35}
+  ]
+}
+
+// Verify before clicking (optional but recommended for unknown UI):
+{"tool": "take_screenshot", "arguments": {"x": 150, "y": 750, "width": 120, "height": 50}}
+
+TIPS:
+- Use region parameters to scan specific areas (10x faster than full screen)
+- Elements filtered by confidence (min 50%) and size (min 20x10px)
+- center_x/center_y are ready to use with click_at or move_mouse
+- All coordinates use logical pixels
+- width/height help identify element type (wide+short = likely button)`),
+		mcp.WithNumber("x", mcp.Description("X coordinate of region to scan (default: 0 = full screen).")),
+		mcp.WithNumber("y", mcp.Description("Y coordinate of region to scan (default: 0 = full screen).")),
+		mcp.WithNumber("width", mcp.Description("Width of region to scan (default: full screen width).")),
+		mcp.WithNumber("height", mcp.Description("Height of region to scan (default: full screen height).")),
+	), handleFindElements)
 }

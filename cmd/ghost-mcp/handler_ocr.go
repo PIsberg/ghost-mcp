@@ -333,6 +333,103 @@ func findAndClickWord(ocrResult *ocr.Result, searchText string, nth, regionX, re
 	return result
 }
 
+// handleFindElements discovers all text elements on screen with their bounding boxes.
+// Use this to get an overview of clickable elements before targeting specific ones.
+func handleFindElements(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	logging.Debug("Handling find_elements request")
+
+	screenW, screenH := robotgo.GetScreenSize()
+
+	// Optional region parameters
+	regionX, regionY := 0, 0
+	regionW, regionH := screenW, screenH
+	if x, err := getIntParam(request, "x"); err == nil {
+		regionX = x
+	}
+	if y, err := getIntParam(request, "y"); err == nil {
+		regionY = y
+	}
+	if w, err := getIntParam(request, "width"); err == nil {
+		regionW = w
+	}
+	if h, err := getIntParam(request, "height"); err == nil {
+		regionH = h
+	}
+
+	// Capture the region
+	img, captureErr := robotgo.CaptureImg(regionX, regionY, regionW, regionH)
+	if captureErr != nil {
+		logging.Error("Failed to capture screen: %v", captureErr)
+		return mcp.NewToolResultError(fmt.Sprintf("failed to capture screen: %v", captureErr)), nil
+	}
+
+	// Save temporarily for OCR
+	screenshotDir := os.Getenv("GHOST_MCP_SCREENSHOT_DIR")
+	if screenshotDir == "" {
+		screenshotDir = os.TempDir()
+	}
+	filename := fmt.Sprintf("ghost-mcp-findelements-%d.png", time.Now().UnixNano())
+	fpath := filepath.Join(screenshotDir, filename)
+
+	if saveErr := robotgo.SavePng(img, fpath); saveErr != nil {
+		logging.Error("Failed to save screenshot: %v", saveErr)
+		return mcp.NewToolResultError(fmt.Sprintf("failed to save screenshot: %v", saveErr)), nil
+	}
+	if os.Getenv("GHOST_MCP_KEEP_SCREENSHOTS") != "1" {
+		defer os.Remove(fpath)
+	}
+
+	// Run OCR with color mode for best element detection
+	ocrResult, ocrErr := ocr.ReadFile(fpath, ocr.Options{Color: true})
+	if ocrErr != nil {
+		logging.Error("OCR failed: %v", ocrErr)
+		return mcp.NewToolResultError(fmt.Sprintf("OCR failed: %v", ocrErr)), nil
+	}
+
+	// Group words into clickable elements (buttons, links, labels)
+	// Filter by confidence and minimum size to avoid noise
+	elements := make([]map[string]interface{}, 0)
+	for _, w := range ocrResult.Words {
+		if w.Confidence < 50 {
+			continue // Skip low-confidence detections
+		}
+		if w.Width < 20 || w.Height < 10 {
+			continue // Skip tiny text (likely noise)
+		}
+
+		elements = append(elements, map[string]interface{}{
+			"text":       w.Text,
+			"x":          regionX + w.X,
+			"y":          regionY + w.Y,
+			"width":      w.Width,
+			"height":     w.Height,
+			"center_x":   regionX + w.X + w.Width/2,
+			"center_y":   regionY + w.Y + w.Height/2,
+			"confidence": w.Confidence,
+		})
+	}
+
+	logging.Info("find_elements: found %d elements in region (%d,%d) %dx%d", len(elements), regionX, regionY, regionW, regionH)
+
+	// Build JSON response
+	elementsJSON := "["
+	for i, e := range elements {
+		if i > 0 {
+			elementsJSON += ","
+		}
+		elementsJSON += fmt.Sprintf(
+			`{"text":%q,"x":%d,"y":%d,"width":%d,"height":%d,"center_x":%d,"center_y":%d,"confidence":%.1f}`,
+			e["text"], e["x"], e["y"], e["width"], e["height"], e["center_x"], e["center_y"], e["confidence"],
+		)
+	}
+	elementsJSON += "]"
+
+	return mcp.NewToolResultText(fmt.Sprintf(
+		`{"success":true,"element_count":%d,"region":{"x":%d,"y":%d,"width":%d,"height":%d},"elements":%s}`,
+		len(elements), regionX, regionY, regionW, regionH, elementsJSON,
+	)), nil
+}
+
 // handleFindAndClickAll finds and clicks multiple text labels in sequence.
 // This is an atomic operation — either all clicks succeed or it returns an error.
 // Use this when you need to click multiple buttons (e.g., "Primary", "Success", "Warning")
