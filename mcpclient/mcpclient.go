@@ -336,3 +336,65 @@ func (c *Client) TakeScreenshot(ctx context.Context) (filepath, base64Data strin
 
 	return data.Filepath, data.Base64, data.Width, data.Height, nil
 }
+
+// FindAndClickOptions holds options for find_and_click
+type FindAndClickOptions struct {
+	Button     string // "left", "right", "middle" (default: "left")
+	Nth        int    // Which occurrence to click (default: 1)
+	X          int    // Region X (default: 0)
+	Y          int    // Region Y (default: 0)
+	Width      int    // Region width (default: screen width)
+	Height     int    // Region height (default: screen height)
+	Grayscale  bool   // Use grayscale OCR (default: true)
+	DelayMS    int    // Delay after click in ms (default: 100)
+}
+
+// FindAndClickResult holds the result of a find_and_click operation
+type FindAndClickResult struct {
+	Success    bool   `json:"success"`
+	Found      string `json:"found"`
+	BoxX       int    `json:"box_x"`
+	BoxY       int    `json:"box_y"`
+	BoxWidth   int    `json:"box_width"`
+	BoxHeight  int    `json:"box_height"`
+	RequestedX int    `json:"requested_x"`
+	RequestedY int    `json:"requested_y"`
+	ActualX    int    `json:"actual_x"`
+	ActualY    int    `json:"actual_y"`
+	Button     string `json:"button"`
+	Occurrence int    `json:"occurrence"`
+}
+
+// FindAndClick finds text on screen and clicks it
+func (c *Client) FindAndClick(ctx context.Context, text string, opts FindAndClickOptions) (*FindAndClickResult, error) {
+	args := map[string]interface{}{"text": text}
+
+	if opts.Button != "" {
+		args["button"] = opts.Button
+	}
+	if opts.Nth > 0 {
+		args["nth"] = opts.Nth
+	}
+	if opts.Width > 0 {
+		args["x"] = opts.X
+		args["y"] = opts.Y
+		args["width"] = opts.Width
+		args["height"] = opts.Height
+	}
+	if opts.DelayMS > 0 {
+		args["delay_ms"] = opts.DelayMS
+	}
+	args["grayscale"] = opts.Grayscale
+
+	result, err := c.CallToolString(ctx, "find_and_click", args)
+	if err != nil {
+		return nil, err
+	}
+
+	var data FindAndClickResult
+	if err := json.Unmarshal([]byte(result), &data); err != nil {
+		return nil, fmt.Errorf("failed to parse find_and_click result: %w", err)
+	}
+
+	return &data, nil
+}

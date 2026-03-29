@@ -234,10 +234,13 @@ func findButtonBounds(ocrResult *ocr.Result, searchText string, nth int) (minX, 
 			minX, minY = w.X, w.Y
 			maxX, maxY = w.X+w.Width, w.Y+w.Height
 
-			// Look for adjacent words on the same horizontal line
-			// Merge words that are within 1.5x the word height vertically (same line)
+			// Look for adjacent words on the same horizontal line that are part
+			// of the same button label. Only merge words that are very close
+			// (within typical word spacing, not separate buttons).
 			avgHeight := w.Height
-			verticalThreshold := avgHeight / 2
+			avgWidth := w.Width
+			verticalThreshold := avgHeight / 3      // Must be very close vertically
+			maxHGap := avgWidth / 2                 // Max gap between words in same label
 
 			// Scan forward to merge adjacent words on same line
 			for j := i + 1; j < len(ocrResult.Words); j++ {
@@ -248,9 +251,9 @@ func findButtonBounds(ocrResult *ocr.Result, searchText string, nth int) (minX, 
 				if abs(nextCenterY-currCenterY) > verticalThreshold {
 					continue // Not on same line
 				}
-				// Check if it's close horizontally (within 1.5x avg height - typical word spacing)
+				// Check if it's close horizontally (within typical word spacing)
 				hGap := next.X - maxX
-				if hGap >= 0 && hGap <= avgHeight {
+				if hGap >= 0 && hGap <= maxHGap {
 					// Merge this word
 					if next.X < minX {
 						minX = next.X
@@ -264,6 +267,9 @@ func findButtonBounds(ocrResult *ocr.Result, searchText string, nth int) (minX, 
 					if next.Y+next.Height > maxY {
 						maxY = next.Y + next.Height
 					}
+				} else if hGap > maxHGap {
+					// Gap is too large - this is a different button/element
+					break
 				}
 			}
 

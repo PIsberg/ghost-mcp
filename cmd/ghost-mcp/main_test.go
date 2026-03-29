@@ -1083,6 +1083,7 @@ func TestHandleScroll_MissingDirection(t *testing.T) {
 }
 
 // TestHandleScroll_MissingX tests scroll with missing x parameter
+// Note: x and y are optional — they default to screen center
 func TestHandleScroll_MissingX(t *testing.T) {
 	req := mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: map[string]interface{}{
 		"y": float64(200), "direction": "down",
@@ -1091,8 +1092,9 @@ func TestHandleScroll_MissingX(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Handler returned unexpected Go error: %v", err)
 	}
-	if !result.IsError {
-		t.Error("Expected tool error for missing x parameter")
+	// x is optional, so this should succeed (x defaults to screen center)
+	if result.IsError {
+		t.Error("Expected success when x is missing (it's optional)")
 	}
 }
 

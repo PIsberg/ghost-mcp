@@ -46,11 +46,26 @@ func TestFindButtonBounds_MultiWord(t *testing.T) {
 		t.Fatal("Expected to find 'Save Changes' button")
 	}
 	// Should merge "Save" and "Changes" into one bounding box
+	// Gap between "Save" (ends at 160) and "Changes" (starts at 165) is 5px
+	// maxHGap = 60/2 = 30, so 5px gap should merge
 	if minX != 100 || maxX != 245 {
 		t.Errorf("Expected merged X bounds 100-245, got %d-%d", minX, maxX)
 	}
 	if minY != 50 || maxY != 80 {
 		t.Errorf("Expected Y bounds 50-80, got %d-%d", minY, maxY)
+	}
+	
+	// "Cancel" should NOT be merged (gap from 245 to 300 = 55px > maxHGap of 30)
+	// Verify by searching for "Cancel" separately
+	minX2, minY2, maxX2, maxY2, found2 := findButtonBounds(result, "Cancel", 1)
+	if !found2 {
+		t.Fatal("Expected to find 'Cancel' button separately")
+	}
+	if minX2 != 300 || maxX2 != 370 {
+		t.Errorf("Expected Cancel bounds 300-370, got %d-%d", minX2, maxX2)
+	}
+	if minY2 != 50 || maxY2 != 80 {
+		t.Errorf("Expected Cancel Y bounds 50-80, got %d-%d", minY2, maxY2)
 	}
 }
 
@@ -120,6 +135,49 @@ func TestFindButtonBounds_PartialMatch(t *testing.T) {
 	}
 	if minX != 100 || minY != 50 || maxX != 200 || maxY != 80 {
 		t.Errorf("Expected bounds (100,50)-(200,80), got (%d,%d)-(%d,%d)", minX, minY, maxX, maxY)
+	}
+}
+
+// TestFindButtonBounds_FixtureButtons tests the fixture button layout where
+// Primary, Success, Warning, Info buttons are on the same row but separated
+func TestFindButtonBounds_FixtureButtons(t *testing.T) {
+	// Simulating fixture layout: buttons spaced ~130px apart
+	result := &ocr.Result{
+		Words: []ocr.Word{
+			{Text: "Primary", X: 100, Y: 200, Width: 80, Height: 35, Confidence: 90},
+			{Text: "Success", X: 230, Y: 200, Width: 80, Height: 35, Confidence: 90},
+			{Text: "Warning", X: 360, Y: 200, Width: 80, Height: 35, Confidence: 90},
+			{Text: "Info", X: 490, Y: 200, Width: 60, Height: 35, Confidence: 90},
+		},
+	}
+
+	// Each button should be found separately
+	tests := []struct {
+		text       string
+		expectX    int
+		expectMaxX int
+	}{
+		{"Primary", 100, 180},
+		{"Success", 230, 310},
+		{"Warning", 360, 440},
+		{"Info", 490, 550},
+	}
+
+	for _, tt := range tests {
+		minX, minY, maxX, maxY, found := findButtonBounds(result, tt.text, 1)
+		if !found {
+			t.Errorf("Expected to find '%s' button", tt.text)
+			continue
+		}
+		if minX != tt.expectX {
+			t.Errorf("%s: expected minX=%d, got %d", tt.text, tt.expectX, minX)
+		}
+		if maxX != tt.expectMaxX {
+			t.Errorf("%s: expected maxX=%d, got %d", tt.text, tt.expectMaxX, maxX)
+		}
+		if minY != 200 || maxY != 235 {
+			t.Errorf("%s: expected Y bounds 200-235, got %d-%d", tt.text, minY, maxY)
+		}
 	}
 }
 
