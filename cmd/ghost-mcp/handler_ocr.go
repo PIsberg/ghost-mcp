@@ -62,13 +62,14 @@ func handleReadScreenText(ctx context.Context, request mcp.CallToolRequest) (*mc
 		logging.Info("OCR screenshot kept at: %s", fpath)
 	}
 
-	result, ocrErr := ocr.ReadFile(fpath)
+	grayscale := getBoolParam(request, "grayscale", true)
+	result, ocrErr := ocr.ReadFile(fpath, ocr.Options{Color: !grayscale})
 	if ocrErr != nil {
 		logging.Error("OCR failed: %v", ocrErr)
 		return mcp.NewToolResultError(fmt.Sprintf("OCR failed: %v", ocrErr)), nil
 	}
 
-	logging.Info("OCR extracted %d words", len(result.Words))
+	logging.Info("OCR extracted %d words (grayscale=%v)", len(result.Words), grayscale)
 
 	// Build JSON response manually to avoid encoding/json import churn.
 	wordsJSON := "["
@@ -168,7 +169,8 @@ func handleFindAndClick(ctx context.Context, request mcp.CallToolRequest) (*mcp.
 		defer os.Remove(fpath)
 	}
 
-	ocrResult, ocrErr := ocr.ReadFile(fpath)
+	grayscale := getBoolParam(request, "grayscale", true)
+	ocrResult, ocrErr := ocr.ReadFile(fpath, ocr.Options{Color: !grayscale})
 	if ocrErr != nil {
 		logging.Error("OCR failed: %v", ocrErr)
 		return mcp.NewToolResultError(fmt.Sprintf("OCR failed: %v", ocrErr)), nil

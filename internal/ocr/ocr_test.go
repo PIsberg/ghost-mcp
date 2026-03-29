@@ -147,13 +147,37 @@ func TestToGrayscaleContrast_ColoredBackground(t *testing.T) {
 	}
 }
 
+// TestOptions_DefaultIsGrayscale verifies the zero value of Options selects
+// grayscale mode (Color == false), preserving backward-compatible behaviour.
+func TestOptions_DefaultIsGrayscale(t *testing.T) {
+	var opts Options
+	if opts.Color {
+		t.Error("Options zero value: Color = true; want false (grayscale is the default)")
+	}
+}
+
+// TestOptions_ColorMode verifies that Options{Color: true} is accepted by
+// ReadFile without error (the pipeline skips grayscale + contrast stretch and
+// passes a colour image to Tesseract instead).
+func TestOptions_ColorMode(t *testing.T) {
+	img := whiteImage(200, 100)
+	path := writePNG(t, img)
+
+	_, err := ReadFile(path, Options{Color: true})
+	// A missing Tesseract install would return an error containing "tessdata";
+	// that is the only expected failure. Any other error is a bug.
+	if err != nil && !strings.Contains(err.Error(), "tessdata") {
+		t.Errorf("ReadFile with Color=true returned unexpected error: %v", err)
+	}
+}
+
 // =============================================================================
 // Error handling tests
 // =============================================================================
 
 func TestReadFile_MissingFile(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "does-not-exist.png")
-	_, err := ReadFile(path)
+	_, err := ReadFile(path, Options{})
 	if err == nil {
 		t.Error("Expected error for missing file, got nil")
 	}
@@ -167,7 +191,7 @@ func TestReadFile_NotAPNG(t *testing.T) {
 	f.WriteString("not a valid image file")
 	f.Close()
 
-	_, err = ReadFile(f.Name())
+	_, err = ReadFile(f.Name(), Options{})
 	if err == nil {
 		t.Error("Expected error for invalid image, got nil")
 	}
@@ -182,7 +206,7 @@ func skipIfNoTesseract(t *testing.T) {
 	// Try a minimal OCR call; if Tesseract data files are missing it errors.
 	img := whiteImage(100, 100)
 	path := writePNG(t, img)
-	_, err := ReadFile(path)
+	_, err := ReadFile(path, Options{})
 	if err != nil && strings.Contains(err.Error(), "tessdata") {
 		t.Skip("Tesseract data files not available")
 	}
@@ -194,7 +218,7 @@ func TestReadFile_WhiteImage_ReturnsEmptyText(t *testing.T) {
 	img := whiteImage(200, 100)
 	path := writePNG(t, img)
 
-	result, err := ReadFile(path)
+	result, err := ReadFile(path, Options{})
 	if err != nil {
 		t.Fatalf("ReadFile: %v", err)
 	}
@@ -213,7 +237,7 @@ func TestReadFile_ResultFields(t *testing.T) {
 	img := whiteImage(200, 100)
 	path := writePNG(t, img)
 
-	result, err := ReadFile(path)
+	result, err := ReadFile(path, Options{})
 	if err != nil {
 		t.Fatalf("ReadFile: %v", err)
 	}

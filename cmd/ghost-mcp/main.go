@@ -505,6 +505,23 @@ func getIntParam(request mcp.CallToolRequest, name string) (int, error) {
 	return 0, fmt.Errorf("parameter %s must be an integer", name)
 }
 
+// getBoolParam reads a boolean parameter. If the parameter is absent, it
+// returns defaultVal. JSON booleans arrive as bool; the function also handles
+// the string literals "true"/"false" for robustness.
+func getBoolParam(request mcp.CallToolRequest, name string, defaultVal bool) bool {
+	val, ok := request.GetArguments()[name]
+	if !ok {
+		return defaultVal
+	}
+	if b, ok := val.(bool); ok {
+		return b
+	}
+	if s, ok := val.(string); ok {
+		return s == "true"
+	}
+	return defaultVal
+}
+
 // =============================================================================
 // TOKEN AUTHENTICATION
 // =============================================================================

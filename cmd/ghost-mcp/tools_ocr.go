@@ -26,6 +26,7 @@ TIPS:
 		mcp.WithNumber("y", mcp.Description("Y coordinate of the top-left corner of the region to scan (default: 0).")),
 		mcp.WithNumber("width", mcp.Description("Width of the region to scan in pixels (default: full screen width).")),
 		mcp.WithNumber("height", mcp.Description("Height of the region to scan in pixels (default: full screen height).")),
+		mcp.WithBoolean("grayscale", mcp.Description("Convert to greyscale and apply contrast stretching before OCR (default: true). Set to false when colour context matters — e.g. 'find the red button' — so that colour differences are visible to the OCR engine.")),
 	), handleReadScreenText)
 
 	mcpServer.AddTool(mcp.NewTool("find_and_click",
@@ -46,5 +47,6 @@ If the element is not found: call take_screenshot to verify it is visible, then 
 		mcp.WithNumber("width", mcp.Description("Width of the region to scan in pixels (default: full screen width). Smaller regions scan faster.")),
 		mcp.WithNumber("height", mcp.Description("Height of the region to scan in pixels (default: full screen height). Smaller regions scan faster.")),
 		mcp.WithNumber("delay_ms", mcp.Description("Milliseconds to wait after the click for the UI to update (default: 100). Set to 0 to skip. Max: 10000.")),
+		mcp.WithBoolean("grayscale", mcp.Description("Convert to greyscale and apply contrast stretching before OCR (default: true). Set to false when you need to distinguish elements by colour — e.g. 'click the red button' vs 'click the green button'.")),
 	), handleFindAndClick)
 }

@@ -30,6 +30,16 @@ type Result struct {
 	Words []Word `json:"words"`
 }
 
+// Options controls OCR preprocessing behaviour.
+type Options struct {
+	// Color skips grayscale conversion and contrast stretching so that colour
+	// information is preserved in the image sent to Tesseract. Use this when
+	// the caller needs to distinguish elements by colour (e.g. "click the red
+	// button"). Default false: grayscale + contrast stretch is applied, which
+	// gives the best recognition accuracy for most UI text.
+	Color bool
+}
+
 // MinConfidence is the minimum word confidence (0–100) to include in results.
 // Words below this are OCR noise and should be discarded.
 const MinConfidence = 30.0
@@ -43,9 +53,9 @@ const MinConfidence = 30.0
 const ScaleFactor = 3
 
 // ReadFile runs OCR on the image at the given file path and returns structured output.
-func ReadFile(imagePath string) (*Result, error) {
-	// Upscale the image before OCR for better accuracy on screen captures.
-	scaledPath, cleanup, err := scaleImage(imagePath, ScaleFactor)
+func ReadFile(imagePath string, opts Options) (*Result, error) {
+	// Preprocess and upscale the image before OCR for better accuracy.
+	scaledPath, cleanup, err := scaleImage(imagePath, ScaleFactor, !opts.Color)
 	if err != nil {
 		// Non-fatal: fall back to original image.
 		scaledPath = imagePath
@@ -105,8 +115,10 @@ func ReadFile(imagePath string) (*Result, error) {
 	return &Result{Text: sb.String(), Words: words}, nil
 }
 
-// scaleImage preprocesses and upscales the image for OCR. It applies three
-// steps in a single pass to avoid extra temp files:
+// scaleImage preprocesses and upscales the image for OCR.
+//
+// When grayscale is true (the default), two preprocessing steps run before
+// scaling:
 //
 //  1. Grayscale conversion (ITU-R BT.709 luminance weights) — removes
 //     color-induced confusion. Tesseract is trained on grayscale and
@@ -118,9 +130,13 @@ func ReadFile(imagePath string) (*Result, error) {
 //     regardless of the original palette (e.g. white text on a blue
 //     button becomes near-white on near-black after stretching).
 //
-//  3. Bilinear upscale by factor — brings 96 DPI screen captures into
-//     Tesseract's optimal ~288 DPI range.
-func scaleImage(src string, factor int) (string, func(), error) {
+// When grayscale is false, colour is preserved and only the bilinear upscale
+// is applied. Use this when the caller needs to distinguish elements by colour
+// (e.g. "click the red button").
+//
+// Step 3 (always): bilinear upscale by factor — brings 96 DPI screen captures
+// into Tesseract's optimal ~288 DPI range.
+func scaleImage(src string, factor int, grayscale bool) (string, func(), error) {
 	f, err := os.Open(src)
 	if err != nil {
 		return "", nil, err
@@ -132,17 +148,25 @@ func scaleImage(src string, factor int) (string, func(), error) {
 		return "", nil, err
 	}
 
-	preprocessed := toGrayscaleContrast(img)
-
-	b := preprocessed.Bounds()
-	scaled := image.NewGray(image.Rect(0, 0, b.Dx()*factor, b.Dy()*factor))
-	draw.BiLinear.Scale(scaled, scaled.Bounds(), preprocessed, b, draw.Over, nil)
+	var scaledImg image.Image
+	if grayscale {
+		preprocessed := toGrayscaleContrast(img)
+		b := preprocessed.Bounds()
+		dst := image.NewGray(image.Rect(0, 0, b.Dx()*factor, b.Dy()*factor))
+		draw.BiLinear.Scale(dst, dst.Bounds(), preprocessed, b, draw.Over, nil)
+		scaledImg = dst
+	} else {
+		b := img.Bounds()
+		dst := image.NewRGBA(image.Rect(0, 0, b.Dx()*factor, b.Dy()*factor))
+		draw.BiLinear.Scale(dst, dst.Bounds(), img, b, draw.Over, nil)
+		scaledImg = dst
+	}
 
 	tmp, err := os.CreateTemp("", "ghost-mcp-ocr-scaled-*.png")
 	if err != nil {
 		return "", nil, err
 	}
-	if err := png.Encode(tmp, scaled); err != nil {
+	if err := png.Encode(tmp, scaledImg); err != nil {
 		tmp.Close()
 		os.Remove(tmp.Name())
 		return "", nil, err
