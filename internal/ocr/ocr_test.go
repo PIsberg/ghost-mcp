@@ -37,6 +37,20 @@ func whiteImage(w, h int) image.Image {
 }
 
 // =============================================================================
+// Constants tests
+// =============================================================================
+
+// TestScaleFactor_AtLeastThree ensures the scale factor is high enough to
+// bring a 96 DPI screen capture into Tesseract's optimal ~288–300 DPI range.
+// Lowering this below 3 degrades recognition of short UI text (button labels,
+// menu items). See: https://tesseract-ocr.github.io/tessdoc/ImproveQuality
+func TestScaleFactor_AtLeastThree(t *testing.T) {
+	if ScaleFactor < 3 {
+		t.Errorf("ScaleFactor = %d; want >= 3 for reliable UI text recognition (96 DPI × 3 ≈ 288 DPI, Tesseract's optimal range)", ScaleFactor)
+	}
+}
+
+// =============================================================================
 // Error handling tests
 // =============================================================================
 
