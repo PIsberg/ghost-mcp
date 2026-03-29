@@ -197,8 +197,22 @@ func handleFindAndClick(ctx context.Context, request mcp.CallToolRequest) (*mcp.
 		}
 	}
 
+	// Pass 3 (color mode): disable grayscale to preserve color contrast.
+	// Some colored buttons (green/blue/red with white text) are detected better
+	// when color information is preserved rather than converted to grayscale.
+	if grayscale {
+		logging.Info("find_and_click: %q not found on inverted pass, retrying with color mode", searchText)
+		colorResult, colorErr := ocr.ReadFile(fpath, ocr.Options{Color: true})
+		if colorErr == nil {
+			if result := findAndClickWord(colorResult, searchText, nth, regionX, regionY, screenW, screenH, button, request); result != nil {
+				return result, nil
+			}
+			logging.Info("find_and_click: %q not found on color pass either (%d words)", searchText, len(colorResult.Words))
+		}
+	}
+
 	logging.Info("Text %q (occurrence %d) not found on screen", searchText, nth)
-	return mcp.NewToolResultError(fmt.Sprintf("text %q not found on screen (occurrence %d)", searchText, nth)), nil
+	return mcp.NewToolResultError(fmt.Sprintf("text %q not found on screen (occurrence %d). TIP: Use read_screen_text first to see all detected text with exact coordinates, or set grayscale=false for colored buttons.", searchText, nth)), nil
 }
 
 // findButtonBounds finds the full bounding box of a button by merging adjacent

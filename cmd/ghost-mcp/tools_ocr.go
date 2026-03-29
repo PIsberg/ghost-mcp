@@ -38,7 +38,13 @@ Match is case-insensitive substring: "save" matches "Save", "SAVE ALL", "Auto-sa
 
 SPEED TIP: Supply x/y/width/height to scan only the relevant area of the screen (e.g. a toolbar, dialog, or panel). Scanning a small region is significantly faster than scanning the full screen.
 
-If the element is not found: call take_screenshot to verify it is visible, then retry with a more specific or shorter text fragment.`),
+IMPORTANT:
+- This tool automatically tries multiple OCR modes (normal, inverted, color) to find text on both light and dark/colored backgrounds.
+- If the text is not found, DO NOT guess coordinates. Instead:
+  1. Call read_screen_text with a small region around where the button should be
+  2. Examine the returned words to see what text was actually detected
+  3. Use the exact coordinates from read_screen_text to click, or retry find_and_click with the detected text
+- For buttons with white text on colored backgrounds (green/red/blue), the tool may need multiple passes — be patient and use the error message guidance.`),
 		mcp.WithString("text", mcp.Description("Text to search for (case-insensitive substring match)."), mcp.Required()),
 		mcp.WithString("button", mcp.Description("Mouse button: 'left' (default), 'right', or 'middle'.")),
 		mcp.WithNumber("nth", mcp.Description("Which occurrence to click if the text appears multiple times (default: 1 = first match).")),
