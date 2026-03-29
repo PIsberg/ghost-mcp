@@ -78,14 +78,12 @@ func ReadFile(imagePath string, opts Options) (*Result, error) {
 		return nil, fmt.Errorf("set image: %w", err)
 	}
 
-	_, err = client.Text()
-	if err != nil {
-		return nil, fmt.Errorf("extract text: %w. Make sure Tesseract OCR is installed: https://github.com/tesseract-ocr/tesseract", err)
-	}
-
+	// GetBoundingBoxes triggers recognition internally via client.init().
+	// The previous client.Text() call was a redundant second recognition pass
+	// whose return value was discarded — removed for speed.
 	boxes, err := client.GetBoundingBoxes(gosseract.RIL_WORD)
 	if err != nil {
-		return nil, fmt.Errorf("get bounding boxes: %w", err)
+		return nil, fmt.Errorf("get bounding boxes: %w. Make sure Tesseract OCR is installed: https://github.com/tesseract-ocr/tesseract", err)
 	}
 
 	words := make([]Word, 0, len(boxes))
