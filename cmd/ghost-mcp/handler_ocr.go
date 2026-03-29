@@ -240,8 +240,8 @@ func findButtonBounds(ocrResult *ocr.Result, searchText string, nth int) (minX, 
 			// (within typical word spacing, not separate buttons).
 			avgHeight := w.Height
 			avgWidth := w.Width
-			verticalThreshold := avgHeight / 3      // Must be very close vertically
-			maxHGap := avgWidth / 2                 // Max gap between words in same label
+			verticalThreshold := avgHeight / 3 // Must be very close vertically
+			maxHGap := avgWidth / 2            // Max gap between words in same label
 
 			// Scan forward to merge adjacent words on same line
 			for j := i + 1; j < len(ocrResult.Words); j++ {
@@ -519,13 +519,13 @@ func handleFindAndClickAll(ctx context.Context, request mcp.CallToolRequest) (*m
 
 		finalX, finalY := robotgo.GetMousePos()
 		clicks = append(clicks, map[string]interface{}{
-			"text":        text,
-			"box":         map[string]int{"x": minX, "y": minY, "width": maxX - minX, "height": maxY - minY},
-			"clicked_x":   cx,
-			"clicked_y":   cy,
-			"actual_x":    finalX,
-			"actual_y":    finalY,
-			"button":      button,
+			"text":      text,
+			"box":       map[string]int{"x": minX, "y": minY, "width": maxX - minX, "height": maxY - minY},
+			"clicked_x": cx,
+			"clicked_y": cy,
+			"actual_x":  finalX,
+			"actual_y":  finalY,
+			"button":    button,
 		})
 	}
 

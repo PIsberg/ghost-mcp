@@ -339,14 +339,14 @@ func (c *Client) TakeScreenshot(ctx context.Context) (filepath, base64Data strin
 
 // FindAndClickOptions holds options for find_and_click
 type FindAndClickOptions struct {
-	Button     string // "left", "right", "middle" (default: "left")
-	Nth        int    // Which occurrence to click (default: 1)
-	X          int    // Region X (default: 0)
-	Y          int    // Region Y (default: 0)
-	Width      int    // Region width (default: screen width)
-	Height     int    // Region height (default: screen height)
-	Grayscale  bool   // Use grayscale OCR (default: true)
-	DelayMS    int    // Delay after click in ms (default: 100)
+	Button    string // "left", "right", "middle" (default: "left")
+	Nth       int    // Which occurrence to click (default: 1)
+	X         int    // Region X (default: 0)
+	Y         int    // Region Y (default: 0)
+	Width     int    // Region width (default: screen width)
+	Height    int    // Region height (default: screen height)
+	Grayscale bool   // Use grayscale OCR (default: true)
+	DelayMS   int    // Delay after click in ms (default: 100)
 }
 
 // FindAndClickResult holds the result of a find_and_click operation

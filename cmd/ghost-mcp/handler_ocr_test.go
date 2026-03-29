@@ -54,7 +54,7 @@ func TestFindButtonBounds_MultiWord(t *testing.T) {
 	if minY != 50 || maxY != 80 {
 		t.Errorf("Expected Y bounds 50-80, got %d-%d", minY, maxY)
 	}
-	
+
 	// "Cancel" should NOT be merged (gap from 245 to 300 = 55px > maxHGap of 30)
 	// Verify by searching for "Cancel" separately
 	minX2, minY2, maxX2, maxY2, found2 := findButtonBounds(result, "Cancel", 1)

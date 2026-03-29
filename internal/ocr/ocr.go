@@ -65,9 +65,9 @@ const MinConfidence = 30.0
 // sharedClientMu serialises access because the Tesseract C++ API is not
 // thread-safe.
 var (
-	sharedClient    *gosseract.Client
-	sharedClientMu  sync.Mutex
-	sharedClientErr error
+	sharedClient     *gosseract.Client
+	sharedClientMu   sync.Mutex
+	sharedClientErr  error
 	sharedClientOnce sync.Once
 )
 
