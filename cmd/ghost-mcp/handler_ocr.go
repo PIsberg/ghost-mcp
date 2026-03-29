@@ -201,50 +201,113 @@ func handleFindAndClick(ctx context.Context, request mcp.CallToolRequest) (*mcp.
 	return mcp.NewToolResultError(fmt.Sprintf("text %q not found on screen (occurrence %d)", searchText, nth)), nil
 }
 
-// findAndClickWord searches ocrResult for the nth case-insensitive occurrence
-// of searchText, clicks its center, and returns the MCP result. Returns nil if
-// the text is not found (caller should try a different OCR pass or give up).
-func findAndClickWord(ocrResult *ocr.Result, searchText string, nth, regionX, regionY, screenW, screenH int, button string, request mcp.CallToolRequest) *mcp.CallToolResult {
+// findButtonBounds finds the full bounding box of a button by merging adjacent
+// words that match searchText. This handles multi-word buttons like "Save Changes"
+// by returning the combined bounding box of all matching words on the same line.
+// Returns the merged bounds relative to the OCR image, or false if not found.
+func findButtonBounds(ocrResult *ocr.Result, searchText string, nth int) (minX, minY, maxX, maxY int, found bool) {
 	needle := strings.ToLower(searchText)
 	matchCount := 0
-	for _, w := range ocrResult.Words {
-		if strings.Contains(strings.ToLower(w.Text), needle) {
-			matchCount++
-			if matchCount == nth {
-				// OCR coords are relative to the captured region; translate to screen coords.
-				cx := regionX + w.X + w.Width/2
-				cy := regionY + w.Y + w.Height/2
 
-				if err := validate.Coords(cx, cy, screenW, screenH); err != nil {
-					result := mcp.NewToolResultError(fmt.Sprintf("found text but center out of bounds: %v", err))
-					return result
+	for i, w := range ocrResult.Words {
+		if !strings.Contains(strings.ToLower(w.Text), needle) {
+			continue
+		}
+
+		matchCount++
+		if matchCount == nth {
+			// Start with the matched word's bounds
+			minX, minY = w.X, w.Y
+			maxX, maxY = w.X+w.Width, w.Y+w.Height
+
+			// Look for adjacent words on the same horizontal line
+			// Merge words that are within 1.5x the word height vertically (same line)
+			avgHeight := w.Height
+			verticalThreshold := avgHeight / 2
+
+			// Scan forward to merge adjacent words on same line
+			for j := i + 1; j < len(ocrResult.Words); j++ {
+				next := ocrResult.Words[j]
+				// Check if next word is horizontally aligned (within threshold)
+				nextCenterY := next.Y + next.Height/2
+				currCenterY := minY + (maxY-minY)/2
+				if abs(nextCenterY-currCenterY) > verticalThreshold {
+					continue // Not on same line
 				}
-
-				logging.Info("ACTION: Found %q (occurrence %d) at (%d,%d), clicking center (%d,%d) with %s",
-					w.Text, nth, w.X, w.Y, cx, cy, button)
-				robotgo.Move(cx, cy)
-
-				if err := checkFailsafe(); err != nil {
-					result := mcp.NewToolResultError(err.Error())
-					return result
+				// Check if it's close horizontally (within 1.5x avg height - typical word spacing)
+				hGap := next.X - maxX
+				if hGap >= 0 && hGap <= avgHeight {
+					// Merge this word
+					if next.X < minX {
+						minX = next.X
+					}
+					if next.Y < minY {
+						minY = next.Y
+					}
+					if next.X+next.Width > maxX {
+						maxX = next.X + next.Width
+					}
+					if next.Y+next.Height > maxY {
+						maxY = next.Y + next.Height
+					}
 				}
-
-				robotgo.Click(button, false)
-				applyClickDelay(request)
-
-				finalX, finalY := robotgo.GetMousePos()
-				if finalX != cx || finalY != cy {
-					logging.Info("WARNING: cursor moved after click: requested (%d,%d) actual (%d,%d)", cx, cy, finalX, finalY)
-				}
-				logging.Info("ACTION COMPLETE: find_and_click %q at (%d, %d)", searchText, finalX, finalY)
-
-				result := mcp.NewToolResultText(fmt.Sprintf(
-					`{"success":true,"found":%q,"requested_x":%d,"requested_y":%d,"actual_x":%d,"actual_y":%d,"button":%q,"occurrence":%d}`,
-					w.Text, cx, cy, finalX, finalY, button, nth,
-				))
-				return result
 			}
+
+			return minX, minY, maxX, maxY, true
 		}
 	}
-	return nil
+	return 0, 0, 0, 0, false
+}
+
+// abs returns the absolute value of an integer.
+func abs(x int) int {
+	if x < 0 {
+		return -x
+	}
+	return x
+}
+
+// findAndClickWord searches ocrResult for the nth case-insensitive occurrence
+// of searchText, clicks the center of the full button (merged bounding box for
+// multi-word buttons), and returns the MCP result. Returns nil if the text is
+// not found (caller should try a different OCR pass or give up).
+func findAndClickWord(ocrResult *ocr.Result, searchText string, nth, regionX, regionY, screenW, screenH int, button string, request mcp.CallToolRequest) *mcp.CallToolResult {
+	minX, minY, maxX, maxY, found := findButtonBounds(ocrResult, searchText, nth)
+	if !found {
+		return nil
+	}
+
+	// Calculate center of the merged button bounds
+	// OCR coords are relative to the captured region; translate to screen coords.
+	cx := regionX + (minX+maxX)/2
+	cy := regionY + (minY+maxY)/2
+
+	if err := validate.Coords(cx, cy, screenW, screenH); err != nil {
+		result := mcp.NewToolResultError(fmt.Sprintf("found text but center out of bounds: %v", err))
+		return result
+	}
+
+	logging.Info("ACTION: Found %q (occurrence %d) at box (%d,%d)-(%d,%d), clicking center (%d,%d) with %s",
+		searchText, nth, minX, minY, maxX, maxY, cx, cy, button)
+	robotgo.Move(cx, cy)
+
+	if err := checkFailsafe(); err != nil {
+		result := mcp.NewToolResultError(err.Error())
+		return result
+	}
+
+	robotgo.Click(button, false)
+	applyClickDelay(request)
+
+	finalX, finalY := robotgo.GetMousePos()
+	if finalX != cx || finalY != cy {
+		logging.Info("WARNING: cursor moved after click: requested (%d,%d) actual (%d,%d)", cx, cy, finalX, finalY)
+	}
+	logging.Info("ACTION COMPLETE: find_and_click %q at (%d, %d)", searchText, finalX, finalY)
+
+	result := mcp.NewToolResultText(fmt.Sprintf(
+		`{"success":true,"found":%q,"box":{"x":%d,"y":%d,"width":%d,"height":%d},"requested_x":%d,"requested_y":%d,"actual_x":%d,"actual_y":%d,"button":%q,"occurrence":%d}`,
+		searchText, minX, minY, maxX-minX, maxY-minY, cx, cy, finalX, finalY, button, nth,
+	))
+	return result
 }

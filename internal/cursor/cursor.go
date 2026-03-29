@@ -3,6 +3,7 @@ package cursor
 
 import (
 	"image/color"
+	"math"
 	"time"
 
 	"github.com/go-vgo/robotgo"

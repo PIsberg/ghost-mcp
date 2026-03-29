@@ -1,3 +1,5 @@
+//go:build integration
+
 // integration_test.go - Integration tests for Ghost MCP
 //
 // These tests verify the full integration between the MCP server
