@@ -3,6 +3,7 @@
 package ocr
 
 import (
+	"bytes"
 	"fmt"
 	"image"
 	"image/png"
@@ -53,15 +54,6 @@ const ScaleFactor = 3
 
 // ReadFile runs OCR on the image at the given file path and returns structured output.
 func ReadFile(imagePath string, opts Options) (*Result, error) {
-	// Preprocess and upscale the image before OCR for better accuracy.
-	scaledPath, cleanup, err := scaleImage(imagePath, ScaleFactor, !opts.Color)
-	if err != nil {
-		// Non-fatal: fall back to original image.
-		scaledPath = imagePath
-		cleanup = func() {}
-	}
-	defer cleanup()
-
 	client := gosseract.NewClient()
 	defer client.Close()
 
@@ -73,8 +65,20 @@ func ReadFile(imagePath string, opts Options) (*Result, error) {
 		return nil, fmt.Errorf("set page seg mode: %w", err)
 	}
 
-	if err := client.SetImage(scaledPath); err != nil {
-		return nil, fmt.Errorf("set image: %w", err)
+	// Preprocess + upscale into an in-memory PNG buffer and hand it to Tesseract
+	// via SetImageFromBytes. This avoids writing a temp file to disk and the
+	// subsequent disk read by Tesseract — two fewer disk round trips per call.
+	imgBytes, prepErr := preprocessToBytes(imagePath, ScaleFactor, !opts.Color)
+	if prepErr == nil {
+		if err := client.SetImageFromBytes(imgBytes); err != nil {
+			return nil, fmt.Errorf("set image from bytes: %w", err)
+		}
+	} else {
+		// Non-fatal: preprocessing failed (rare — decode error, OOM).
+		// Fall back to the original unprocessed file.
+		if err := client.SetImage(imagePath); err != nil {
+			return nil, fmt.Errorf("set image: %w", err)
+		}
 	}
 
 	// GetBoundingBoxes triggers recognition internally via client.init().
@@ -112,37 +116,25 @@ func ReadFile(imagePath string, opts Options) (*Result, error) {
 	return &Result{Text: sb.String(), Words: words}, nil
 }
 
-// scaleImage preprocesses and upscales the image for OCR.
+// preprocessToBytes loads the image at src, applies optional grayscale +
+// contrast stretching, upscales by factor, and returns PNG-encoded bytes.
+// Using bytes avoids writing a temp file and the subsequent Tesseract disk read.
 //
-// When grayscale is true (the default), two preprocessing steps run before
-// scaling:
+// When grayscale is true:
+//  1. Grayscale conversion (ITU-R BT.709) — removes colour-induced confusion.
+//  2. Linear contrast stretch — makes text pop regardless of background colour.
 //
-//  1. Grayscale conversion (ITU-R BT.709 luminance weights) — removes
-//     color-induced confusion. Tesseract is trained on grayscale and
-//     silently converts color images itself, but explicit conversion lets
-//     us also apply contrast stretching before that happens.
-//
-//  2. Linear contrast stretch — maps the darkest pixel to 0 and the
-//     brightest to 255. This makes text pop against its background
-//     regardless of the original palette (e.g. white text on a blue
-//     button becomes near-white on near-black after stretching).
-//
-// When grayscale is false, colour is preserved and only the bilinear upscale
-// is applied. Use this when the caller needs to distinguish elements by colour
-// (e.g. "click the red button").
-//
-// Step 3 (always): bilinear upscale by factor — brings 96 DPI screen captures
-// into Tesseract's optimal ~288 DPI range.
-func scaleImage(src string, factor int, grayscale bool) (string, func(), error) {
+// When grayscale is false, colour is preserved (bilinear upscale only).
+func preprocessToBytes(src string, factor int, grayscale bool) ([]byte, error) {
 	f, err := os.Open(src)
 	if err != nil {
-		return "", nil, err
+		return nil, err
 	}
 	defer f.Close()
 
 	img, _, err := image.Decode(f)
 	if err != nil {
-		return "", nil, err
+		return nil, err
 	}
 
 	var scaledImg image.Image
@@ -159,19 +151,11 @@ func scaleImage(src string, factor int, grayscale bool) (string, func(), error) 
 		scaledImg = dst
 	}
 
-	tmp, err := os.CreateTemp("", "ghost-mcp-ocr-scaled-*.png")
-	if err != nil {
-		return "", nil, err
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, scaledImg); err != nil {
+		return nil, err
 	}
-	if err := png.Encode(tmp, scaledImg); err != nil {
-		tmp.Close()
-		os.Remove(tmp.Name())
-		return "", nil, err
-	}
-	tmp.Close()
-
-	cleanup := func() { os.Remove(tmp.Name()) }
-	return tmp.Name(), cleanup, nil
+	return buf.Bytes(), nil
 }
 
 // toGrayscaleContrast converts img to grayscale and applies linear contrast
