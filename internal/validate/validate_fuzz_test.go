@@ -14,7 +14,7 @@ func FuzzText(f *testing.F) {
 		err := Text(s)
 		// We expect error if s is empty or exceeds MaxTextLength.
 		// Otherwise, it should pass.
-		// We can't easily check for MaxTextLength here without repeating logic, 
+		// We can't easily check for MaxTextLength here without repeating logic,
 		// but we can ensure it doesn't panic.
 		_ = err
 	})
