@@ -1,0 +1,11 @@
+# Enforce LF line endings for Go source files so gofmt checks pass in CI
+# regardless of platform core.autocrlf settings.
+*.go    text eol=lf
+*.mod   text eol=lf
+*.sum   text eol=lf
+*.sh    text eol=lf
+*.md    text eol=lf
+
+# Windows-specific files keep CRLF
+*.bat   text eol=crlf
+*.ps1   text eol=crlf
