@@ -896,11 +896,11 @@ func TestIntegration_FindElements(t *testing.T) {
 		Success      bool `json:"success"`
 		ElementCount int  `json:"element_count"`
 		Elements     []struct {
-			Text      string  `json:"text"`
-			CenterX   int     `json:"center_x"`
-			CenterY   int     `json:"center_y"`
-			Width     int     `json:"width"`
-			Height    int     `json:"height"`
+			Text       string  `json:"text"`
+			CenterX    int     `json:"center_x"`
+			CenterY    int     `json:"center_y"`
+			Width      int     `json:"width"`
+			Height     int     `json:"height"`
 			Confidence float64 `json:"confidence"`
 		} `json:"elements"`
 	}
@@ -959,9 +959,9 @@ func TestIntegration_WaitForText(t *testing.T) {
 	}
 
 	var data struct {
-		Success   bool   `json:"success"`
-		Visible   bool   `json:"visible"`
-		WaitedMS  int    `json:"waited_ms"`
+		Success  bool `json:"success"`
+		Visible  bool `json:"visible"`
+		WaitedMS int  `json:"waited_ms"`
 	}
 	if err := json.Unmarshal([]byte(result), &data); err != nil {
 		t.Fatalf("Failed to parse result: %v\nraw: %s", err, result)
