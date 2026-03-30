@@ -212,8 +212,23 @@ func handleFindAndClick(ctx context.Context, request mcp.CallToolRequest) (*mcp.
 		}
 	}
 
+	// Pass 4 (bright-text): maps pixels with all RGB ≥ 240 → black, else → white.
+	// Uniquely captures pure-white button text (255,255,255) while ignoring near-white
+	// body text like #eee (238 < 240) and all coloured backgrounds (always have at
+	// least one channel < 240). Last resort for white text on dark/gradient pages.
+	if grayscale {
+		logging.Info("find_and_click: %q not found on color pass, retrying with bright-text extraction", searchText)
+		brightResult, brightErr := ocr.ReadFile(fpath, ocr.Options{BrightText: true})
+		if brightErr == nil {
+			if result := findAndClickWord(brightResult, searchText, nth, regionX, regionY, screenW, screenH, button, request); result != nil {
+				return result, nil
+			}
+			logging.Info("find_and_click: %q not found on bright-text pass either (%d words)", searchText, len(brightResult.Words))
+		}
+	}
+
 	logging.Info("Text %q (occurrence %d) not found on screen", searchText, nth)
-	return mcp.NewToolResultError(fmt.Sprintf("text %q not found on screen (occurrence %d). TIP: Use read_screen_text first to see all detected text with exact coordinates, or set grayscale=false for colored buttons.", searchText, nth)), nil
+	return mcp.NewToolResultError(fmt.Sprintf("text %q not found on screen (occurrence %d). TIP: Call find_elements (no args) to see all text OCR detected — this shows exactly what is visible and why the match failed.", searchText, nth)), nil
 }
 
 // findButtonBounds finds the full bounding box of a button by merging adjacent
@@ -497,6 +512,15 @@ func handleFindAndClickAll(ctx context.Context, request mcp.CallToolRequest) (*m
 			invertedResult, invertedErr := ocr.ReadFile(fpath, ocr.Options{Inverted: true})
 			if invertedErr == nil {
 				minX, minY, maxX, maxY, found = findButtonBounds(invertedResult, text, 1)
+			}
+		}
+
+		if !found {
+			// Try bright-text extraction: pixels with all RGB ≥ 240 → black.
+			// Captures pure-white button labels on dark/gradient pages.
+			brightResult, brightErr := ocr.ReadFile(fpath, ocr.Options{BrightText: true})
+			if brightErr == nil {
+				minX, minY, maxX, maxY, found = findButtonBounds(brightResult, text, 1)
 			}
 		}
 

@@ -48,6 +48,17 @@ type Options struct {
 	// Inversion makes button text dark on a lighter button background, which
 	// is what Tesseract is trained on. Ignored when Color is true.
 	Inverted bool
+
+	// BrightText isolates near-white pixels for detecting white text on any
+	// coloured or dark background. Each pixel is mapped to black if all three
+	// RGB channels are ≥ 240, otherwise to white. The result is a high-contrast
+	// binary image where pure-white button labels appear as black text on a
+	// white background — the pattern Tesseract is trained on. Threshold 240
+	// captures true white text while excluding near-white body text (e.g.
+	// #eee = 238) and all coloured backgrounds. Use as a last-resort fallback
+	// when grayscale, inverted, and colour passes all fail. Ignored when Color
+	// or Inverted is true.
+	BrightText bool
 }
 
 // MinConfidence is the minimum word confidence (0–100) to include in results.
@@ -108,7 +119,7 @@ func ReadFile(imagePath string, opts Options) (*Result, error) {
 	// Preprocess + upscale into an in-memory PNG buffer and hand it to Tesseract
 	// via SetImageFromBytes. This avoids writing a temp file to disk and the
 	// subsequent disk read by Tesseract — two fewer disk round trips per call.
-	imgBytes, prepErr := preprocessToBytes(imagePath, ScaleFactor, !opts.Color, opts.Inverted)
+	imgBytes, prepErr := preprocessToBytes(imagePath, ScaleFactor, opts)
 	if prepErr == nil {
 		if err := client.SetImageFromBytes(imgBytes); err != nil {
 			return nil, fmt.Errorf("set image from bytes: %w", err)
@@ -170,7 +181,7 @@ func ReadImage(img image.Image, opts Options) (*Result, error) {
 	sharedClientMu.Lock()
 	defer sharedClientMu.Unlock()
 
-	imgBytes, prepErr := encodeForOCR(img, ScaleFactor, !opts.Color, opts.Inverted)
+	imgBytes, prepErr := encodeForOCR(img, ScaleFactor, opts)
 	if prepErr == nil {
 		if err := client.SetImageFromBytes(imgBytes); err != nil {
 			return nil, fmt.Errorf("set image from bytes: %w", err)
@@ -212,7 +223,7 @@ func ReadImage(img image.Image, opts Options) (*Result, error) {
 // preprocessToBytes loads the image at src, applies optional preprocessing,
 // upscales by factor, and returns PNG-encoded bytes ready for Tesseract.
 // Using bytes avoids writing a temp file and the subsequent Tesseract disk read.
-func preprocessToBytes(src string, factor int, grayscale, inverted bool) ([]byte, error) {
+func preprocessToBytes(src string, factor int, opts Options) ([]byte, error) {
 	f, err := os.Open(src)
 	if err != nil {
 		return nil, err
@@ -224,34 +235,40 @@ func preprocessToBytes(src string, factor int, grayscale, inverted bool) ([]byte
 		return nil, err
 	}
 
-	return encodeForOCR(img, factor, grayscale, inverted)
+	return encodeForOCR(img, factor, opts)
 }
 
 // encodeForOCR applies preprocessing to img and returns PNG-encoded bytes
 // suitable for Tesseract. It is the shared core used by both preprocessToBytes
 // (file path input) and ReadImage (in-memory image input).
 //
-// When grayscale is true:
-//  1. Grayscale conversion (ITU-R BT.709) + linear contrast stretch.
-//  2. Inversion (255-x) — only when inverted is true.
-//  3. Bilinear upscale by factor.
-//
-// When grayscale is false colour is preserved and only the upscale is applied.
-func encodeForOCR(img image.Image, factor int, grayscale, inverted bool) ([]byte, error) {
+// Preprocessing is selected by opts (evaluated in priority order):
+//  1. BrightText: pixels where all RGB ≥ 240 → black, else → white.
+//     Isolates pure-white button text from any background. Upscaled as Gray.
+//  2. Color (and not BrightText): no grayscale/inversion; upscale as RGBA.
+//  3. Default (grayscale): BT.709 grayscale + contrast stretch + optional
+//     inversion (opts.Inverted). Upscaled as Gray.
+func encodeForOCR(img image.Image, factor int, opts Options) ([]byte, error) {
 	var scaledImg image.Image
-	if grayscale {
+	if opts.BrightText {
+		preprocessed := brightTextToGray(img, 240)
+		b := preprocessed.Bounds()
+		dst := image.NewGray(image.Rect(0, 0, b.Dx()*factor, b.Dy()*factor))
+		draw.BiLinear.Scale(dst, dst.Bounds(), preprocessed, b, draw.Over, nil)
+		scaledImg = dst
+	} else if opts.Color {
+		b := img.Bounds()
+		dst := image.NewRGBA(image.Rect(0, 0, b.Dx()*factor, b.Dy()*factor))
+		draw.BiLinear.Scale(dst, dst.Bounds(), img, b, draw.Over, nil)
+		scaledImg = dst
+	} else {
 		preprocessed := toGrayscaleContrast(img)
-		if inverted {
+		if opts.Inverted {
 			invertGray(preprocessed)
 		}
 		b := preprocessed.Bounds()
 		dst := image.NewGray(image.Rect(0, 0, b.Dx()*factor, b.Dy()*factor))
 		draw.BiLinear.Scale(dst, dst.Bounds(), preprocessed, b, draw.Over, nil)
-		scaledImg = dst
-	} else {
-		b := img.Bounds()
-		dst := image.NewRGBA(image.Rect(0, 0, b.Dx()*factor, b.Dy()*factor))
-		draw.BiLinear.Scale(dst, dst.Bounds(), img, b, draw.Over, nil)
 		scaledImg = dst
 	}
 
@@ -267,6 +284,56 @@ func invertGray(img *image.Gray) {
 	for i, v := range img.Pix {
 		img.Pix[i] = 255 - v
 	}
+}
+
+// brightTextToGray creates a binary image where pixels with all three RGB
+// channels at or above threshold become black, and all other pixels become
+// white. This reliably isolates white (or near-white) text from any coloured
+// or dark background by exploiting the fact that pure white has all channels
+// uniformly high, while coloured backgrounds have at least one low channel.
+//
+// Result: black text on white background — the pattern Tesseract is trained on.
+//
+// threshold=240 is chosen to capture true white button text (255,255,255)
+// while excluding near-white body text like #eee (238,238,238) and any
+// coloured background gradient (always has at least one channel < 240).
+func brightTextToGray(img image.Image, threshold uint8) *image.Gray {
+	b := img.Bounds()
+	out := image.NewGray(b)
+	w, h := b.Dx(), b.Dy()
+
+	// Fast path for *image.RGBA — direct Pix slice access, no interface calls.
+	if rgba, ok := img.(*image.RGBA); ok {
+		for y := 0; y < h; y++ {
+			srcRow := rgba.Pix[y*rgba.Stride : y*rgba.Stride+w*4]
+			dstOff := y * out.Stride
+			for x := 0; x < w; x++ {
+				r := srcRow[x*4]
+				g := srcRow[x*4+1]
+				bl := srcRow[x*4+2]
+				if r >= threshold && g >= threshold && bl >= threshold {
+					out.Pix[dstOff+x] = 0 // near-white → black (text)
+				} else {
+					out.Pix[dstOff+x] = 255 // everything else → white (background)
+				}
+			}
+		}
+	} else {
+		// Slow path: interface dispatch fallback for any other image type.
+		for y := b.Min.Y; y < b.Max.Y; y++ {
+			dstOff := (y-b.Min.Y)*out.Stride - b.Min.X
+			for x := b.Min.X; x < b.Max.X; x++ {
+				r32, g32, b32, _ := img.At(x, y).RGBA()
+				r8, g8, b8 := uint8(r32>>8), uint8(g32>>8), uint8(b32>>8)
+				if r8 >= threshold && g8 >= threshold && b8 >= threshold {
+					out.Pix[dstOff+x] = 0
+				} else {
+					out.Pix[dstOff+x] = 255
+				}
+			}
+		}
+	}
+	return out
 }
 
 // toGrayscaleContrast converts img to grayscale and applies linear contrast

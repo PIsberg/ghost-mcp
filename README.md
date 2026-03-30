@@ -29,7 +29,7 @@ Ghost MCP allows AI assistants like Claude to control your computer's mouse, key
 
 | Tool | Description | Parameters |
 |------|-------------|------------|
-| `get_screen_size` | Get screen resolution. Call this first to know valid coordinate ranges. | None |
+| `get_screen_size` | Get screen resolution and DPI scale factor. | None |
 | `move_mouse` | Move mouse cursor to absolute coordinates. Origin (0,0) is top-left. | `x`, `y` |
 | `click` | Click mouse at current cursor position. Use `move_mouse` first. | `button` (left/right/middle) |
 | `click_at` | Move mouse to coordinates and click in one operation. Preferred over separate move+click. | `x`, `y`, `button` (optional, default left) |
@@ -289,13 +289,7 @@ GHOST_MCP_DEBUG=1 ./ghost-mcp
 Once connected, AI clients can use the tools like this:
 
 ```json
-// Get screen size first — establishes coordinate space
-{
-  "tool": "get_screen_size"
-}
-// Response: {"width": 1920, "height": 1080}
-
-// Find text on screen and click it (preferred workflow)
+// Find text on screen and click it — start here for any click task
 {
   "tool": "find_and_click",
   "arguments": {"text": "Save"}

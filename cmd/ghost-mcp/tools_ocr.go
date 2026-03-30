@@ -9,19 +9,22 @@ import (
 // Requires Tesseract OCR libraries to be installed (e.g., via vcpkg).
 func registerOCRTools(mcpServer *server.MCPServer) {
 	mcpServer.AddTool(mcp.NewTool("read_screen_text",
-		mcp.WithDescription(`Scan the screen with OCR and return all visible text with the pixel position of each word. Use this to locate UI elements by their text label so you can click them accurately.
+		mcp.WithDescription(`Scan the screen with OCR and return all visible text with the pixel position of each word.
+
+⚠️ NOT FOR CLICKING: If your goal is to click a button or link, use find_and_click instead — it handles colored backgrounds automatically and is a single call.
+
+Use read_screen_text when you need to READ text content: verify a label, read a status message, extract dynamic values, or diagnose why find_and_click failed (see what OCR actually detected).
 
 Returns: {text: string, words: [{text, x, y, width, height, confidence}]}
 - x, y is the TOP-LEFT corner of each word in screen pixels.
 - width, height is the size of the word's bounding box.
 
-TO CLICK A WORD: compute its center — move_x = x + width/2, move_y = y + height/2 — then call move_mouse with those values.
-
 TIPS:
 - Narrow the scan region (x, y, width, height) to a specific window or panel to get faster, more accurate results and avoid picking up unrelated text.
 - Filter results by confidence (higher = more reliable). Low-confidence words may be misread.
 - If a word is not found, try take_screenshot to see if it is actually visible, then re-scan the relevant region.
-- Works best on crisp UI text. May struggle with stylised fonts, low-contrast text, or very small text — use take_screenshot for visual confirmation in those cases.`),
+- Colored button text (white on blue/green/red) is often invisible in grayscale — set grayscale=false to see it.
+- Works best on crisp UI text. May struggle with stylised fonts, low-contrast text, or very small text.`),
 		mcp.WithNumber("x", mcp.Description("X coordinate of the top-left corner of the region to scan (default: 0).")),
 		mcp.WithNumber("y", mcp.Description("Y coordinate of the top-left corner of the region to scan (default: 0).")),
 		mcp.WithNumber("width", mcp.Description("Width of the region to scan in pixels (default: full screen width).")),
@@ -30,11 +33,11 @@ TIPS:
 	), handleReadScreenText)
 
 	mcpServer.AddTool(mcp.NewTool("find_and_click",
-		mcp.WithDescription(`PREFERRED WAY TO CLICK UI ELEMENTS. Scans the screen with OCR, finds the word matching the given text, and clicks its center — all in one call.
+		mcp.WithDescription(`THE ONLY TOOL YOU NEED TO CLICK A BUTTON. Start here for every click task. Do NOT call get_screen_size, take_screenshot, read_screen_text, or find_elements first — just call this.
 
 🎯 WHEN TO USE:
 - You need to click a single button/link/menu item by its text label
-- Prefer this over read_screen_text + click_at (simpler, more reliable)
+- Works for ALL button styles: colored backgrounds, dark themes, gradients
 - Text can be partial: "save" matches "Save", "SAVE ALL", "Auto-save"
 
 🚫 WHEN NOT TO USE:
@@ -45,20 +48,23 @@ SPEED TIP: Supply x/y/width/height to scan only the relevant area (e.g., a dialo
 
 HOW IT WORKS:
 1. Captures screen (or region) once
-2. Runs OCR with 3 passes: normal → inverted (for dark backgrounds) → color
+2. Automatically runs OCR with 3 passes: grayscale → inverted (dark backgrounds) → color (colored buttons)
 3. Finds text matching your search (case-insensitive substring)
 4. Clicks the CENTER of the matched button (merges multi-word labels)
-5. Returns exact coordinates for verification
+5. Returns exact coordinates
 
-IMPORTANT:
-- If text not found, DO NOT guess coordinates
-- Instead: call read_screen_text to see what OCR actually detected
-- Or: use take_screenshot to verify the text is visible
-- For colored buttons (white text on green/red/blue), may need multiple passes
+COLORED BUTTONS (white text on blue/green/red/cyan): handled automatically by the color pass. No special parameters needed — just call find_and_click with the button label.
+
+IF TEXT NOT FOUND:
+- DO NOT guess coordinates — guessing will miss
+- Call find_elements (no args) to see what OCR actually detected on screen
+- Or take_screenshot to visually confirm the button is visible
 
 RESPONSE: {success, found, box: {x,y,width,height}, requested_x/y, actual_x/y, button, occurrence}
-- box shows the full button bounds (merged for multi-word labels)
-- actual_x/y is where the mouse actually landed (verify this matches expected)`),
+- box is the OCR text bounding box (tight around characters, not the full button background)
+- requested_x/y is the center of that box — where the click is aimed
+- actual_x/y is where the mouse actually landed (verify this matches expected)
+- For standard buttons with symmetric padding the text center == button center, so the click lands correctly`),
 		mcp.WithString("text", mcp.Description("Text to search for (case-insensitive substring match). Example: \"save\" matches \"Save\", \"SAVE ALL\"."), mcp.Required()),
 		mcp.WithString("button", mcp.Description("Mouse button: 'left' (default), 'right', or 'middle'.")),
 		mcp.WithNumber("nth", mcp.Description("Which occurrence to click if text appears multiple times (default: 1 = first).")),
@@ -145,30 +151,28 @@ TIPS:
 	), handleWaitForText)
 
 	mcpServer.AddTool(mcp.NewTool("find_elements",
-		mcp.WithDescription(`Discover all clickable text elements on screen with their exact coordinates. Use this as a FAST alternative to full screenshots when you need to understand what's clickable.
+		mcp.WithDescription(`DIAGNOSTIC TOOL ONLY — shows what OCR can see on screen. Do NOT use this to find buttons before clicking. Use find_and_click directly instead.
 
-🎯 WHEN TO USE:
-- First step in unknown UI — get overview of all clickable elements
-- find_and_click can't find your text — see what OCR actually detected
-- Faster than take_screenshot + read_screen_text for element discovery
-- Returns center_x/center_y ready to use with click_at
+🎯 WHEN TO USE (after find_and_click already failed):
+- find_and_click couldn't find your text — use this to see what OCR actually detected
+- You need center_x/center_y coordinates for click_at (no text label available)
+- Auditing what text is visible in a region
 
 ⚠️ IMPORTANT LIMITATIONS:
 - OCR detects TEXT ONLY — it cannot tell if text is on a button, link, or label
 - Same text may appear multiple times (e.g., "Submit" in header vs button)
 - Icons/images without text are NOT detected
-- ALWAYS verify with take_screenshot before clicking unknown elements
+- Colored buttons (white text on blue/green/red) may not appear — find_and_click handles these better with its 3-pass OCR
 
 🚫 WHEN NOT TO USE:
-- You already know the exact text → use find_and_click directly
+- You want to click a button — use find_and_click directly, do NOT scan first
 - Need to see visual layout → use take_screenshot instead
 - Target has no text (icon button, image) → use take_screenshot
 
-RECOMMENDED WORKFLOW:
-1. find_elements → get list of all text with coordinates
-2. Examine results to identify target (e.g., "Submit" at y=700 is button, not header)
-3. take_screenshot with small region around target → visually verify it's clickable
-4. click_at with center_x/center_y from step 1
+DIAGNOSTIC WORKFLOW (only after find_and_click fails):
+1. find_and_click fails → call find_elements to see what OCR detected
+2. Examine results to identify target
+3. click_at with center_x/center_y from step 2
 
 EXAMPLE USAGE:
 // Find all elements in button area (faster than full screen)

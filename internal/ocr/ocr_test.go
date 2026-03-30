@@ -232,6 +232,80 @@ func TestOptions_Inverted_WhiteTextOnDark(t *testing.T) {
 	}
 }
 
+// TestBrightTextToGray_WhiteOnColored verifies that pure-white pixels become
+// black (text detected) and coloured / near-white pixels become white (background).
+// This documents the threshold=240 design choice:
+//   - Pure white button text (255,255,255) → black ✓
+//   - Body text colour #eee (238,238,238) → white (238 < 240, not captured) ✓
+//   - Coloured button background, e.g. primary #667eea (102,126,234) → white ✓
+//     (R=102 < 240 fails the "all channels ≥ threshold" check)
+func TestBrightTextToGray_WhiteOnColored(t *testing.T) {
+	img := image.NewRGBA(image.Rect(0, 0, 10, 10))
+	// Primary button blue (#667eea) — coloured background, should become white.
+	btnColor := color.RGBA{R: 102, G: 126, B: 234, A: 255}
+	// Pure white — button label text, should become black.
+	whiteText := color.RGBA{R: 255, G: 255, B: 255, A: 255}
+	// Near-white body text (#eee = 238,238,238) — must NOT be captured (238 < 240).
+	bodyText := color.RGBA{R: 238, G: 238, B: 238, A: 255}
+
+	for y := 0; y < 10; y++ {
+		for x := 0; x < 10; x++ {
+			switch {
+			case x == 5 && y == 5:
+				img.Set(x, y, whiteText)
+			case x == 0 && y == 0:
+				img.Set(x, y, bodyText)
+			default:
+				img.Set(x, y, btnColor)
+			}
+		}
+	}
+
+	got := brightTextToGray(img, 240)
+
+	// Pure white text pixel → black (0 = text detected).
+	if got.GrayAt(5, 5).Y != 0 {
+		t.Errorf("white text pixel: gray=%d; want 0 (black)", got.GrayAt(5, 5).Y)
+	}
+	// Coloured button background → white (255 = background, not captured).
+	if got.GrayAt(1, 1).Y != 255 {
+		t.Errorf("blue background pixel: gray=%d; want 255 (white)", got.GrayAt(1, 1).Y)
+	}
+	// Near-white body text #eee (238) → white (238 < 240, should not be captured).
+	if got.GrayAt(0, 0).Y != 255 {
+		t.Errorf("body text #eee pixel: gray=%d; want 255 (238 < threshold 240, not captured)", got.GrayAt(0, 0).Y)
+	}
+}
+
+// TestBrightTextToGray_DarkBackground verifies dark page backgrounds become white
+// (background), ensuring white button labels stand out on dark-themed pages.
+func TestBrightTextToGray_DarkBackground(t *testing.T) {
+	img := image.NewRGBA(image.Rect(0, 0, 10, 10))
+	// Dark page background (#1a1a2e) — should become white background.
+	darkBg := color.RGBA{R: 26, G: 26, B: 46, A: 255}
+	// Pure white button text — should become black.
+	whiteText := color.RGBA{R: 255, G: 255, B: 255, A: 255}
+
+	for y := 0; y < 10; y++ {
+		for x := 0; x < 10; x++ {
+			if x == 5 && y == 5 {
+				img.Set(x, y, whiteText)
+			} else {
+				img.Set(x, y, darkBg)
+			}
+		}
+	}
+
+	got := brightTextToGray(img, 240)
+
+	if got.GrayAt(5, 5).Y != 0 {
+		t.Errorf("white text on dark bg: gray=%d; want 0 (black)", got.GrayAt(5, 5).Y)
+	}
+	if got.GrayAt(0, 0).Y != 255 {
+		t.Errorf("dark background: gray=%d; want 255 (white)", got.GrayAt(0, 0).Y)
+	}
+}
+
 // TestOptions_DefaultIsGrayscale verifies the zero value of Options selects
 // grayscale mode (Color == false), preserving backward-compatible behaviour.
 func TestOptions_DefaultIsGrayscale(t *testing.T) {

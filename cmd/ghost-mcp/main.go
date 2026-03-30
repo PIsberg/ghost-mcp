@@ -621,34 +621,25 @@ Returns {width, height, scale_factor}.
 - width / height: screen dimensions in logical pixels. All ghost-mcp coordinates (mouse, screenshots, OCR) use this same logical pixel space, so you do NOT need to apply the scale factor yourself.
 - scale_factor: the OS display scaling ratio (e.g. 1.5 = 150% / "High DPI"). Informational only — useful to understand why an app's own coordinate reporter (e.g. a browser's window.devicePixelRatio or a game's cursor position) might differ from ghost-mcp coordinates.
 
-Call this first to understand the coordinate space before moving the mouse or taking screenshots. (0,0) is the top-left corner.`),
+(0,0) is the top-left corner. Only call this when you specifically need the screen dimensions — most tasks do not require it.`),
 	), handleGetScreenSize)
 
 	mcpServer.AddTool(mcp.NewTool("move_mouse",
 		mcp.WithDescription(`Move the mouse cursor to absolute screen coordinates. (0,0) is the top-left corner.
 
-ALWAYS use read_screen_text first to locate the target element by its text label before calling this tool. Do not guess coordinates.
+⚠️ NOT FOR CLICKING BUTTONS: If you want to click a button or link by its text label, use find_and_click instead — it locates the target by OCR and clicks in one call with no coordinate guessing.
 
-WORKFLOW:
-1. read_screen_text → finds word bounding boxes {x, y, width, height} where x,y is the TOP-LEFT corner.
-2. Compute center: move_x = word.x + word.width/2, move_y = word.y + word.height/2.
-3. move_mouse to the center coordinates.
-4. take_screenshot to verify the cursor is over the correct target.
-5. click.
-
-Only skip read_screen_text if the target has no text label (icon, image) — in that case use take_screenshot to estimate coordinates visually.`),
+Use move_mouse only when you already have exact coordinates (e.g. from find_elements center_x/center_y) and need to hover before a click, or when dragging.`),
 		mcp.WithNumber("x", mcp.Description("X coordinate in pixels from the left edge of the screen. Must be within screen bounds."), mcp.Required()),
 		mcp.WithNumber("y", mcp.Description("Y coordinate in pixels from the top edge of the screen. Must be within screen bounds."), mcp.Required()),
 	), handleMoveMouse)
 
 	mcpServer.AddTool(mcp.NewTool("click",
-		mcp.WithDescription(`Click the mouse button at the current cursor position. Always call move_mouse first to position the cursor over the target.
+		mcp.WithDescription(`Click the mouse button at the current cursor position. Call move_mouse first to position the cursor.
 
-BEFORE CLICKING: Call take_screenshot to confirm the cursor is over the correct element. Clicking the wrong target can cause unintended actions that are hard to undo.
+⚠️ NOT FOR CLICKING BUTTONS BY LABEL: Use find_and_click instead — it locates and clicks in one call without needing move_mouse first.
 
-Use right-click to open context menus. After clicking, take a screenshot to confirm the expected UI change occurred (e.g. a window opened, a button activated, a field was selected).
-
-A short delay (default 100 ms) is applied after every click so the UI has time to update before a subsequent screenshot. Use delay_ms=0 to skip it when speed is critical.`),
+Use this tool only when you have already moved the mouse to exact coordinates and need to click at the current position (e.g. after a drag, or a hover-then-click sequence). Use right-click to open context menus.`),
 		mcp.WithString("button", mcp.Description("Mouse button to click: 'left' for normal clicks and selecting items, 'right' for context menus, 'middle' for middle-click."), mcp.Required()),
 		mcp.WithNumber("delay_ms", mcp.Description("Milliseconds to wait after the click for the UI to update (default: 100). Set to 0 to skip. Max: 10000.")),
 	), handleClick)
@@ -656,11 +647,9 @@ A short delay (default 100 ms) is applied after every click so the UI has time t
 	mcpServer.AddTool(mcp.NewTool("click_at",
 		mcp.WithDescription(`Move the mouse to (x, y) and click in one atomic operation. Preferred over separate move_mouse + click calls.
 
-Use read_screen_text to get bounding boxes, compute the center (x + width/2, y + height/2), then call click_at with that center.
+⚠️ NOT FOR CLICKING BUTTONS BY LABEL: Use find_and_click instead — it finds the text on screen and clicks without needing you to supply coordinates.
 
-After clicking, take a screenshot to confirm the expected UI change occurred.
-
-A short delay (default 100 ms) is applied after the click so the UI has time to update before a subsequent screenshot. Use delay_ms=0 to skip it when speed is critical.`),
+Use click_at only when you already have exact pixel coordinates (e.g. center_x/center_y from find_elements, or a known fixed coordinate). Do not guess coordinates — guessing will miss.`),
 		mcp.WithNumber("x", mcp.Description("X coordinate in pixels from the left edge of the screen."), mcp.Required()),
 		mcp.WithNumber("y", mcp.Description("Y coordinate in pixels from the top edge of the screen."), mcp.Required()),
 		mcp.WithString("button", mcp.Description("Mouse button: 'left' (default), 'right', or 'middle'.")),
@@ -670,9 +659,7 @@ A short delay (default 100 ms) is applied after the click so the UI has time to 
 	mcpServer.AddTool(mcp.NewTool("double_click",
 		mcp.WithDescription(`Move the mouse to (x, y) and perform a double-click. Use for opening files, activating items, or any UI that requires double-click.
 
-After double-clicking, take a screenshot to confirm the expected action occurred (e.g. a file opened, a word was selected).
-
-A short delay (default 100 ms) is applied after the double-click so the UI has time to update before a subsequent screenshot. Use delay_ms=0 to skip it.`),
+Use coordinates from find_elements (center_x/center_y) or a known fixed position. Do not guess coordinates.`),
 		mcp.WithNumber("x", mcp.Description("X coordinate in pixels from the left edge of the screen."), mcp.Required()),
 		mcp.WithNumber("y", mcp.Description("Y coordinate in pixels from the top edge of the screen."), mcp.Required()),
 		mcp.WithNumber("delay_ms", mcp.Description("Milliseconds to wait after the click for the UI to update (default: 100). Set to 0 to skip. Max: 10000.")),
@@ -685,17 +672,34 @@ Scroll 'down' to reveal content below, 'up' to go back up. For horizontal conten
 
 The response includes visible_text — the OCR text of the centre half of the screen after scrolling. Use this to know what is now on screen WITHOUT needing a separate read_screen_text or take_screenshot call.
 
+AMOUNT GUIDANCE — use small increments to avoid overshooting:
+- amount=3 (default): ~1/4 screen — use for fine positioning
+- amount=5: ~1/2 screen — use to reveal the next section
+- amount=10: ~full screen — jumps far, easy to overshoot; only use for large pages
+
+SEARCH WORKFLOW: scroll down by 5, check visible_text for your target; repeat if not found. Scroll up by 5 to backtrack if you overshoot.
+
 x and y are optional and default to the screen centre, which is correct for most page scrolling. Only specify them when scrolling a specific widget (e.g. a side panel or dropdown list).`),
 		mcp.WithNumber("x", mcp.Description("X coordinate to scroll at (pixels from left edge). Defaults to screen centre.")),
 		mcp.WithNumber("y", mcp.Description("Y coordinate to scroll at (pixels from top edge). Defaults to screen centre.")),
 		mcp.WithString("direction", mcp.Description("Scroll direction: 'up', 'down', 'left', or 'right'."), mcp.Required()),
-		mcp.WithNumber("amount", mcp.Description("Number of scroll steps (default: 3). Higher values scroll further.")),
+		mcp.WithNumber("amount", mcp.Description("Number of scroll steps (default: 3 ≈ 1/4 screen). amount=5 ≈ half screen. amount=10 jumps far — avoid for precise navigation.")),
 	), handleScroll)
 
 	mcpServer.AddTool(mcp.NewTool("type_text",
 		mcp.WithDescription(`Type text as keyboard input into the currently focused element. Click the target input field first to ensure it has focus before typing.
 
-For text fields: click the field, then call type_text. For special characters or control sequences (Enter, Tab, Ctrl+C), use press_key instead. After typing, take a screenshot to verify the text was entered correctly.`),
+NORMAL WORKFLOW:
+1. find_and_click {"text": "placeholder or label text"} → focuses the field
+2. type_text {"text": "your text"}
+
+IF THE FIELD HAS NO DETECTABLE TEXT (e.g. dark/empty placeholder):
+- Find a labeled button immediately next to the field (e.g. "Clear" button beside the input)
+- find_and_click {"text": "Clear"} → response includes box: {x, y, width, height}
+- The input field is to the LEFT: click_at {"x": box.x - 200, "y": box.y + box.height/2}
+- Then type_text
+
+For special characters or control sequences (Enter, Tab, Ctrl+C), use press_key instead. To verify the text was entered, use wait_for_text or read_screen_text on the input region — not a full screenshot.`),
 		mcp.WithString("text", mcp.Description("The exact text string to type. Supports Unicode. Do not include control characters — use press_key for Enter, Tab, Backspace etc."), mcp.Required()),
 	), handleTypeText)
 
@@ -707,19 +711,20 @@ Common uses: 'enter' to confirm/submit, 'tab' to move between fields, 'esc' to c
 	), handlePressKey)
 
 	mcpServer.AddTool(mcp.NewTool("take_screenshot",
-		mcp.WithDescription(`Capture the screen and return it as an image. Use this to see the current visual state.
+		mcp.WithDescription(`Capture the screen and return it as an image.
 
-NOTE: For finding where to click, prefer read_screen_text — it returns exact pixel coordinates for every word on screen, which is faster and more precise than estimating from a screenshot.
+🚫 DO NOT take a screenshot before clicking — use find_and_click instead.
+🚫 DO NOT take a screenshot after every click to verify — use wait_for_text instead.
+🚫 DO NOT take a screenshot to find a button's coordinates — use find_and_click or find_elements instead.
 
 WHEN TO USE take_screenshot:
-- At the start of a task to get a visual overview.
-- After move_mouse to verify the cursor landed on the correct target before clicking.
-- After a click or key press to confirm the expected UI change occurred.
-- When the target has no text (icon, image, progress bar) and read_screen_text cannot locate it.
+- The task explicitly requires seeing the visual layout (e.g. "describe the screen", "what color is the button").
+- The target has no text (icon, image, progress bar) so OCR cannot locate it.
+- Debugging: find_and_click or find_elements returned unexpected results and you need to see what is on screen.
 
 SPEED TIPS:
-- Use quality=85 (JPEG) for a ~10× smaller image — much faster for the model to process. Use this whenever pixel-perfect quality is not required.
-- Use region parameters (x, y, width, height) to capture only the relevant area. Smaller regions are faster to capture, encode, and process.`),
+- Use quality=85 (JPEG) for a ~10× smaller image — much faster for the model to process.
+- Use region parameters (x, y, width, height) to capture only the relevant area.`),
 		mcp.WithNumber("x", mcp.Description("X coordinate of the top-left corner of the capture region in pixels (default: 0).")),
 		mcp.WithNumber("y", mcp.Description("Y coordinate of the top-left corner of the capture region in pixels (default: 0).")),
 		mcp.WithNumber("width", mcp.Description("Width of the capture region in pixels (default: full screen width).")),

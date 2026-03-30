@@ -303,72 +303,52 @@ func TestIntegration_TakeScreenshot(t *testing.T) {
 	t.Logf("Screenshot: %dx%d, saved to %s", width, height, filepath)
 }
 
-// TestIntegration_FullWorkflow tests a complete automation workflow
+// TestIntegration_FullWorkflow tests a complete automation workflow against the fixture.
 func TestIntegration_FullWorkflow(t *testing.T) {
+	if os.Getenv("INTEGRATION") != "1" {
+		t.Skip("Integration tests not enabled")
+	}
+
 	skipIfNoGCC(t)
 	skipIfNoDisplay(t)
 
-	// Start fixture server
 	_, cleanup := startFixtureServer(t)
 	defer cleanup()
-
 	waitForFixture(t)
 
-	client, err := mcpclient.NewClient(mcpclient.Config{
-		Timeout: testTimeout,
-	})
+	client, err := mcpclient.NewClient(mcpclient.Config{Timeout: testTimeout})
 	if err != nil {
 		t.Fatalf("Failed to create MCP client: %v", err)
 	}
 	defer client.Close()
 
 	ctx := context.Background()
-
-	// Get screen size
-	width, height, err := client.GetScreenSize(ctx)
-	if err != nil {
-		t.Fatalf("GetScreenSize failed: %v", err)
-	}
-
-	// Move to center of screen (where fixture should be visible)
-	centerX := width / 2
-	centerY := height / 2
-	err = client.MoveMouse(ctx, centerX, centerY)
-	if err != nil {
-		t.Fatalf("MoveMouse failed: %v", err)
-	}
 	time.Sleep(settleTime)
 
-	// Move to a button area (approximate - depends on screen layout)
-	// This is a basic test; real tests would use image recognition
-	err = client.MoveMouse(ctx, centerX-200, centerY-100)
+	// Click the Primary button by text label — no coordinate guessing.
+	result, err := client.FindAndClick(ctx, "Primary", mcpclient.FindAndClickOptions{})
 	if err != nil {
-		t.Fatalf("MoveMouse failed: %v", err)
+		t.Fatalf("FindAndClick('Primary') failed: %v", err)
 	}
-	time.Sleep(settleTime)
-
-	// Click
-	err = client.Click(ctx, "left")
-	if err != nil {
-		t.Fatalf("Click failed: %v", err)
+	if !result.Success {
+		t.Fatalf("FindAndClick('Primary') reported failure: %+v", result)
 	}
-	time.Sleep(settleTime)
+	t.Logf("✓ Clicked Primary at (%d, %d)", result.ActualX, result.ActualY)
 
-	// Type some text
-	err = client.TypeText(ctx, "Integration test successful!")
+	// Click the text input field and type into it.
+	inputResult, err := client.FindAndClick(ctx, "Type here", mcpclient.FindAndClickOptions{})
 	if err != nil {
+		t.Fatalf("FindAndClick('Type here') failed: %v", err)
+	}
+	if !inputResult.Success {
+		t.Fatalf("FindAndClick('Type here') reported failure")
+	}
+
+	if err := client.TypeText(ctx, "Integration test"); err != nil {
 		t.Fatalf("TypeText failed: %v", err)
 	}
-	time.Sleep(settleTime)
 
-	// Press Enter
-	err = client.PressKey(ctx, "enter")
-	if err != nil {
-		t.Fatalf("PressKey failed: %v", err)
-	}
-	time.Sleep(settleTime)
-
-	t.Log("Full workflow completed successfully")
+	t.Log("✓ Full workflow completed successfully")
 }
 
 // TestIntegration_ScreenshotRegion tests region-specific screenshots
@@ -541,10 +521,17 @@ func TestIntegration_ToolDiscovery(t *testing.T) {
 		"get_screen_size",
 		"move_mouse",
 		"click",
+		"click_at",
+		"double_click",
+		"scroll",
 		"type_text",
 		"press_key",
 		"take_screenshot",
 		"read_screen_text",
+		"find_and_click",
+		"find_and_click_all",
+		"wait_for_text",
+		"find_elements",
 	}
 
 	for _, tool := range expectedTools {
@@ -756,6 +743,233 @@ func TestIntegration_ReadScreenTextInvalidRegion(t *testing.T) {
 	}
 
 	t.Log("✓ Invalid region correctly rejected")
+}
+
+// TestIntegration_FindAndClickButton verifies find_and_click against the fixture's
+// plain-text buttons (dark text, easily readable by grayscale OCR).
+func TestIntegration_FindAndClickButton(t *testing.T) {
+	if os.Getenv("INTEGRATION") != "1" {
+		t.Skip("Integration tests not enabled")
+	}
+
+	skipIfNoGCC(t)
+	skipIfNoDisplay(t)
+
+	_, cleanup := startFixtureServer(t)
+	defer cleanup()
+	waitForFixture(t)
+
+	client, err := mcpclient.NewClient(mcpclient.Config{Timeout: testTimeout})
+	if err != nil {
+		t.Fatalf("Failed to create MCP client: %v", err)
+	}
+	defer client.Close()
+
+	ctx := context.Background()
+	time.Sleep(settleTime)
+
+	for _, label := range []string{"Primary", "Success", "Warning"} {
+		t.Run(label, func(t *testing.T) {
+			result, err := client.FindAndClick(ctx, label, mcpclient.FindAndClickOptions{})
+			if err != nil {
+				t.Fatalf("FindAndClick(%q) error: %v", label, err)
+			}
+			if !result.Success {
+				t.Fatalf("FindAndClick(%q) not found", label)
+			}
+			t.Logf("✓ Clicked %q at (%d, %d)", label, result.ActualX, result.ActualY)
+			time.Sleep(settleTime)
+		})
+	}
+}
+
+// TestIntegration_FindAndClickColoredButton verifies that find_and_click can locate
+// the Info button, which has white text on a cyan/blue gradient background that is
+// invisible to grayscale OCR. This exercises the color-mode fallback in the 3-pass OCR.
+func TestIntegration_FindAndClickColoredButton(t *testing.T) {
+	if os.Getenv("INTEGRATION") != "1" {
+		t.Skip("Integration tests not enabled")
+	}
+
+	skipIfNoGCC(t)
+	skipIfNoDisplay(t)
+
+	_, cleanup := startFixtureServer(t)
+	defer cleanup()
+	waitForFixture(t)
+
+	client, err := mcpclient.NewClient(mcpclient.Config{Timeout: testTimeout})
+	if err != nil {
+		t.Fatalf("Failed to create MCP client: %v", err)
+	}
+	defer client.Close()
+
+	ctx := context.Background()
+	time.Sleep(settleTime)
+
+	result, err := client.FindAndClick(ctx, "Info", mcpclient.FindAndClickOptions{})
+	if err != nil {
+		t.Fatalf("FindAndClick('Info') error: %v", err)
+	}
+	if !result.Success {
+		t.Fatal("FindAndClick('Info') not found — color OCR fallback may have failed")
+	}
+	t.Logf("✓ Clicked Info button at (%d, %d)", result.ActualX, result.ActualY)
+}
+
+// TestIntegration_FindAndClickAll verifies find_and_click_all clicks multiple buttons
+// in one atomic OCR scan.
+func TestIntegration_FindAndClickAll(t *testing.T) {
+	if os.Getenv("INTEGRATION") != "1" {
+		t.Skip("Integration tests not enabled")
+	}
+
+	skipIfNoGCC(t)
+	skipIfNoDisplay(t)
+
+	_, cleanup := startFixtureServer(t)
+	defer cleanup()
+	waitForFixture(t)
+
+	client, err := mcpclient.NewClient(mcpclient.Config{Timeout: testTimeout})
+	if err != nil {
+		t.Fatalf("Failed to create MCP client: %v", err)
+	}
+	defer client.Close()
+
+	ctx := context.Background()
+	time.Sleep(settleTime)
+
+	result, err := client.CallToolString(ctx, "find_and_click_all", map[string]interface{}{
+		"texts":    `["Primary", "Success", "Warning"]`,
+		"delay_ms": 150,
+	})
+	if err != nil {
+		t.Fatalf("find_and_click_all error: %v", err)
+	}
+
+	var data struct {
+		Success      bool `json:"success"`
+		ClickedCount int  `json:"clicked_count"`
+	}
+	if err := json.Unmarshal([]byte(result), &data); err != nil {
+		t.Fatalf("Failed to parse result: %v\nraw: %s", err, result)
+	}
+	if !data.Success {
+		t.Fatalf("find_and_click_all reported failure: %s", result)
+	}
+	if data.ClickedCount != 3 {
+		t.Errorf("Expected 3 clicks, got %d", data.ClickedCount)
+	}
+	t.Logf("✓ find_and_click_all clicked %d buttons", data.ClickedCount)
+}
+
+// TestIntegration_FindElements verifies find_elements returns the fixture's button labels
+// with valid coordinates.
+func TestIntegration_FindElements(t *testing.T) {
+	if os.Getenv("INTEGRATION") != "1" {
+		t.Skip("Integration tests not enabled")
+	}
+
+	skipIfNoGCC(t)
+	skipIfNoDisplay(t)
+
+	_, cleanup := startFixtureServer(t)
+	defer cleanup()
+	waitForFixture(t)
+
+	client, err := mcpclient.NewClient(mcpclient.Config{Timeout: testTimeout})
+	if err != nil {
+		t.Fatalf("Failed to create MCP client: %v", err)
+	}
+	defer client.Close()
+
+	ctx := context.Background()
+	time.Sleep(settleTime)
+
+	result, err := client.CallToolString(ctx, "find_elements", nil)
+	if err != nil {
+		t.Fatalf("find_elements error: %v", err)
+	}
+
+	var data struct {
+		Success      bool `json:"success"`
+		ElementCount int  `json:"element_count"`
+		Elements     []struct {
+			Text      string  `json:"text"`
+			CenterX   int     `json:"center_x"`
+			CenterY   int     `json:"center_y"`
+			Width     int     `json:"width"`
+			Height    int     `json:"height"`
+			Confidence float64 `json:"confidence"`
+		} `json:"elements"`
+	}
+	if err := json.Unmarshal([]byte(result), &data); err != nil {
+		t.Fatalf("Failed to parse result: %v\nraw: %s", err, result)
+	}
+	if !data.Success {
+		t.Fatalf("find_elements reported failure")
+	}
+	if data.ElementCount == 0 {
+		t.Fatal("find_elements returned no elements")
+	}
+
+	// Every element must have valid coordinates.
+	for _, el := range data.Elements {
+		if el.CenterX <= 0 || el.CenterY <= 0 {
+			t.Errorf("Element %q has invalid center: (%d, %d)", el.Text, el.CenterX, el.CenterY)
+		}
+		if el.Width <= 0 || el.Height <= 0 {
+			t.Errorf("Element %q has invalid size: %dx%d", el.Text, el.Width, el.Height)
+		}
+	}
+
+	t.Logf("✓ find_elements returned %d elements", data.ElementCount)
+}
+
+// TestIntegration_WaitForText verifies wait_for_text detects text already on screen.
+func TestIntegration_WaitForText(t *testing.T) {
+	if os.Getenv("INTEGRATION") != "1" {
+		t.Skip("Integration tests not enabled")
+	}
+
+	skipIfNoGCC(t)
+	skipIfNoDisplay(t)
+
+	_, cleanup := startFixtureServer(t)
+	defer cleanup()
+	waitForFixture(t)
+
+	client, err := mcpclient.NewClient(mcpclient.Config{Timeout: testTimeout})
+	if err != nil {
+		t.Fatalf("Failed to create MCP client: %v", err)
+	}
+	defer client.Close()
+
+	ctx := context.Background()
+	time.Sleep(settleTime)
+
+	// "Button Click Tests" heading is always visible on the fixture page.
+	result, err := client.CallToolString(ctx, "wait_for_text", map[string]interface{}{
+		"text":       "Button Click Tests",
+		"timeout_ms": 5000,
+	})
+	if err != nil {
+		t.Fatalf("wait_for_text error: %v", err)
+	}
+
+	var data struct {
+		Success   bool   `json:"success"`
+		Visible   bool   `json:"visible"`
+		WaitedMS  int    `json:"waited_ms"`
+	}
+	if err := json.Unmarshal([]byte(result), &data); err != nil {
+		t.Fatalf("Failed to parse result: %v\nraw: %s", err, result)
+	}
+	if !data.Success || !data.Visible {
+		t.Fatalf("wait_for_text did not find 'Button Click Tests': %s", result)
+	}
+	t.Logf("✓ wait_for_text found text in %dms", data.WaitedMS)
 }
 
 // Helper function to parse tool result JSON

@@ -83,8 +83,8 @@ What do you need to do?
 ├─ See visual layout → take_screenshot
 │   └─ Use quality=85 for 10x smaller images
 │
-└─ Get text coordinates → read_screen_text
-    └─ Returns {x, y, width, height, center}
+└─ Read/verify text content → read_screen_text
+    └─ Returns {x, y, width, height, confidence}
 ```
 
 ### Example: Click Multiple Buttons (Your Scenario)
@@ -430,10 +430,7 @@ Discovers all clickable text elements on screen with their exact coordinates. Us
 // Step 2: Examine results - identify target by position/context
 // "Primary" at y=700 with width=80,height=35 is likely a button
 
-// Step 3: Verify with small screenshot (optional but recommended)
-{"tool": "take_screenshot", "arguments": {"x": 100, "y": 680, "width": 120, "height": 60}}
-
-// Step 4: Click if verified
+// Step 3: Click using center_x/center_y from the results
 {"tool": "click_at", "arguments": {"x": 140, "y": 717}}
 ```
 
@@ -464,18 +461,12 @@ The top section shows the status bar, four coloured buttons, and text input fiel
 
 **Button click workflow (using find_and_click):**
 ```json
-[
-  { "tool": "find_and_click",   "arguments": { "text": "PRIMARY" } },
-  { "tool": "take_screenshot",  "arguments": {} }
-]
+{ "tool": "find_and_click", "arguments": { "text": "PRIMARY" } }
 ```
 
 **Button click workflow (using click_at with known coordinates):**
 ```json
-[
-  { "tool": "click_at",        "arguments": { "x": 183, "y": 98 } },
-  { "tool": "take_screenshot", "arguments": {} }
-]
+{ "tool": "click_at", "arguments": { "x": 183, "y": 98 } }
 ```
 
 **Text input workflow:**
@@ -639,17 +630,14 @@ Targeting just the white OCR test panel at the bottom of the fixture gives a cle
 
 ### OCR-first workflow (recommended)
 
-Use `find_and_click` to locate and click elements by their visible text label — no coordinate guessing:
+Use `find_and_click` to locate and click elements by their visible text label — no coordinate guessing, no pre-scan needed:
 
 ```json
 [
-  { "tool": "get_screen_size",  "arguments": {} },
   { "tool": "find_and_click",   "arguments": { "text": "PRIMARY" } },
-  { "tool": "take_screenshot",  "arguments": {} },
   { "tool": "find_and_click",   "arguments": { "text": "Type here" } },
   { "tool": "type_text",        "arguments": { "text": "Automated test data" } },
-  { "tool": "find_and_click",   "arguments": { "text": "Option 1" } },
-  { "tool": "take_screenshot",  "arguments": {} }
+  { "tool": "find_and_click",   "arguments": { "text": "Option 1" } }
 ]
 ```
 
@@ -658,10 +646,11 @@ Use `find_and_click` to locate and click elements by their visible text label �
 ```json
 [
   { "tool": "find_and_click", "arguments": { "text": "Dropdown" } },
-  { "tool": "scroll",         "arguments": { "x": 400, "y": 400, "direction": "down", "amount": 3 } },
-  { "tool": "take_screenshot","arguments": {} }
+  { "tool": "scroll",         "arguments": { "x": 400, "y": 400, "direction": "down", "amount": 3 } }
 ]
 ```
+
+> The `scroll` response includes OCR text of the visible area after scrolling — no follow-up `read_screen_text` or screenshot needed.
 
 ### Form navigation with keyboard
 
@@ -847,8 +836,13 @@ Use `find_and_click` to locate and click elements by their visible text label ra
 { "tool": "click_at", "arguments": { "x": 400, "y": 300 } }
 ```
 
-### 3. Verify with screenshots
-Take a screenshot after key actions to confirm the UI changed as expected.
+### 3. Verify UI changes with wait_for_text, not screenshots
+After clicking, use `wait_for_text` to confirm the expected change occurred — it's faster and more reliable than a screenshot:
+```json
+{ "tool": "find_and_click", "arguments": { "text": "Save" } }
+{ "tool": "wait_for_text",  "arguments": { "text": "Saved", "timeout_ms": 5000 } }
+```
+Use `take_screenshot` only when the task explicitly requires seeing the visual layout.
 
 ### 4. Avoid the failsafe position
 Don't move the mouse to (0, 0) — this triggers an emergency shutdown.
@@ -882,18 +876,20 @@ absolute_y = word.y + region.y
 - Images, checkboxes, radio buttons without labels
 - Whether an element is actually clickable
 
-**RECOMMENDED: Verify before clicking unknown elements**
+**For known text labels — just use find_and_click directly:**
 ```json
-// Step 1: Find text elements
+{"tool": "find_and_click", "arguments": {"text": "Submit"}}
+```
+
+**When you don't know the exact label — use find_elements to discover it, then click:**
+```json
+// Step 1: Discover elements
 {"tool": "find_elements", "arguments": {"y": 600, "height": 200}}
 
-// Step 2: Identify target by position/context
+// Step 2: Identify target from results by position/text
 // "Submit" at y=700, width=80, height=35 → likely a button
 
-// Step 3: Verify with small screenshot
-{"tool": "take_screenshot", "arguments": {"x": 100, "y": 680, "width": 120, "height": 60}}
-
-// Step 4: Click when verified
+// Step 3: Click using the center coordinates from find_elements
 {"tool": "click_at", "arguments": {"x": 140, "y": 717}}
 ```
 
