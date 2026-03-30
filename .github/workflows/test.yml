@@ -157,14 +157,14 @@ jobs:
       if: matrix.os != 'macos-latest'
       run: go vet ./cmd/ghost-mcp/... || true
 
-    - name: Run format check (Linux/macOS)
-      if: runner.os != 'Windows'
+    - name: Run format check
       run: |
-        if [ "$(gofmt -l . | wc -l)" -gt 0 ]; then
+        if [ "$(gofmt -l . 2>/dev/null | wc -l)" -gt 0 ]; then
           echo "Go files are not formatted:"
           gofmt -d .
           exit 1
         fi
+      shell: bash
 
     - name: Test coverage (Linux only)
       if: matrix.os == 'ubuntu-latest'
