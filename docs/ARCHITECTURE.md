@@ -95,6 +95,7 @@ The `handler_ocr.go` pipeline leverages a pure-concurrency model to minimize lat
    - `Color`: Preserves color (no grayscale)
    - `Bright-Text`: Highlights pure-white letters
 3. **Short-Circuit Cancellation**: A synchronized `context.WithCancel` channel structure immediately aborts and garbage-collects all remaining fallback passes the millisecond a matched coordinate is found.
+4. **Fast Wait Polling**: `wait_for_text` polls every 100ms instead of 500ms, so UI transition checks return closer to the actual screen change rather than spending most of their latency budget asleep between captures.
 
 ### 6. Parameter Extraction Helpers
 

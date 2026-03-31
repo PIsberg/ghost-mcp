@@ -7,7 +7,9 @@ import (
 	"context"
 	"fmt"
 	"image"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/ghost-mcp/internal/ocr"
 	"github.com/mark3labs/mcp-go/mcp"
@@ -298,11 +300,67 @@ func TestParallelFindText_PreparesVariantsOnceAndUsesPreparedBytes(t *testing.T)
 	for name := range seen {
 		got[name] = true
 	}
-	if !got["color"] {
+	if !got["normal"] || !got["inverted"] || !got["bright"] || !got["color"] {
 		t.Fatalf("prepared bytes used = %v", got)
 	}
-	if len(got) < 2 {
-		t.Fatalf("expected more than one prepared pass to run, got %v", got)
+}
+
+func TestWaitForTextPollInterval_Is100ms(t *testing.T) {
+	if waitForTextPollInterval != 100*time.Millisecond {
+		t.Fatalf("waitForTextPollInterval = %v, want 100ms", waitForTextPollInterval)
+	}
+}
+
+func TestHandleWaitForText_UsesConfiguredPollInterval(t *testing.T) {
+	originalCapture := waitForTextCaptureImage
+	originalRead := waitForTextReadImage
+	originalSleep := waitForTextSleep
+	t.Cleanup(func() {
+		waitForTextCaptureImage = originalCapture
+		waitForTextReadImage = originalRead
+		waitForTextSleep = originalSleep
+	})
+
+	waitForTextCaptureImage = func(x, y, width, height int) (image.Image, error) {
+		return image.NewRGBA(image.Rect(0, 0, 2, 2)), nil
+	}
+	waitForTextReadImage = func(img image.Image, opts ocr.Options) (*ocr.Result, error) {
+		return &ocr.Result{}, nil
+	}
+
+	var slept []time.Duration
+	waitForTextSleep = func(d time.Duration) {
+		slept = append(slept, d)
+		time.Sleep(5 * time.Millisecond)
+	}
+
+	req := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{
+			Arguments: map[string]interface{}{
+				"text":       "NeverAppears",
+				"timeout_ms": float64(210),
+			},
+		},
+	}
+
+	result, err := handleWaitForText(context.Background(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !result.IsError {
+		t.Fatal("expected timeout error result")
+	}
+	if len(slept) == 0 {
+		t.Fatal("expected at least one sleep")
+	}
+	for _, d := range slept {
+		if d != waitForTextPollInterval {
+			t.Fatalf("sleep duration = %v, want %v", d, waitForTextPollInterval)
+		}
+	}
+	text := result.Content[0].(mcp.TextContent).Text
+	if !strings.Contains(text, "timeout waiting for text") {
+		t.Fatalf("unexpected result text: %s", text)
 	}
 }
 

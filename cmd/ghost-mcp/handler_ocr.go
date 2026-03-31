@@ -21,7 +21,12 @@ import (
 var (
 	prepareParallelOCRImageSet = ocr.PrepareParallelImageSet
 	readPreparedOCRImage       = ocr.ReadPreparedBytes
+	waitForTextCaptureImage    = func(x, y, width, height int) (image.Image, error) { return robotgo.CaptureImg(x, y, width, height) }
+	waitForTextReadImage       = ocr.ReadImage
+	waitForTextSleep           = time.Sleep
 )
+
+const waitForTextPollInterval = 100 * time.Millisecond
 
 func handleReadScreenText(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	logging.Debug("Handling read_screen_text request")
@@ -497,12 +502,10 @@ func handleWaitForText(ctx context.Context, request mcp.CallToolRequest) (*mcp.C
 	}
 
 	startTime := time.Now()
-	intervalMS := 500 // Check every 500ms
-
 	for time.Since(startTime) < time.Duration(timeoutMS)*time.Millisecond {
-		img, captureErr := robotgo.CaptureImg(regionX, regionY, regionW, regionH)
+		img, captureErr := waitForTextCaptureImage(regionX, regionY, regionW, regionH)
 		if captureErr == nil {
-			ocrResult, ocrErr := ocr.ReadImage(img, ocr.Options{})
+			ocrResult, ocrErr := waitForTextReadImage(img, ocr.Options{})
 			if ocrErr == nil {
 				_, _, _, _, found := findButtonBounds(ocrResult, text, 1)
 				if visible && found {
@@ -522,7 +525,7 @@ func handleWaitForText(ctx context.Context, request mcp.CallToolRequest) (*mcp.C
 			}
 		}
 
-		time.Sleep(time.Duration(intervalMS) * time.Millisecond)
+		waitForTextSleep(waitForTextPollInterval)
 	}
 
 	logging.Info("wait_for_text: timeout waiting for %q (visible=%v)", text, visible)
