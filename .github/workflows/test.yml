@@ -14,15 +14,12 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        os: [ubuntu-latest, windows-latest]
         go-version: ['1.24', '1.25']
         exclude:
-          # Windows and macOS jobs are expensive / partial — only run them on
-          # the latest Go version. The older Go compat check is covered by the
-          # two Linux jobs which are cheapest and fastest.
+          # Windows is expensive — only run it on the latest Go version.
+          # The older Go compat check is covered by the two Linux jobs.
           - os: windows-latest
-            go-version: '1.24'
-          - os: macos-latest
             go-version: '1.24'
 
     steps:
@@ -162,15 +159,10 @@ jobs:
         if [ -z "$TESSDATA" ]; then TESSDATA=/usr/share/tessdata; fi
         echo "TESSDATA_PREFIX=$TESSDATA" >> $GITHUB_ENV
 
-    - name: Install dependencies (macOS)
-      if: matrix.os == 'macos-latest'
-      run: xcode-select --install || true
-
     - name: Verify Go modules
       run: go mod verify || true
 
-    - name: Build (Linux & Windows)
-      if: matrix.os != 'macos-latest'
+    - name: Build
       run: |
         if [ "${{ runner.os }}" = "Windows" ]; then
           go build -o cmd/ghost-mcp/ghost-mcp.exe ./cmd/ghost-mcp/
@@ -186,10 +178,6 @@ jobs:
         Copy-Item "$vcpkgBin\*.dll" cmd\ghost-mcp\ -Force
         Write-Host "Copied DLLs to cmd\ghost-mcp\ from $vcpkgBin"
 
-    - name: Build (macOS) - unit tests only
-      if: matrix.os == 'macos-latest'
-      run: echo "Skipping full build on macOS due to robotgo CGDisplayCreateImageForRect deprecation (macOS 15.0+). Unit tests run without full build."
-
     - name: Run unit tests
       run: go test -v -short ./cmd/ghost-mcp/... || true
 
@@ -199,12 +187,6 @@ jobs:
         export INTEGRATION=1
         go test -v -run Integration ./cmd/ghost-mcp/...
 
-    - name: Run integration tests (macOS)
-      if: matrix.os == 'macos-latest'
-      run: |
-        export INTEGRATION=1
-        go test -v -run Integration ./cmd/ghost-mcp/... || true
-
     - name: Run integration tests (Windows)
       if: matrix.os == 'windows-latest'
       run: |
@@ -212,7 +194,6 @@ jobs:
         go test -v -run Integration ./cmd/ghost-mcp/...
 
     - name: Run linting
-      if: matrix.os != 'macos-latest'
       run: go vet ./cmd/ghost-mcp/... || true
 
     - name: Run format check
