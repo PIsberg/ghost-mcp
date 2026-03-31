@@ -18,6 +18,11 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 )
 
+var (
+	prepareParallelOCRImageSet = ocr.PrepareParallelImageSet
+	readPreparedOCRImage       = ocr.ReadPreparedBytes
+)
+
 func handleReadScreenText(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	logging.Debug("Handling read_screen_text request")
 
@@ -720,6 +725,12 @@ func parallelFindText(ctx context.Context, img image.Image, searchText string, n
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
+	prepared, err := prepareParallelOCRImageSet(img, grayscale)
+	if err != nil {
+		logging.Error("parallelFindText preprocessing failed: %v", err)
+		return 0, 0, 0, 0, false, ""
+	}
+
 	type match struct {
 		minX, minY, maxX, maxY int
 		pass                   string
@@ -727,7 +738,7 @@ func parallelFindText(ctx context.Context, img image.Image, searchText string, n
 	matches := make(chan match, 4)
 	var wg sync.WaitGroup
 
-	runPass := func(opts ocr.Options, name string) {
+	runPass := func(imgBytes []byte, name string) {
 		defer wg.Done()
 
 		select {
@@ -736,7 +747,7 @@ func parallelFindText(ctx context.Context, img image.Image, searchText string, n
 		default:
 		}
 
-		ocrResult, err := ocr.ReadImage(img, opts)
+		ocrResult, err := readPreparedOCRImage(imgBytes, ocr.ScaleFactor)
 		if err == nil && ocrResult != nil {
 			if bMinX, bMinY, bMaxX, bMaxY, bFound := findButtonBounds(ocrResult, searchText, nth); bFound {
 				select {
@@ -749,13 +760,13 @@ func parallelFindText(ctx context.Context, img image.Image, searchText string, n
 	}
 
 	wg.Add(1)
-	go runPass(ocr.Options{Color: !grayscale}, "normal")
+	go runPass(prepared.Normal, "normal")
 
 	if grayscale {
 		wg.Add(3)
-		go runPass(ocr.Options{Inverted: true}, "inverted")
-		go runPass(ocr.Options{BrightText: true}, "bright-text")
-		go runPass(ocr.Options{Color: true}, "color")
+		go runPass(prepared.Inverted, "inverted")
+		go runPass(prepared.BrightText, "bright-text")
+		go runPass(prepared.Color, "color")
 	}
 
 	go func() {

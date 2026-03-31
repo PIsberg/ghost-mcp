@@ -469,6 +469,39 @@ func TestReadImage_InvertedMode(t *testing.T) {
 	}
 }
 
+func TestPrepareParallelImageSet_GrayscaleIncludesAllVariants(t *testing.T) {
+	img := whiteImage(20, 10)
+	set, err := PrepareParallelImageSet(img, true)
+	if err != nil {
+		t.Fatalf("PrepareParallelImageSet: %v", err)
+	}
+	if len(set.Normal) == 0 || len(set.Inverted) == 0 || len(set.BrightText) == 0 || len(set.Color) == 0 {
+		t.Fatalf("expected all grayscale variants to be populated: %+v", map[string]int{
+			"normal":      len(set.Normal),
+			"inverted":    len(set.Inverted),
+			"bright_text": len(set.BrightText),
+			"color":       len(set.Color),
+		})
+	}
+}
+
+func TestPrepareParallelImageSet_ColorOnlyReusesBytes(t *testing.T) {
+	img := whiteImage(20, 10)
+	set, err := PrepareParallelImageSet(img, false)
+	if err != nil {
+		t.Fatalf("PrepareParallelImageSet: %v", err)
+	}
+	if len(set.Normal) == 0 || len(set.Color) == 0 {
+		t.Fatal("expected normal/color bytes to be populated")
+	}
+	if &set.Normal[0] != &set.Color[0] {
+		t.Fatal("expected non-grayscale path to reuse the same prepared bytes for normal and color")
+	}
+	if len(set.Inverted) != 0 || len(set.BrightText) != 0 {
+		t.Fatal("expected inverted and bright-text variants to stay empty when grayscale=false")
+	}
+}
+
 // BenchmarkToGrayscaleContrast_RGBA benchmarks the fast path (input is
 // *image.RGBA, the type returned by robotgo screen captures).
 func BenchmarkToGrayscaleContrast_RGBA(b *testing.B) {

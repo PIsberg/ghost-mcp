@@ -5,6 +5,8 @@ package main
 
 import (
 	"context"
+	"fmt"
+	"image"
 	"testing"
 
 	"github.com/ghost-mcp/internal/ocr"
@@ -238,5 +240,87 @@ func TestHandleFindClickAndTypeMissingTypeText(t *testing.T) {
 	}
 	if !result.IsError {
 		t.Error("Expected error result for missing type_text")
+	}
+}
+
+func TestParallelFindText_PreparesVariantsOnceAndUsesPreparedBytes(t *testing.T) {
+	originalPrepare := prepareParallelOCRImageSet
+	originalRead := readPreparedOCRImage
+	t.Cleanup(func() {
+		prepareParallelOCRImageSet = originalPrepare
+		readPreparedOCRImage = originalRead
+	})
+
+	var prepareCalls int
+	img := image.NewRGBA(image.Rect(0, 0, 10, 10))
+	prepared := &ocr.PreparedImageSet{
+		Normal:     []byte("normal"),
+		Inverted:   []byte("inverted"),
+		BrightText: []byte("bright"),
+		Color:      []byte("color"),
+	}
+	prepareParallelOCRImageSet = func(got image.Image, grayscale bool) (*ocr.PreparedImageSet, error) {
+		prepareCalls++
+		if got != img {
+			t.Fatalf("prepare called with unexpected image pointer")
+		}
+		if !grayscale {
+			t.Fatalf("expected grayscale=true")
+		}
+		return prepared, nil
+	}
+
+	seen := make(chan string, 4)
+	readPreparedOCRImage = func(imgBytes []byte, scaleFactor int) (*ocr.Result, error) {
+		seen <- string(imgBytes)
+		if scaleFactor != ocr.ScaleFactor {
+			t.Fatalf("scaleFactor = %d, want %d", scaleFactor, ocr.ScaleFactor)
+		}
+		if string(imgBytes) == "color" {
+			return &ocr.Result{Words: []ocr.Word{{Text: "Submit", X: 10, Y: 10, Width: 40, Height: 20, Confidence: 99}}}, nil
+		}
+		return &ocr.Result{}, nil
+	}
+
+	_, _, _, _, found, pass := parallelFindText(context.Background(), img, "Submit", 1, true)
+	if !found {
+		t.Fatal("expected text to be found")
+	}
+	if pass != "color" {
+		t.Fatalf("pass = %q, want color", pass)
+	}
+	if prepareCalls != 1 {
+		t.Fatalf("prepareCalls = %d, want 1", prepareCalls)
+	}
+
+	close(seen)
+	got := make(map[string]bool)
+	for name := range seen {
+		got[name] = true
+	}
+	if !got["color"] {
+		t.Fatalf("prepared bytes used = %v", got)
+	}
+	if len(got) < 2 {
+		t.Fatalf("expected more than one prepared pass to run, got %v", got)
+	}
+}
+
+func TestParallelFindText_PreprocessFailureReturnsNotFound(t *testing.T) {
+	originalPrepare := prepareParallelOCRImageSet
+	t.Cleanup(func() {
+		prepareParallelOCRImageSet = originalPrepare
+	})
+
+	prepareParallelOCRImageSet = func(image.Image, bool) (*ocr.PreparedImageSet, error) {
+		return nil, fmt.Errorf("boom")
+	}
+
+	_, _, _, _, found, pass := parallelFindText(context.Background(), image.NewRGBA(image.Rect(0, 0, 1, 1)), "Submit", 1, true)
+	if found {
+		t.Fatal("expected not found when preprocessing fails")
+	}
+	if pass != "" {
+		t.Fatalf("pass = %q, want empty", pass)
 	}
 }

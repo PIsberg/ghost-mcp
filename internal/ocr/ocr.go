@@ -195,18 +195,70 @@ func ReadFile(imagePath string, opts Options) (*Result, error) {
 // (e.g. from a screen capture) and does not want to pay the cost of writing a
 // temp file just to read it back.
 func ReadImage(img image.Image, opts Options) (*Result, error) {
+	prepared, err := PrepareImageSet(img, opts)
+	if err != nil {
+		return nil, err
+	}
+	return ReadPreparedBytes(prepared.Normal, ScaleFactor)
+}
+
+// PreparedImageSet stores preprocessed OCR-ready bytes so multiple passes can
+// reuse the expensive scaling work instead of each goroutine rebuilding it.
+type PreparedImageSet struct {
+	Normal     []byte
+	Inverted   []byte
+	BrightText []byte
+	Color      []byte
+}
+
+func PrepareImageSet(img image.Image, opts Options) (*PreparedImageSet, error) {
+	normal, err := encodeForOCR(img, ScaleFactor, opts)
+	if err != nil {
+		return nil, fmt.Errorf("preprocess image: %w", err)
+	}
+
+	return &PreparedImageSet{Normal: normal}, nil
+}
+
+func PrepareParallelImageSet(img image.Image, grayscale bool) (*PreparedImageSet, error) {
+	set := &PreparedImageSet{}
+
+	if grayscale {
+		var err error
+		if set.Normal, err = encodeForOCR(img, ScaleFactor, Options{}); err != nil {
+			return nil, fmt.Errorf("preprocess normal image: %w", err)
+		}
+		if set.Inverted, err = encodeForOCR(img, ScaleFactor, Options{Inverted: true}); err != nil {
+			return nil, fmt.Errorf("preprocess inverted image: %w", err)
+		}
+		if set.BrightText, err = encodeForOCR(img, ScaleFactor, Options{BrightText: true}); err != nil {
+			return nil, fmt.Errorf("preprocess bright-text image: %w", err)
+		}
+		if set.Color, err = encodeForOCR(img, ScaleFactor, Options{Color: true}); err != nil {
+			return nil, fmt.Errorf("preprocess color image: %w", err)
+		}
+		return set, nil
+	}
+
+	colorBytes, err := encodeForOCR(img, ScaleFactor, Options{Color: true})
+	if err != nil {
+		return nil, fmt.Errorf("preprocess color image: %w", err)
+	}
+	set.Normal = colorBytes
+	set.Color = colorBytes
+	return set, nil
+}
+
+// ReadPreparedBytes runs OCR on already-preprocessed image bytes.
+func ReadPreparedBytes(imgBytes []byte, scaleFactor int) (*Result, error) {
 	client := getPooledClient()
 	defer putPooledClient(client)
 
-	imgBytes, prepErr := encodeForOCR(img, ScaleFactor, opts)
-	if prepErr != nil {
-		return nil, fmt.Errorf("preprocess image: %w", prepErr)
-	}
 	if err := client.SetImageFromBytes(imgBytes); err != nil {
 		return nil, fmt.Errorf("set image from bytes: %w", err)
 	}
 
-	return readClientResult(client, ScaleFactor)
+	return readClientResult(client, scaleFactor)
 }
 
 func readClientResult(client ocrClient, scaleFactor int) (*Result, error) {
