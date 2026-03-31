@@ -8,10 +8,39 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/otiai10/gosseract/v2"
 )
+
+type fakeOCRClient struct {
+	id             int
+	setImageBytes  [][]byte
+	getBoxesCalls  int
+	pageSegModes   []gosseract.PageSegMode
+	boundingBoxes  []gosseract.BoundingBox
+	boundingBoxErr error
+}
+
+func (f *fakeOCRClient) SetImage(string) error { return nil }
+
+func (f *fakeOCRClient) SetImageFromBytes(data []byte) error {
+	f.setImageBytes = append(f.setImageBytes, append([]byte(nil), data...))
+	return nil
+}
+
+func (f *fakeOCRClient) SetPageSegMode(mode gosseract.PageSegMode) error {
+	f.pageSegModes = append(f.pageSegModes, mode)
+	return nil
+}
+
+func (f *fakeOCRClient) GetBoundingBoxes(gosseract.PageIteratorLevel) ([]gosseract.BoundingBox, error) {
+	f.getBoxesCalls++
+	return f.boundingBoxes, f.boundingBoxErr
+}
+
+func (f *fakeOCRClient) Close() error { return nil }
 
 // writePNG creates a temporary PNG file and returns its path.
 func writePNG(t *testing.T, img image.Image) string {
@@ -64,6 +93,88 @@ func TestPageSegMode_SparseText(t *testing.T) {
 func TestScaleFactor_AtLeastThree(t *testing.T) {
 	if ScaleFactor < 3 {
 		t.Errorf("ScaleFactor = %d; want >= 3 for reliable UI text recognition (96 DPI × 3 ≈ 288 DPI, Tesseract's optimal range)", ScaleFactor)
+	}
+}
+
+func TestPrimeClientPool_WarmsFourClients(t *testing.T) {
+	originalNewClient := newOCRClient
+	originalPool := clientPool
+	originalWarmOnce := warmClientOnce
+	t.Cleanup(func() {
+		newOCRClient = originalNewClient
+		clientPool = originalPool
+		warmClientOnce = originalWarmOnce
+	})
+
+	created := make([]*fakeOCRClient, 0, pooledClientWarmCount)
+	newOCRClient = func() ocrClient {
+		client := &fakeOCRClient{id: len(created) + 1}
+		created = append(created, client)
+		return client
+	}
+	clientPool = sync.Pool{
+		New: func() any {
+			c := newOCRClient()
+			_ = c.SetPageSegMode(gosseract.PSM_SPARSE_TEXT)
+			return c
+		},
+	}
+	warmClientOnce = sync.Once{}
+
+	primeClientPool()
+
+	if len(created) != pooledClientWarmCount {
+		t.Fatalf("created %d clients, want %d", len(created), pooledClientWarmCount)
+	}
+	for i, client := range created {
+		if len(client.pageSegModes) != 1 || client.pageSegModes[0] != gosseract.PSM_SPARSE_TEXT {
+			t.Fatalf("client %d page seg modes = %v, want [PSM_SPARSE_TEXT]", i, client.pageSegModes)
+		}
+		if client.getBoxesCalls != 1 {
+			t.Fatalf("client %d warm calls = %d, want 1", i, client.getBoxesCalls)
+		}
+		if len(client.setImageBytes) != 1 || len(client.setImageBytes[0]) == 0 {
+			t.Fatalf("client %d warm image bytes not set", i)
+		}
+	}
+}
+
+func TestGetPooledClient_ReusesPrimedClient(t *testing.T) {
+	originalNewClient := newOCRClient
+	originalPool := clientPool
+	originalWarmOnce := warmClientOnce
+	t.Cleanup(func() {
+		newOCRClient = originalNewClient
+		clientPool = originalPool
+		warmClientOnce = originalWarmOnce
+	})
+
+	created := make([]*fakeOCRClient, 0, pooledClientWarmCount)
+	newOCRClient = func() ocrClient {
+		client := &fakeOCRClient{id: len(created) + 1}
+		created = append(created, client)
+		return client
+	}
+	clientPool = sync.Pool{
+		New: func() any {
+			c := newOCRClient()
+			_ = c.SetPageSegMode(gosseract.PSM_SPARSE_TEXT)
+			return c
+		},
+	}
+	warmClientOnce = sync.Once{}
+
+	first := getPooledClient()
+	putPooledClient(first)
+	second := getPooledClient()
+
+	firstFake, ok1 := first.(*fakeOCRClient)
+	secondFake, ok2 := second.(*fakeOCRClient)
+	if !ok1 || !ok2 {
+		t.Fatalf("unexpected client types: %T and %T", first, second)
+	}
+	if firstFake != secondFake {
+		t.Fatalf("expected pooled client reuse, got ids %d and %d", firstFake.id, secondFake.id)
 	}
 }
 
@@ -386,7 +497,7 @@ func TestReadFile_MissingFile(t *testing.T) {
 	}
 }
 
-// Test disabled: Tesseract C++ API on Windows swallows invalid image format 
+// Test disabled: Tesseract C++ API on Windows swallows invalid image format
 // errors and returns an empty string without an error code via gosseract.
 /*
 func TestReadFile_NotAPNG(t *testing.T) {

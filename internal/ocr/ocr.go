@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"fmt"
 	"image"
+	"image/color"
 	"image/png"
 	"os"
 	"strings"
@@ -66,14 +67,36 @@ type Options struct {
 // Words below this are OCR noise and should be discarded.
 const MinConfidence = 30.0
 
+const pooledClientWarmCount = 4
+
+type ocrClient interface {
+	SetImage(string) error
+	SetImageFromBytes([]byte) error
+	SetPageSegMode(gosseract.PageSegMode) error
+	GetBoundingBoxes(gosseract.PageIteratorLevel) ([]gosseract.BoundingBox, error)
+	Close() error
+}
+
+type gosseractClient struct {
+	*gosseract.Client
+}
+
+var (
+	newOCRClient = func() ocrClient {
+		return gosseractClient{Client: gosseract.NewClient()}
+	}
+	warmClientOnce sync.Once
+	warmImageBytes = mustEncodeWarmupImage()
+)
+
 // clientPool gracefully recycles loaded Tesseract clients to eliminate the
 // ~200ms `eng.traineddata` disk-initialization latency for every concurrent OCR pass.
 // `sync.Pool` also relies on the natively embedded Go Garbage Collector to scale down and
 // destroy idle Tesseract pointers out of RAM organically, preventing memory leaks!
 var clientPool = sync.Pool{
 	New: func() any {
-		c := gosseract.NewClient()
-		// If we can't init, we silently return the client anyway, and let the 
+		c := newOCRClient()
+		// If we can't init, we silently return the client anyway, and let the
 		// caller handle an empty or errored SetImage. However, SetPageSegMode
 		// rarely fails unless Tesseract is missing completely on the OS level.
 		c.SetPageSegMode(gosseract.PSM_SPARSE_TEXT)
@@ -82,16 +105,50 @@ var clientPool = sync.Pool{
 }
 
 // getPooledClient pops a hot Tesseract client off the internal array or builds it.
-func getPooledClient() *gosseract.Client {
-	return clientPool.Get().(*gosseract.Client)
+func getPooledClient() ocrClient {
+	primeClientPool()
+	return clientPool.Get().(ocrClient)
 }
 
-// putPooledClient clears the memory-bound image pixel buffer out of C++ memory
-// and safely re-queues the client back into the idle pool.
-func putPooledClient(c *gosseract.Client) {
+// putPooledClient safely re-queues the client back into the idle pool.
+// gosseract does not expose a "clear current image" API, so the previous pix
+// buffer is released on the next SetImage*/Close call rather than at put time.
+func putPooledClient(c ocrClient) {
 	if c != nil {
 		clientPool.Put(c)
 	}
+}
+
+func primeClientPool() {
+	warmClientOnce.Do(func() {
+		warmed := make([]ocrClient, 0, pooledClientWarmCount)
+		for i := 0; i < pooledClientWarmCount; i++ {
+			client := clientPool.Get().(ocrClient)
+			_ = warmOCRClient(client)
+			warmed = append(warmed, client)
+		}
+		for _, client := range warmed {
+			clientPool.Put(client)
+		}
+	})
+}
+
+func warmOCRClient(client ocrClient) error {
+	if err := client.SetImageFromBytes(warmImageBytes); err != nil {
+		return err
+	}
+	_, err := client.GetBoundingBoxes(gosseract.RIL_WORD)
+	return err
+}
+
+func mustEncodeWarmupImage() []byte {
+	img := image.NewGray(image.Rect(0, 0, 1, 1))
+	img.SetGray(0, 0, color.Gray{Y: 255})
+	buf, err := encodeForOCR(img, 1, Options{})
+	if err != nil {
+		panic(fmt.Sprintf("encode warmup image: %v", err))
+	}
+	return buf
 }
 
 // ScaleFactor is how much we upscale the image before OCR.
@@ -126,36 +183,11 @@ func ReadFile(imagePath string, opts Options) (*Result, error) {
 	// runs the full Tesseract Init (loads tessdata). On all subsequent calls
 	// shouldInit==false so init() only sets the new pixel image — tessdata is
 	// already loaded in memory.
-	boxes, err := client.GetBoundingBoxes(gosseract.RIL_WORD)
+	result, err := readClientResult(client, ScaleFactor)
 	if err != nil {
 		return nil, fmt.Errorf("get bounding boxes: %w. Make sure Tesseract OCR is installed: https://github.com/tesseract-ocr/tesseract", err)
 	}
-
-	words := make([]Word, 0, len(boxes))
-	for _, b := range boxes {
-		if b.Word == "" || b.Confidence < MinConfidence {
-			continue
-		}
-		words = append(words, Word{
-			Text:       b.Word,
-			X:          b.Box.Min.X / ScaleFactor,
-			Y:          b.Box.Min.Y / ScaleFactor,
-			Width:      (b.Box.Max.X - b.Box.Min.X) / ScaleFactor,
-			Height:     (b.Box.Max.Y - b.Box.Min.Y) / ScaleFactor,
-			Confidence: b.Confidence,
-		})
-	}
-
-	// Reconstruct text from the filtered words so the text field matches words.
-	var sb strings.Builder
-	for i, w := range words {
-		if i > 0 {
-			sb.WriteByte(' ')
-		}
-		sb.WriteString(w.Text)
-	}
-
-	return &Result{Text: sb.String(), Words: words}, nil
+	return result, nil
 }
 
 // ReadImage runs OCR on an already-decoded image and returns structured output.
@@ -167,14 +199,17 @@ func ReadImage(img image.Image, opts Options) (*Result, error) {
 	defer putPooledClient(client)
 
 	imgBytes, prepErr := encodeForOCR(img, ScaleFactor, opts)
-	if prepErr == nil {
-		if err := client.SetImageFromBytes(imgBytes); err != nil {
-			return nil, fmt.Errorf("set image from bytes: %w", err)
-		}
-	} else {
+	if prepErr != nil {
 		return nil, fmt.Errorf("preprocess image: %w", prepErr)
 	}
+	if err := client.SetImageFromBytes(imgBytes); err != nil {
+		return nil, fmt.Errorf("set image from bytes: %w", err)
+	}
 
+	return readClientResult(client, ScaleFactor)
+}
+
+func readClientResult(client ocrClient, scaleFactor int) (*Result, error) {
 	boxes, err := client.GetBoundingBoxes(gosseract.RIL_WORD)
 	if err != nil {
 		return nil, fmt.Errorf("get bounding boxes: %w", err)
@@ -187,10 +222,10 @@ func ReadImage(img image.Image, opts Options) (*Result, error) {
 		}
 		words = append(words, Word{
 			Text:       b.Word,
-			X:          b.Box.Min.X / ScaleFactor,
-			Y:          b.Box.Min.Y / ScaleFactor,
-			Width:      (b.Box.Max.X - b.Box.Min.X) / ScaleFactor,
-			Height:     (b.Box.Max.Y - b.Box.Min.Y) / ScaleFactor,
+			X:          b.Box.Min.X / scaleFactor,
+			Y:          b.Box.Min.Y / scaleFactor,
+			Width:      (b.Box.Max.X - b.Box.Min.X) / scaleFactor,
+			Height:     (b.Box.Max.Y - b.Box.Min.Y) / scaleFactor,
 			Confidence: b.Confidence,
 		})
 	}
