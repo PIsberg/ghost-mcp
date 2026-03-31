@@ -231,7 +231,7 @@ func TestFixture_FindClickAndType(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed find_click_and_type: %v", err)
 	}
-	
+
 	if !strings.Contains(result, `"success":true`) {
 		t.Fatalf("Tool returned error: %s", result)
 	}
