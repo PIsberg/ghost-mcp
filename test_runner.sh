@@ -119,7 +119,7 @@ if [ "$TEST_TYPE" == "integration" ]; then
 
     echo "[INFO] Running integration tests..."
     echo ""
-    INTEGRATION=1 go test -v -run Integration ./cmd/ghost-mcp/...
+    INTEGRATION=1 go test -v -tags integration -run TestIntegration ./cmd/ghost-mcp/...
     goto_summary
 fi
 
@@ -152,7 +152,7 @@ if [ "$TEST_TYPE" == "all" ]; then
     # Ensure cleanup on exit
     trap "kill $FIXTURE_PID 2>/dev/null || true" EXIT
 
-    INTEGRATION=1 go test -v -run Integration ./cmd/ghost-mcp/...
+    INTEGRATION=1 go test -v -tags integration -run TestIntegration ./cmd/ghost-mcp/...
     goto_summary
 fi
 

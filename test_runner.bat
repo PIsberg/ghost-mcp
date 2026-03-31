@@ -132,7 +132,7 @@ if "%TEST_TYPE%"=="integration" (
     echo [INFO] Running integration tests...
     echo.
     set INTEGRATION=1
-    go test -v -run Integration ./cmd/ghost-mcp/...
+    go test -v -tags integration -run TestIntegration ./cmd/ghost-mcp/...
     goto :summary
 )
 
@@ -163,7 +163,7 @@ if "%TEST_TYPE%"=="all" (
     timeout /t 3 /nobreak >nul
 
     set INTEGRATION=1
-    go test -v -run Integration ./cmd/ghost-mcp/...
+    go test -v -tags integration -run TestIntegration ./cmd/ghost-mcp/...
     goto :summary
 )
 

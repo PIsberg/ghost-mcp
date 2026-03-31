@@ -186,23 +186,59 @@ jobs:
     - name: Run unit tests
       run: go test -v -short ./cmd/ghost-mcp/... || true
 
+    - name: Start fixture server and browser (Linux)
+      if: matrix.os == 'ubuntu-latest'
+      run: |
+        # Start the fixture HTTP server in the background
+        go run ./cmd/ghost-mcp/test_fixture/fixture_server.go &
+        # Poll until it responds (up to 15 s)
+        for i in $(seq 1 15); do
+          curl -sf http://localhost:8765 > /dev/null && echo "Fixture server ready" && break
+          sleep 1
+        done
+        # Open Google Chrome on the Xvfb display so OCR tests can see the fixture UI
+        DISPLAY=:99 google-chrome --no-sandbox --disable-gpu http://localhost:8765 &
+        sleep 3
+
     - name: Run integration tests (Linux)
       if: matrix.os == 'ubuntu-latest'
       run: |
         export INTEGRATION=1
-        go test -v -run Integration ./cmd/ghost-mcp/...
+        go test -v -tags integration -run TestIntegration ./cmd/ghost-mcp/...
 
-    - name: Run integration tests (macOS)
-      if: matrix.os == 'macos-latest'
+    - name: Start fixture server and browser (Windows)
+      if: matrix.os == 'windows-latest'
       run: |
-        export INTEGRATION=1
-        go test -v -run Integration ./cmd/ghost-mcp/... || true
+        # Start the fixture HTTP server in the background
+        Start-Process -FilePath "go" `
+          -ArgumentList "run", "./cmd/ghost-mcp/test_fixture/fixture_server.go" `
+          -WindowStyle Hidden
+        # Poll until it responds (up to 15 s)
+        $ready = $false
+        for ($i = 0; $i -lt 15; $i++) {
+          try {
+            Invoke-WebRequest "http://localhost:8765" -UseBasicParsing -ErrorAction Stop | Out-Null
+            $ready = $true
+            Write-Host "Fixture server ready"
+            break
+          } catch { Start-Sleep 1 }
+        }
+        if (-not $ready) { Write-Warning "Fixture server did not respond in time" }
+        # Open Edge on the runner display so OCR tests can see the fixture UI
+        Start-Process "msedge" -ArgumentList "http://localhost:8765"
+        Start-Sleep 3
 
     - name: Run integration tests (Windows)
       if: matrix.os == 'windows-latest'
       run: |
         $env:INTEGRATION = "1"
-        go test -v -run Integration ./cmd/ghost-mcp/...
+        go test -v -tags integration -run TestIntegration ./cmd/ghost-mcp/...
+
+    - name: Run integration tests (macOS)
+      if: matrix.os == 'macos-latest'
+      run: |
+        export INTEGRATION=1
+        go test -v -tags integration -run TestIntegration ./cmd/ghost-mcp/... || true
 
     - name: Run linting
       if: matrix.os != 'macos-latest'

@@ -135,7 +135,7 @@ test_runner.bat integration
 # Direct go test
 set INTEGRATION=1  # Windows
 export INTEGRATION=1  # macOS/Linux
-go test -v -run Integration ./...
+go test -v -tags integration -run TestIntegration ./...
 ```
 
 #### All Tests
@@ -456,7 +456,7 @@ jobs:
         Xvfb :99 &
         export DISPLAY=:99
         export INTEGRATION=1
-        go test -v -run Integration ./...
+        go test -v -tags integration -run TestIntegration ./...
 ```
 
 ## Test Coverage
