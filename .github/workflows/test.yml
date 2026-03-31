@@ -38,12 +38,24 @@ jobs:
     - name: Tidy Go modules
       run: go mod tidy
 
+    - name: Cache apt packages (Linux)
+      if: matrix.os == 'ubuntu-latest'
+      uses: awalsh128/cache-apt-pkgs-action@4c82f82f6e23d1fc1f99f7e449aec854b79e9b3c # v1.4.3
+      with:
+        packages: >-
+          gcc libx11-dev libx11-xcb-dev libxcb1-dev libxkbcommon-dev
+          libxkbcommon-x11-dev libxext-dev xorg-dev libxtst-dev libpng-dev
+          xvfb tesseract-ocr libleptonica-dev libtesseract-dev
+        version: 1
+
     - name: Install dependencies (Linux)
       if: matrix.os == 'ubuntu-latest'
       run: |
-        sudo apt-get update
+        # apt-get install is still run so packages are registered, but the
+        # cache-apt-pkgs-action above restores the downloaded .deb files so
+        # the actual network fetch is skipped on cache hit (~3-5 min saved).
+        sudo apt-get update -q
         sudo apt-get install -y gcc libx11-dev libx11-xcb-dev libxcb1-dev libxkbcommon-dev libxkbcommon-x11-dev libxext-dev xorg-dev libxtst-dev libpng-dev xvfb
-        # Install Tesseract OCR and Leptonica for gosseract
         sudo apt-get install -y tesseract-ocr libleptonica-dev libtesseract-dev
 
     - name: Install MinGW (Windows)
