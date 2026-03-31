@@ -84,6 +84,15 @@ func containsIgnoreCase(s, substr string) bool {
 	return strings.Contains(strings.ToLower(s), strings.ToLower(substr))
 }
 
+func scrollFixtureToTop(t *testing.T, ctx context.Context, client *mcpclient.Client) {
+	t.Helper()
+	for i := 0; i < 4; i++ {
+		if err := client.PressKey(ctx, "home"); err == nil {
+			time.Sleep(150 * time.Millisecond)
+		}
+	}
+}
+
 // =============================================================================
 // BUTTON TESTS
 // =============================================================================
@@ -657,6 +666,122 @@ func TestFixture_ClearLog(t *testing.T) {
 		t.Errorf("Expected 'Log cleared' in event log: %s", logResult)
 	}
 	t.Logf("✓ Clear Log button at (%d, %d) reset the event log", result.ActualX, result.ActualY)
+}
+
+// =============================================================================
+// SCROLL TESTS
+// =============================================================================
+
+// TestFixture_ScrollUntilText_ClearLog verifies the bounded page-search helper
+// can locate a lower-page control without oscillating through manual scroll loops.
+func TestFixture_ScrollUntilText_ClearLog(t *testing.T) {
+	client, ctx, cleanup := setupFixtureTest(t)
+	defer cleanup()
+
+	scrollFixtureToTop(t, ctx, client)
+
+	result, err := client.CallToolString(ctx, "scroll_until_text", map[string]interface{}{
+		"text":      "Clear Log",
+		"direction": "down",
+		"amount":    5,
+		"max_steps": 8,
+		"delay_ms":  100,
+	})
+	if err != nil {
+		t.Fatalf("scroll_until_text failed: %v", err)
+	}
+
+	var data struct {
+		Success        bool   `json:"success"`
+		Found          bool   `json:"found"`
+		Text           string `json:"text"`
+		StepsTaken     int    `json:"steps_taken"`
+		MaxSteps       int    `json:"max_steps"`
+		StopReason     string `json:"stop_reason"`
+		BoundaryLikely bool   `json:"boundary_likely"`
+		VisibleText    string `json:"visible_text"`
+	}
+	if err := json.Unmarshal([]byte(result), &data); err != nil {
+		t.Fatalf("scroll_until_text returned invalid JSON: %v\nraw: %s", err, result)
+	}
+	if !data.Success {
+		t.Fatalf("scroll_until_text did not report success: %s", result)
+	}
+	if !data.Found {
+		t.Fatalf("expected to find Clear Log while scrolling, got: %s", result)
+	}
+	if data.StopReason != "found" && data.StopReason != "already_visible" {
+		t.Fatalf("unexpected stop_reason %q in: %s", data.StopReason, result)
+	}
+	if !containsIgnoreCase(data.VisibleText, "Clear Log") {
+		t.Fatalf("post-scroll OCR does not contain Clear Log: %s", result)
+	}
+
+	clickResult, err := client.FindAndClick(ctx, "Clear Log", mcpclient.FindAndClickOptions{Button: "left"})
+	if err != nil {
+		t.Fatalf("FindAndClick('Clear Log') after scroll_until_text failed: %v", err)
+	}
+	if !clickResult.Success {
+		t.Fatalf("FindAndClick('Clear Log') did not report success")
+	}
+	verifyLastAction(t, ctx, client, "Log cleared")
+	t.Logf("✓ scroll_until_text found Clear Log in %d step(s)", data.StepsTaken)
+}
+
+// TestFixture_Scroll_StructuredFeedback verifies scroll returns the additional
+// search-friendly fields needed to avoid blind up/down oscillation.
+func TestFixture_Scroll_StructuredFeedback(t *testing.T) {
+	client, ctx, cleanup := setupFixtureTest(t)
+	defer cleanup()
+
+	scrollFixtureToTop(t, ctx, client)
+
+	result, err := client.CallToolString(ctx, "scroll", map[string]interface{}{
+		"direction":   "down",
+		"amount":      5,
+		"search_text": "Clear Log",
+	})
+	if err != nil {
+		t.Fatalf("scroll failed: %v", err)
+	}
+
+	var data struct {
+		Success         bool   `json:"success"`
+		Direction       string `json:"direction"`
+		Amount          int    `json:"amount"`
+		SearchText      string `json:"search_text"`
+		TextFound       bool   `json:"text_found"`
+		VisibleText     string `json:"visible_text"`
+		VisibleTextHash string `json:"visible_text_hash"`
+		ViewportChanged bool   `json:"viewport_changed"`
+		BoundaryLikely  bool   `json:"boundary_likely"`
+	}
+	if err := json.Unmarshal([]byte(result), &data); err != nil {
+		t.Fatalf("scroll returned invalid JSON: %v\nraw: %s", err, result)
+	}
+	if !data.Success {
+		t.Fatalf("scroll did not report success: %s", result)
+	}
+	if data.Direction != "down" {
+		t.Fatalf("Direction = %q; want down", data.Direction)
+	}
+	if data.Amount != 5 {
+		t.Fatalf("Amount = %d; want 5", data.Amount)
+	}
+	if data.SearchText != "Clear Log" {
+		t.Fatalf("SearchText = %q; want Clear Log", data.SearchText)
+	}
+	if data.VisibleTextHash == "" {
+		t.Fatalf("VisibleTextHash must not be empty: %s", result)
+	}
+	if data.VisibleText == "" {
+		t.Fatalf("VisibleText must not be empty: %s", result)
+	}
+	if !data.ViewportChanged && !data.BoundaryLikely {
+		t.Fatalf("expected either viewport change or boundary detection: %s", result)
+	}
+
+	t.Logf("✓ scroll returned structured feedback (changed=%t boundary=%t found=%t)", data.ViewportChanged, data.BoundaryLikely, data.TextFound)
 }
 
 // =============================================================================

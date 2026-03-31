@@ -524,6 +524,7 @@ func TestIntegration_ToolDiscovery(t *testing.T) {
 		"click_at",
 		"double_click",
 		"scroll",
+		"scroll_until_text",
 		"type_text",
 		"press_key",
 		"take_screenshot",

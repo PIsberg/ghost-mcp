@@ -34,7 +34,7 @@ Ghost MCP allows AI assistants like Claude to control your computer's mouse, key
 | `click` | Click mouse at current cursor position. Use `move_mouse` first. | `button` (left/right/middle) |
 | `click_at` | Move mouse to coordinates and click in one operation. Preferred over separate move+click. | `x`, `y`, `button` (optional, default left) |
 | `double_click` | Move mouse to coordinates and double-click. Use for opening files or activating items. | `x`, `y` |
-| `scroll` | Move mouse to coordinates and scroll the wheel. | `x`, `y`, `direction` (up/down/left/right), `amount` (optional, default 3) |
+| `scroll` | Move mouse to coordinates and scroll the wheel with OCR-based feedback about what changed. | `x`, `y`, `direction` (up/down/left/right), `amount` (optional, default 3), `search_text` |
 | `type_text` | Type text via keyboard. Use for input fields. | `text`, `press_enter` (optional, hit enter after typing) |
 | `click_and_type` | Move mouse, click, wait slightly, and type text. Fast unified atomic operation. | `x`, `y`, `type_text`, `button`, `delay_ms`, `press_enter` |
 | `press_key` | Press a single key. Use for Enter, Tab, shortcuts, etc. | `key` |
@@ -50,6 +50,7 @@ Ghost MCP allows AI assistants like Claude to control your computer's mouse, key
 | `find_and_click_all` ⭐ | Click multiple buttons in ONE atomic operation. | `texts` (array), `button`, `delay_ms` |
 | `wait_for_text` ⭐ | Wait for text to appear or disappear. Verify UI changes. | `text`, `visible`, `timeout_ms`, `x`, `y`, `width`, `height` |
 | `find_elements` ⭐ | Discover all clickable text elements with coordinates. Fast alternative to screenshots. | `x`, `y`, `width`, `height` |
+| `scroll_until_text` ⭐ | Search a long page in bounded steps until text appears or the page edge is reached. | `text`, `direction`, `amount`, `max_steps`, `delay_ms`, `x`, `y` |
 
 > **Note:** OCR tools require Tesseract to be installed and `TESSDATA_PREFIX` to be set. The installation scripts handle this automatically. See [Prerequisites](#prerequisites).
 
@@ -58,6 +59,8 @@ Ghost MCP allows AI assistants like Claude to control your computer's mouse, key
 - **`find_and_click_all`** - Click 3 buttons with ONE call instead of 3+ verification loops (75% faster)
 - **`wait_for_text`** - Properly verify UI state changes instead of guessing with screenshots
 - **`find_elements`** - Discover all clickable elements 10x faster than taking screenshots
+- **`scroll_until_text`** - Search long pages without manual up/down scroll loops
+- **`scroll` structured feedback** - Reports `viewport_changed`, `boundary_likely`, and optional `text_found`
 
 ## Prerequisites
 
@@ -318,7 +321,14 @@ Once connected, AI clients can use the tools like this:
   "tool": "scroll",
   "arguments": {"x": 960, "y": 540, "direction": "down", "amount": 5}
 }
-// Response: {"success": true, "x": 960, "y": 540, "direction": "down", "amount": 5}
+// Response: {"success": true, "x": 960, "y": 540, "direction": "down", "amount": 5, "visible_text": "...", "visible_text_hash": "3f...", "viewport_changed": true, "boundary_likely": false, "text_found": false}
+
+// Search a long page without manual scroll loops
+{
+  "tool": "scroll_until_text",
+  "arguments": {"text": "Clear Log", "direction": "down", "amount": 5, "max_steps": 8}
+}
+// Response: {"success": true, "found": true, "text": "Clear Log", "steps_taken": 4, "stop_reason": "found", "visible_text": "..."}
 
 // Type text into the focused field
 {
@@ -598,6 +608,10 @@ GOOS=darwin GOARCH=amd64 go build -o ghost-mcp -ldflags="-s -w" ./cmd/ghost-mcp/
 # Linux
 GOOS=linux GOARCH=amd64 go build -o ghost-mcp -ldflags="-s -w" ./cmd/ghost-mcp/
 ```
+
+### LOGS
+
+ Get-Content -Path C:\Users\isber\AppData\Roaming\ghost-mcp\audit\ghost-mcp-audit-2026-03-31.jsonl -Wait
 
 ## Architecture
 

@@ -14,6 +14,7 @@ import (
 
 	"github.com/ghost-mcp/internal/audit"
 	"github.com/ghost-mcp/internal/logging"
+	"github.com/ghost-mcp/internal/ocr"
 	"github.com/ghost-mcp/internal/validate"
 	"github.com/mark3labs/mcp-go/mcp"
 )
@@ -144,6 +145,94 @@ func TestGetIntParamInvalidType(t *testing.T) {
 	_, err := getIntParam(request, "test_param")
 	if err == nil {
 		t.Error("Expected error for invalid type, got nil")
+	}
+}
+
+func TestNormalizeVisibleText(t *testing.T) {
+	got := normalizeVisibleText("  Success!\nInfo\tPanel 42  ")
+	want := "success info panel 42"
+	if got != want {
+		t.Fatalf("normalizeVisibleText() = %q, want %q", got, want)
+	}
+}
+
+func TestBuildScrollFeedbackDetectsBoundary(t *testing.T) {
+	before := scrollOCRSnapshot{
+		VisibleText: "Section A",
+		Normalized:  "section a",
+		Hash:        hashVisibleText("section a"),
+	}
+	after := scrollOCRSnapshot{
+		VisibleText: "Section A",
+		Normalized:  "section a",
+		Hash:        hashVisibleText("section a"),
+	}
+
+	got := buildScrollFeedback(before, after, "down", "target")
+	if got.ViewportChanged {
+		t.Fatal("ViewportChanged = true, want false")
+	}
+	if !got.BoundaryLikely {
+		t.Fatal("BoundaryLikely = false, want true")
+	}
+	if got.TextFound {
+		t.Fatal("TextFound = true, want false")
+	}
+}
+
+func TestBuildScrollFeedbackFindsSearchText(t *testing.T) {
+	before := scrollOCRSnapshot{
+		VisibleText: "overview",
+		Normalized:  "overview",
+		Hash:        hashVisibleText("overview"),
+	}
+	after := scrollOCRSnapshot{
+		VisibleText: "Settings Panel Save Changes",
+		Normalized:  "settings panel save changes",
+		Hash:        hashVisibleText("settings panel save changes"),
+	}
+
+	got := buildScrollFeedback(before, after, "down", "save")
+	if !got.ViewportChanged {
+		t.Fatal("ViewportChanged = false, want true")
+	}
+	if got.BoundaryLikely {
+		t.Fatal("BoundaryLikely = true, want false")
+	}
+	if !got.TextFound {
+		t.Fatal("TextFound = false, want true")
+	}
+}
+
+func TestFindScrollMatchReturnsBoundingBox(t *testing.T) {
+	snapshot := scrollOCRSnapshot{
+		OCRResult: &ocr.Result{
+			Words: []ocr.Word{
+				{Text: "Type", X: 100, Y: 200, Width: 40, Height: 20},
+				{Text: "here", X: 148, Y: 200, Width: 38, Height: 20},
+				{Text: "Label", X: 300, Y: 300, Width: 50, Height: 20},
+			},
+		},
+	}
+
+	got, ok := findScrollMatch(snapshot, "Type here")
+	if !ok {
+		t.Fatal("findScrollMatch() = not found, want found")
+	}
+	if got.BoxX != 100 || got.BoxY != 200 {
+		t.Fatalf("Box origin = (%d,%d), want (100,200)", got.BoxX, got.BoxY)
+	}
+	if got.BoxWidth != 86 || got.BoxHeight != 20 {
+		t.Fatalf("Box size = %dx%d, want 86x20", got.BoxWidth, got.BoxHeight)
+	}
+	if got.RequestedX != 143 || got.RequestedY != 210 {
+		t.Fatalf("Requested center = (%d,%d), want (143,210)", got.RequestedX, got.RequestedY)
+	}
+}
+
+func TestFindScrollMatchMissingOCRResult(t *testing.T) {
+	if _, ok := findScrollMatch(scrollOCRSnapshot{}, "Type here"); ok {
+		t.Fatal("findScrollMatch() = found, want not found")
 	}
 }
 
