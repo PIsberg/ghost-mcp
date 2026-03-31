@@ -1,10 +1,10 @@
 {
-  "generated_at": "2026-03-31T23:01:38",
+  "generated_at": "2026-03-31T23:11:45",
   "label": "baseline",
   "git": {
-    "ref": "origin/main",
-    "short_commit": "53cebc2",
     "branch": "origin/main",
+    "short_commit": "53cebc2",
+    "ref": "origin/main",
     "commit": "53cebc212201a10928adeae4cfd3579215e8ee25"
   },
   "benchmark_regex": "Benchmark(ReadImage_FixturePanel|ParallelFindText_FixtureButtons)",
@@ -13,64 +13,64 @@
     "BenchmarkReadImage_FixturePanel_Color": {
       "runs": [
         {
-          "ns_per_op": 6396334900.0,
+          "ns_per_op": 6576358000.0,
           "bytes_per_op": 1070724632.0,
           "allocs_per_op": 108.0
         },
         {
-          "ns_per_op": 6350655800.0,
+          "ns_per_op": 6704255300.0,
           "bytes_per_op": 1070724632.0,
           "allocs_per_op": 108.0
         },
         {
-          "ns_per_op": 6525298200.0,
+          "ns_per_op": 6586394000.0,
           "bytes_per_op": 1070724632.0,
           "allocs_per_op": 108.0
         },
         {
-          "ns_per_op": 6591133200.0,
-          "bytes_per_op": 1070724632.0,
-          "allocs_per_op": 108.0
+          "ns_per_op": 6542954300.0,
+          "bytes_per_op": 1070724648.0,
+          "allocs_per_op": 109.0
         },
         {
-          "ns_per_op": 6446378600.0,
+          "ns_per_op": 6645031300.0,
           "bytes_per_op": 1070724632.0,
           "allocs_per_op": 108.0
         }
       ],
-      "median_ns_per_op": 6446378600.0,
+      "median_ns_per_op": 6586394000.0,
       "median_bytes_per_op": 1070724632.0,
       "median_allocs_per_op": 108.0
     },
     "BenchmarkReadImage_FixturePanel_Grayscale": {
       "runs": [
         {
-          "ns_per_op": 3737860100.0,
+          "ns_per_op": 3638999900.0,
           "bytes_per_op": 857208408.0,
           "allocs_per_op": 108.0
         },
         {
-          "ns_per_op": 3661346100.0,
-          "bytes_per_op": 857208408.0,
-          "allocs_per_op": 108.0
-        },
-        {
-          "ns_per_op": 3592349600.0,
-          "bytes_per_op": 857213656.0,
-          "allocs_per_op": 115.0
-        },
-        {
-          "ns_per_op": 3631785200.0,
-          "bytes_per_op": 857208504.0,
+          "ns_per_op": 3585952500.0,
+          "bytes_per_op": 857208424.0,
           "allocs_per_op": 109.0
         },
         {
-          "ns_per_op": 3509152800.0,
+          "ns_per_op": 3529152500.0,
           "bytes_per_op": 857208408.0,
           "allocs_per_op": 108.0
+        },
+        {
+          "ns_per_op": 3633466700.0,
+          "bytes_per_op": 857208408.0,
+          "allocs_per_op": 108.0
+        },
+        {
+          "ns_per_op": 3709766500.0,
+          "bytes_per_op": 857208504.0,
+          "allocs_per_op": 109.0
         }
       ],
-      "median_ns_per_op": 3631785200.0,
+      "median_ns_per_op": 3633466700.0,
       "median_bytes_per_op": 857208408.0,
       "median_allocs_per_op": 108.0
     }

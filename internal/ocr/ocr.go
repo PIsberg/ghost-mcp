@@ -324,10 +324,7 @@ func encodeForOCR(img image.Image, factor int, opts Options) ([]byte, error) {
 	var scaledImg image.Image
 	if opts.BrightText {
 		preprocessed := brightTextToGray(img, 240)
-		b := preprocessed.Bounds()
-		dst := image.NewGray(image.Rect(0, 0, b.Dx()*factor, b.Dy()*factor))
-		draw.NearestNeighbor.Scale(dst, dst.Bounds(), preprocessed, b, draw.Over, nil)
-		scaledImg = dst
+		scaledImg = scaleGrayNearest(preprocessed, factor)
 	} else if opts.Color {
 		b := img.Bounds()
 		dst := image.NewRGBA(image.Rect(0, 0, b.Dx()*factor, b.Dy()*factor))
@@ -338,10 +335,7 @@ func encodeForOCR(img image.Image, factor int, opts Options) ([]byte, error) {
 		if opts.Inverted {
 			invertGray(preprocessed)
 		}
-		b := preprocessed.Bounds()
-		dst := image.NewGray(image.Rect(0, 0, b.Dx()*factor, b.Dy()*factor))
-		draw.NearestNeighbor.Scale(dst, dst.Bounds(), preprocessed, b, draw.Over, nil)
-		scaledImg = dst
+		scaledImg = scaleGrayNearest(preprocessed, factor)
 	}
 
 	var buf bytes.Buffer
@@ -357,6 +351,41 @@ func encodeForOCR(img image.Image, factor int, opts Options) ([]byte, error) {
 		}
 	}
 	return buf.Bytes(), nil
+}
+
+// scaleGrayNearest performs nearest-neighbor upscaling for grayscale images
+// without routing through x/image/draw's generic RGBA64 path, which creates
+// tens of millions of tiny allocation objects for large *image.Gray scales.
+func scaleGrayNearest(src *image.Gray, factor int) *image.Gray {
+	b := src.Bounds()
+	srcW, srcH := b.Dx(), b.Dy()
+
+	if factor <= 1 {
+		clone := image.NewGray(image.Rect(0, 0, srcW, srcH))
+		for y := 0; y < srcH; y++ {
+			srcOff := y * src.Stride
+			dstOff := y * clone.Stride
+			copy(clone.Pix[dstOff:dstOff+srcW], src.Pix[srcOff:srcOff+srcW])
+		}
+		return clone
+	}
+
+	dst := image.NewGray(image.Rect(0, 0, srcW*factor, srcH*factor))
+
+	for sy := 0; sy < srcH; sy++ {
+		srcRow := src.Pix[sy*src.Stride : sy*src.Stride+srcW]
+		for fy := 0; fy < factor; fy++ {
+			dstRow := dst.Pix[(sy*factor+fy)*dst.Stride : (sy*factor+fy)*dst.Stride+srcW*factor]
+			for sx, px := range srcRow {
+				base := sx * factor
+				for fx := 0; fx < factor; fx++ {
+					dstRow[base+fx] = px
+				}
+			}
+		}
+	}
+
+	return dst
 }
 
 // invertGray flips every pixel in-place: new = 255 - old.

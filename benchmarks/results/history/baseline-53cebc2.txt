@@ -2,18 +2,18 @@ goos: windows
 goarch: amd64
 pkg: github.com/ghost-mcp/internal/ocr
 cpu: 12th Gen Intel(R) Core(TM) i7-1260P
-BenchmarkReadImage_FixturePanel_Grayscale-16    	       1	3737860100 ns/op	857208408 B/op	     108 allocs/op
-BenchmarkReadImage_FixturePanel_Grayscale-16    	       1	3661346100 ns/op	857208408 B/op	     108 allocs/op
-BenchmarkReadImage_FixturePanel_Grayscale-16    	       1	3592349600 ns/op	857213656 B/op	     115 allocs/op
-BenchmarkReadImage_FixturePanel_Grayscale-16    	       1	3631785200 ns/op	857208504 B/op	     109 allocs/op
-BenchmarkReadImage_FixturePanel_Grayscale-16    	       1	3509152800 ns/op	857208408 B/op	     108 allocs/op
-BenchmarkReadImage_FixturePanel_Color-16        	       1	6396334900 ns/op	1070724632 B/op	     108 allocs/op
-BenchmarkReadImage_FixturePanel_Color-16        	       1	6350655800 ns/op	1070724632 B/op	     108 allocs/op
-BenchmarkReadImage_FixturePanel_Color-16        	       1	6525298200 ns/op	1070724632 B/op	     108 allocs/op
-BenchmarkReadImage_FixturePanel_Color-16        	       1	6591133200 ns/op	1070724632 B/op	     108 allocs/op
-BenchmarkReadImage_FixturePanel_Color-16        	       1	6446378600 ns/op	1070724632 B/op	     108 allocs/op
+BenchmarkReadImage_FixturePanel_Grayscale-16    	       1	3638999900 ns/op	857208408 B/op	     108 allocs/op
+BenchmarkReadImage_FixturePanel_Grayscale-16    	       1	3585952500 ns/op	857208424 B/op	     109 allocs/op
+BenchmarkReadImage_FixturePanel_Grayscale-16    	       1	3529152500 ns/op	857208408 B/op	     108 allocs/op
+BenchmarkReadImage_FixturePanel_Grayscale-16    	       1	3633466700 ns/op	857208408 B/op	     108 allocs/op
+BenchmarkReadImage_FixturePanel_Grayscale-16    	       1	3709766500 ns/op	857208504 B/op	     109 allocs/op
+BenchmarkReadImage_FixturePanel_Color-16        	       1	6576358000 ns/op	1070724632 B/op	     108 allocs/op
+BenchmarkReadImage_FixturePanel_Color-16        	       1	6704255300 ns/op	1070724632 B/op	     108 allocs/op
+BenchmarkReadImage_FixturePanel_Color-16        	       1	6586394000 ns/op	1070724632 B/op	     108 allocs/op
+BenchmarkReadImage_FixturePanel_Color-16        	       1	6542954300 ns/op	1070724648 B/op	     109 allocs/op
+BenchmarkReadImage_FixturePanel_Color-16        	       1	6645031300 ns/op	1070724632 B/op	     108 allocs/op
 PASS
-ObjectCache(00007ffdf38c77c0)::~ObjectCache(): WARNING! LEAK! object 0000020811337e90 still has count 1 (id C:\Users\isber\vcpkg\installed\x64-mingw-dynamic\share\tessdata/eng.traineddatalstm-punc-dawg)
-ObjectCache(00007ffdf38c77c0)::~ObjectCache(): WARNING! LEAK! object 0000020811337cd0 still has count 1 (id C:\Users\isber\vcpkg\installed\x64-mingw-dynamic\share\tessdata/eng.traineddatalstm-word-dawg)
-ObjectCache(00007ffdf38c77c0)::~ObjectCache(): WARNING! LEAK! object 00000208113382f0 still has count 1 (id C:\Users\isber\vcpkg\installed\x64-mingw-dynamic\share\tessdata/eng.traineddatalstm-number-dawg)
-ok  	github.com/ghost-mcp/internal/ocr	51.980s
+ObjectCache(00007ffdf38c77c0)::~ObjectCache(): WARNING! LEAK! object 000001627db76f60 still has count 1 (id C:\Users\isber\vcpkg\installed\x64-mingw-dynamic\share\tessdata/eng.traineddatalstm-punc-dawg)
+ObjectCache(00007ffdf38c77c0)::~ObjectCache(): WARNING! LEAK! object 000001627dbe4f30 still has count 1 (id C:\Users\isber\vcpkg\installed\x64-mingw-dynamic\share\tessdata/eng.traineddatalstm-word-dawg)
+ObjectCache(00007ffdf38c77c0)::~ObjectCache(): WARNING! LEAK! object 000001627dbe43d0 still has count 1 (id C:\Users\isber\vcpkg\installed\x64-mingw-dynamic\share\tessdata/eng.traineddatalstm-number-dawg)
+ok  	github.com/ghost-mcp/internal/ocr	52.650s

@@ -281,6 +281,30 @@ func TestInvertGray(t *testing.T) {
 	}
 }
 
+func TestScaleGrayNearest_ReplicatesPixels(t *testing.T) {
+	src := image.NewGray(image.Rect(0, 0, 2, 2))
+	src.Pix[0] = 10
+	src.Pix[1] = 20
+	src.Pix[src.Stride] = 30
+	src.Pix[src.Stride+1] = 40
+
+	got := scaleGrayNearest(src, 2)
+	want := [][]uint8{
+		{10, 10, 20, 20},
+		{10, 10, 20, 20},
+		{30, 30, 40, 40},
+		{30, 30, 40, 40},
+	}
+
+	for y := 0; y < 4; y++ {
+		for x := 0; x < 4; x++ {
+			if got.GrayAt(x, y).Y != want[y][x] {
+				t.Fatalf("pixel (%d,%d) = %d, want %d", x, y, got.GrayAt(x, y).Y, want[y][x])
+			}
+		}
+	}
+}
+
 // TestOptions_Inverted_WhiteTextOnDark simulates the button scenario:
 // white text (255) on a dark coloured background (~100). After normal
 // grayscale+contrast the text and background are both high-valued on a
