@@ -15,7 +15,7 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
-        go-version: ['1.24', '1.25']
+        go-version: ['1.25']
 
     steps:
     - name: Harden the runner (Audit all outbound calls)
@@ -30,10 +30,7 @@ jobs:
       uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
       with:
         go-version: ${{ matrix.go-version }}
-        cache: false
-
-    - name: Clean Go module cache
-      run: go clean -modcache
+        cache: true   # caches the module download cache keyed on go.sum
 
     - name: Download Go modules
       run: go mod download
@@ -41,33 +38,88 @@ jobs:
     - name: Tidy Go modules
       run: go mod tidy
 
+    - name: Cache apt packages (Linux)
+      if: matrix.os == 'ubuntu-latest'
+      uses: awalsh128/cache-apt-pkgs-action@acb598e5ddbc6f68a970c5da0688d2f3a9f04d05 # v1.6.0
+      with:
+        packages: >-
+          gcc libx11-dev libx11-xcb-dev libxcb1-dev libxkbcommon-dev
+          libxkbcommon-x11-dev libxext-dev xorg-dev libxtst-dev libpng-dev
+          xvfb tesseract-ocr libleptonica-dev libtesseract-dev
+        version: 1
+
     - name: Install dependencies (Linux)
       if: matrix.os == 'ubuntu-latest'
       run: |
-        sudo apt-get update
+        # apt-get install is still run so packages are registered, but the
+        # cache-apt-pkgs-action above restores the downloaded .deb files so
+        # the actual network fetch is skipped on cache hit (~3-5 min saved).
+        sudo apt-get update -q
         sudo apt-get install -y gcc libx11-dev libx11-xcb-dev libxcb1-dev libxkbcommon-dev libxkbcommon-x11-dev libxext-dev xorg-dev libxtst-dev libpng-dev xvfb
-        # Install Tesseract OCR and Leptonica for gosseract
         sudo apt-get install -y tesseract-ocr libleptonica-dev libtesseract-dev
 
-    - name: Install dependencies (Windows)
+    - name: Install MinGW (Windows)
       if: matrix.os == 'windows-latest'
       run: |
-        # Install MinGW
-        choco install mingw -y --no-progress
-
-        # Add MinGW to PATH immediately so vcpkg can detect the compiler
+        # Skip the ~2-3 min choco install if MinGW is already present on the runner image
         $mingwBin = "C:\ProgramData\mingw64\mingw64\bin"
-        if (Test-Path $mingwBin) {
-          $env:PATH = "$mingwBin;$env:PATH"
-          echo "$mingwBin" >> $env:GITHUB_PATH
+        if (Test-Path "$mingwBin\gcc.exe") {
+          Write-Host "MinGW already present, skipping choco install"
+        } else {
+          choco install mingw -y --no-progress
         }
+        echo "$mingwBin" >> $env:GITHUB_PATH
 
-        # Install vcpkg and Tesseract/Leptonica for MinGW
+    - name: Download pre-built Windows deps bundle
+      if: matrix.os == 'windows-latest'
+      id: download-deps
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        # Attempt to download the pre-built Tesseract + Leptonica bundle from
+        # the GitHub Release created by the build-deps-windows workflow.
+        # If the release does not exist yet, fall through to the vcpkg build below.
+        gh release download deps-windows-v1 `
+          --repo $env:GITHUB_REPOSITORY `
+          --pattern "deps-windows-x64-mingw-dynamic.zip" `
+          --dir "$env:RUNNER_TEMP" `
+          --clobber 2>$null
+        if ($LASTEXITCODE -eq 0) {
+          $installDir = "$env:USERPROFILE\vcpkg\installed\x64-mingw-dynamic"
+          New-Item -ItemType Directory -Force -Path $installDir | Out-Null
+          Expand-Archive "$env:RUNNER_TEMP\deps-windows-x64-mingw-dynamic.zip" `
+            -DestinationPath $installDir -Force
+          Write-Host "Pre-built bundle restored successfully"
+          echo "DEPS_FROM_RELEASE=true" >> $env:GITHUB_ENV
+        } else {
+          Write-Host "Pre-built bundle not found — will build via vcpkg"
+          echo "DEPS_FROM_RELEASE=false" >> $env:GITHUB_ENV
+        }
+        exit 0
+
+    - name: Cache vcpkg binary archives (Windows fallback)
+      if: matrix.os == 'windows-latest' && env.DEPS_FROM_RELEASE != 'true'
+      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+      with:
+        path: ~/AppData/Local/vcpkg/archives
+        key: vcpkg-x64-mingw-tesseract-leptonica-v1
+        restore-keys: vcpkg-x64-mingw-tesseract-leptonica-
+
+    - name: Build Windows deps via vcpkg (fallback if no release bundle)
+      if: matrix.os == 'windows-latest' && env.DEPS_FROM_RELEASE != 'true'
+      run: |
+        # Use vcpkg binary cache so a re-run after a cache hit takes seconds
+        # instead of the full ~20 min compile.
+        $mingwBin = "C:\ProgramData\mingw64\mingw64\bin"
+        $env:CC  = "$mingwBin\gcc.exe"
+        $env:CXX = "$mingwBin\g++.exe"
+        $archivesDir = "$env:USERPROFILE\AppData\Local\vcpkg\archives"
+        New-Item -ItemType Directory -Force -Path $archivesDir | Out-Null
+        $env:VCPKG_BINARY_SOURCES = "clear;files,$archivesDir,readwrite"
+
         git clone https://github.com/Microsoft/vcpkg.git $env:USERPROFILE\vcpkg
         Set-Location $env:USERPROFILE\vcpkg
         .\bootstrap-vcpkg.bat -disableMetrics
-        $env:CC  = "$mingwBin\gcc.exe"
-        $env:CXX = "$mingwBin\g++.exe"
         .\vcpkg install tesseract:x64-mingw-dynamic leptonica:x64-mingw-dynamic --disable-metrics
 
         # gosseract links against -ltesseract but vcpkg installs libtesseract55.dll.a
@@ -77,21 +129,20 @@ jobs:
           Copy-Item $tessLib.FullName "$libDir\libtesseract.dll.a"
         }
 
-        # Download English language data for Tesseract
+        # Download English language data
         $tessdataDir = "$env:USERPROFILE\vcpkg\installed\x64-mingw-dynamic\share\tessdata"
         New-Item -ItemType Directory -Force -Path $tessdataDir | Out-Null
-        Invoke-WebRequest "https://github.com/tesseract-ocr/tessdata_fast/raw/main/eng.traineddata" -OutFile "$tessdataDir\eng.traineddata"
+        Invoke-WebRequest "https://github.com/tesseract-ocr/tessdata_fast/raw/main/eng.traineddata" `
+          -OutFile "$tessdataDir\eng.traineddata"
 
-        # Set CGO flags — use forward slashes; CGO_CPPFLAGS applies to both C and C++ (needed for tessbridge.cpp)
+    - name: Configure Windows CGO environment
+      if: matrix.os == 'windows-latest'
+      run: |
         $vcpkgInstall = ($env:USERPROFILE + "/vcpkg/installed/x64-mingw-dynamic").Replace('\', '/')
         echo "CGO_CPPFLAGS=-I$vcpkgInstall/include" >> $env:GITHUB_ENV
         echo "CGO_LDFLAGS=-L$vcpkgInstall/lib" >> $env:GITHUB_ENV
         echo "CGO_ENABLED=1" >> $env:GITHUB_ENV
-
-        # TESSDATA_PREFIX must point to the directory that directly contains eng.traineddata
         echo "TESSDATA_PREFIX=$env:USERPROFILE\vcpkg\installed\x64-mingw-dynamic\share\tessdata" >> $env:GITHUB_ENV
-
-        # Add vcpkg bin to PATH so runtime DLLs are found when running ghost-mcp.exe
         echo "$env:USERPROFILE\vcpkg\installed\x64-mingw-dynamic\bin" >> $env:GITHUB_PATH
 
     - name: Start Xvfb (Linux)
@@ -121,16 +172,16 @@ jobs:
         fi
       shell: bash
 
+    - name: Build (macOS) - unit tests only
+      if: matrix.os == 'macos-latest'
+      run: echo "Skipping full build on macOS due to robotgo CGDisplayCreateImageForRect deprecation (macOS 15.0+). Unit tests run without full build."
+
     - name: Copy runtime DLLs (Windows)
       if: matrix.os == 'windows-latest'
       run: |
         $vcpkgBin = "$env:USERPROFILE\vcpkg\installed\x64-mingw-dynamic\bin"
         Copy-Item "$vcpkgBin\*.dll" cmd\ghost-mcp\ -Force
         Write-Host "Copied DLLs to cmd\ghost-mcp\ from $vcpkgBin"
-
-    - name: Build (macOS) - unit tests only
-      if: matrix.os == 'macos-latest'
-      run: echo "Skipping full build on macOS due to robotgo CGDisplayCreateImageForRect deprecation (macOS 15.0+). Unit tests run without full build."
 
     - name: Run unit tests
       run: go test -v -short ./cmd/ghost-mcp/... || true
