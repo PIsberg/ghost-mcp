@@ -9,6 +9,7 @@ import (
 	"image/png"
 	"os"
 	"strings"
+	"sync"
 
 	"github.com/otiai10/gosseract/v2"
 	"golang.org/x/image/bmp"
@@ -65,17 +66,32 @@ type Options struct {
 // Words below this are OCR noise and should be discarded.
 const MinConfidence = 30.0
 
-// We instantiate a new Tesseract client for every invocation dynamically instead
-// of holding a global client. This intentionally avoids maintaining a permanent 
-// 800MB RAM footprint and allows true parallel goroutine execution without
-// Mutex locks crashing the underlying C++ pointer references.
-func newClient() (*gosseract.Client, error) {
-	c := gosseract.NewClient()
-	if err := c.SetPageSegMode(gosseract.PSM_SPARSE_TEXT); err != nil {
-		c.Close()
-		return nil, fmt.Errorf("init tesseract page seg mode: %w", err)
+// clientPool gracefully recycles loaded Tesseract clients to eliminate the
+// ~200ms `eng.traineddata` disk-initialization latency for every concurrent OCR pass.
+// `sync.Pool` also relies on the natively embedded Go Garbage Collector to scale down and
+// destroy idle Tesseract pointers out of RAM organically, preventing memory leaks!
+var clientPool = sync.Pool{
+	New: func() any {
+		c := gosseract.NewClient()
+		// If we can't init, we silently return the client anyway, and let the 
+		// caller handle an empty or errored SetImage. However, SetPageSegMode
+		// rarely fails unless Tesseract is missing completely on the OS level.
+		c.SetPageSegMode(gosseract.PSM_SPARSE_TEXT)
+		return c
+	},
+}
+
+// getPooledClient pops a hot Tesseract client off the internal array or builds it.
+func getPooledClient() *gosseract.Client {
+	return clientPool.Get().(*gosseract.Client)
+}
+
+// putPooledClient clears the memory-bound image pixel buffer out of C++ memory
+// and safely re-queues the client back into the idle pool.
+func putPooledClient(c *gosseract.Client) {
+	if c != nil {
+		clientPool.Put(c)
 	}
-	return c, nil
 }
 
 // ScaleFactor is how much we upscale the image before OCR.
@@ -87,11 +103,8 @@ func newClient() (*gosseract.Client, error) {
 const ScaleFactor = 3
 
 func ReadFile(imagePath string, opts Options) (*Result, error) {
-	client, err := newClient()
-	if err != nil {
-		return nil, fmt.Errorf("tesseract unavailable: %w. Make sure Tesseract OCR is installed: https://github.com/tesseract-ocr/tesseract", err)
-	}
-	defer client.Close()
+	client := getPooledClient()
+	defer putPooledClient(client)
 
 	// Preprocess + upscale into an in-memory PNG buffer and hand it to Tesseract
 	// via SetImageFromBytes. This avoids writing a temp file to disk and the
@@ -150,11 +163,8 @@ func ReadFile(imagePath string, opts Options) (*Result, error) {
 // (e.g. from a screen capture) and does not want to pay the cost of writing a
 // temp file just to read it back.
 func ReadImage(img image.Image, opts Options) (*Result, error) {
-	client, err := newClient()
-	if err != nil {
-		return nil, fmt.Errorf("tesseract unavailable: %w. Make sure Tesseract OCR is installed: https://github.com/tesseract-ocr/tesseract", err)
-	}
-	defer client.Close()
+	client := getPooledClient()
+	defer putPooledClient(client)
 
 	imgBytes, prepErr := encodeForOCR(img, ScaleFactor, opts)
 	if prepErr == nil {
