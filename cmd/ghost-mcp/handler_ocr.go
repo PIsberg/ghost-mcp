@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"image"
 	"os"
 	"path/filepath"
 	"strings"
@@ -44,27 +45,10 @@ func handleReadScreenText(ctx context.Context, request mcp.CallToolRequest) (*mc
 		return mcp.NewToolResultError(fmt.Sprintf("failed to capture screen: %v", captureErr)), nil
 	}
 
-	// Determine screenshot directory
-	screenshotDir := os.Getenv("GHOST_MCP_SCREENSHOT_DIR")
-	if screenshotDir == "" {
-		screenshotDir = os.TempDir()
-	}
-
-	filename := fmt.Sprintf("ghost-mcp-ocr-%d.png", time.Now().UnixNano())
-	fpath := filepath.Join(screenshotDir, filename)
-
-	if saveErr := robotgo.SavePng(img, fpath); saveErr != nil {
-		logging.Error("Failed to save screenshot for OCR: %v", saveErr)
-		return mcp.NewToolResultError(fmt.Sprintf("failed to save screenshot: %v", saveErr)), nil
-	}
-	if os.Getenv("GHOST_MCP_KEEP_SCREENSHOTS") != "1" {
-		defer os.Remove(fpath)
-	} else {
-		logging.Info("OCR screenshot kept at: %s", fpath)
-	}
+	saveScreenshotIfKept(img, "ghost-mcp-ocr")
 
 	grayscale := getBoolParam(request, "grayscale", true)
-	result, ocrErr := ocr.ReadFile(fpath, ocr.Options{Color: !grayscale})
+	result, ocrErr := ocr.ReadImage(img, ocr.Options{Color: !grayscale})
 	if ocrErr != nil {
 		logging.Error("OCR failed: %v", ocrErr)
 		return mcp.NewToolResultError(fmt.Sprintf("OCR failed: %v", ocrErr)), nil
@@ -154,26 +138,12 @@ func handleFindAndClick(ctx context.Context, request mcp.CallToolRequest) (*mcp.
 		return mcp.NewToolResultError(fmt.Sprintf("failed to capture screen: %v", captureErr)), nil
 	}
 
-	screenshotDir := os.Getenv("GHOST_MCP_SCREENSHOT_DIR")
-	if screenshotDir == "" {
-		screenshotDir = os.TempDir()
-	}
-
-	filename := fmt.Sprintf("ghost-mcp-findclick-%d.png", time.Now().UnixNano())
-	fpath := filepath.Join(screenshotDir, filename)
-
-	if saveErr := robotgo.SavePng(img, fpath); saveErr != nil {
-		logging.Error("Failed to save screenshot for OCR: %v", saveErr)
-		return mcp.NewToolResultError(fmt.Sprintf("failed to save screenshot: %v", saveErr)), nil
-	}
-	if os.Getenv("GHOST_MCP_KEEP_SCREENSHOTS") != "1" {
-		defer os.Remove(fpath)
-	}
+	saveScreenshotIfKept(img, "ghost-mcp-findclick")
 
 	grayscale := getBoolParam(request, "grayscale", true)
 
 	// Pass 1: normal preprocessing (dark text on light backgrounds).
-	ocrResult, ocrErr := ocr.ReadFile(fpath, ocr.Options{Color: !grayscale})
+	ocrResult, ocrErr := ocr.ReadImage(img, ocr.Options{Color: !grayscale})
 	if ocrErr != nil {
 		logging.Error("OCR failed: %v", ocrErr)
 		return mcp.NewToolResultError(fmt.Sprintf("OCR failed: %v", ocrErr)), nil
@@ -189,7 +159,7 @@ func handleFindAndClick(ctx context.Context, request mcp.CallToolRequest) (*mcp.
 	// Only runs in grayscale mode; colour mode already preserves all info.
 	if grayscale {
 		logging.Info("find_and_click: %q not found on normal pass, retrying with inverted image", searchText)
-		invertedResult, invertedErr := ocr.ReadFile(fpath, ocr.Options{Inverted: true})
+		invertedResult, invertedErr := ocr.ReadImage(img, ocr.Options{Inverted: true})
 		if invertedErr == nil {
 			if result := findAndClickWord(invertedResult, searchText, nth, regionX, regionY, screenW, screenH, button, request); result != nil {
 				return result, nil
@@ -203,7 +173,7 @@ func handleFindAndClick(ctx context.Context, request mcp.CallToolRequest) (*mcp.
 	// when color information is preserved rather than converted to grayscale.
 	if grayscale {
 		logging.Info("find_and_click: %q not found on inverted pass, retrying with color mode", searchText)
-		colorResult, colorErr := ocr.ReadFile(fpath, ocr.Options{Color: true})
+		colorResult, colorErr := ocr.ReadImage(img, ocr.Options{Color: true})
 		if colorErr == nil {
 			if result := findAndClickWord(colorResult, searchText, nth, regionX, regionY, screenW, screenH, button, request); result != nil {
 				return result, nil
@@ -218,7 +188,7 @@ func handleFindAndClick(ctx context.Context, request mcp.CallToolRequest) (*mcp.
 	// least one channel < 240). Last resort for white text on dark/gradient pages.
 	if grayscale {
 		logging.Info("find_and_click: %q not found on color pass, retrying with bright-text extraction", searchText)
-		brightResult, brightErr := ocr.ReadFile(fpath, ocr.Options{BrightText: true})
+		brightResult, brightErr := ocr.ReadImage(img, ocr.Options{BrightText: true})
 		if brightErr == nil {
 			if result := findAndClickWord(brightResult, searchText, nth, regionX, regionY, screenW, screenH, button, request); result != nil {
 				return result, nil
@@ -378,24 +348,10 @@ func handleFindElements(ctx context.Context, request mcp.CallToolRequest) (*mcp.
 		return mcp.NewToolResultError(fmt.Sprintf("failed to capture screen: %v", captureErr)), nil
 	}
 
-	// Save temporarily for OCR
-	screenshotDir := os.Getenv("GHOST_MCP_SCREENSHOT_DIR")
-	if screenshotDir == "" {
-		screenshotDir = os.TempDir()
-	}
-	filename := fmt.Sprintf("ghost-mcp-findelements-%d.png", time.Now().UnixNano())
-	fpath := filepath.Join(screenshotDir, filename)
-
-	if saveErr := robotgo.SavePng(img, fpath); saveErr != nil {
-		logging.Error("Failed to save screenshot: %v", saveErr)
-		return mcp.NewToolResultError(fmt.Sprintf("failed to save screenshot: %v", saveErr)), nil
-	}
-	if os.Getenv("GHOST_MCP_KEEP_SCREENSHOTS") != "1" {
-		defer os.Remove(fpath)
-	}
+	saveScreenshotIfKept(img, "ghost-mcp-findelements")
 
 	// Run OCR with color mode for best element detection
-	ocrResult, ocrErr := ocr.ReadFile(fpath, ocr.Options{Color: true})
+	ocrResult, ocrErr := ocr.ReadImage(img, ocr.Options{Color: true})
 	if ocrErr != nil {
 		logging.Error("OCR failed: %v", ocrErr)
 		return mcp.NewToolResultError(fmt.Sprintf("OCR failed: %v", ocrErr)), nil
@@ -480,24 +436,10 @@ func handleFindAndClickAll(ctx context.Context, request mcp.CallToolRequest) (*m
 		return mcp.NewToolResultError(fmt.Sprintf("failed to capture screen: %v", captureErr)), nil
 	}
 
-	screenshotDir := os.Getenv("GHOST_MCP_SCREENSHOT_DIR")
-	if screenshotDir == "" {
-		screenshotDir = os.TempDir()
-	}
-
-	filename := fmt.Sprintf("ghost-mcp-findclickall-%d.png", time.Now().UnixNano())
-	fpath := filepath.Join(screenshotDir, filename)
-
-	if saveErr := robotgo.SavePng(img, fpath); saveErr != nil {
-		logging.Error("Failed to save screenshot: %v", saveErr)
-		return mcp.NewToolResultError(fmt.Sprintf("failed to save screenshot: %v", saveErr)), nil
-	}
-	if os.Getenv("GHOST_MCP_KEEP_SCREENSHOTS") != "1" {
-		defer os.Remove(fpath)
-	}
+	saveScreenshotIfKept(img, "ghost-mcp-findclickall")
 
 	// Run OCR once
-	ocrResult, ocrErr := ocr.ReadFile(fpath, ocr.Options{Color: true})
+	ocrResult, ocrErr := ocr.ReadImage(img, ocr.Options{Color: true})
 	if ocrErr != nil {
 		logging.Error("OCR failed: %v", ocrErr)
 		return mcp.NewToolResultError(fmt.Sprintf("OCR failed: %v", ocrErr)), nil
@@ -509,7 +451,7 @@ func handleFindAndClickAll(ctx context.Context, request mcp.CallToolRequest) (*m
 		minX, minY, maxX, maxY, found := findButtonBounds(ocrResult, text, 1)
 		if !found {
 			// Try inverted OCR for this text
-			invertedResult, invertedErr := ocr.ReadFile(fpath, ocr.Options{Inverted: true})
+			invertedResult, invertedErr := ocr.ReadImage(img, ocr.Options{Inverted: true})
 			if invertedErr == nil {
 				minX, minY, maxX, maxY, found = findButtonBounds(invertedResult, text, 1)
 			}
@@ -518,7 +460,7 @@ func handleFindAndClickAll(ctx context.Context, request mcp.CallToolRequest) (*m
 		if !found {
 			// Try bright-text extraction: pixels with all RGB ≥ 240 → black.
 			// Captures pure-white button labels on dark/gradient pages.
-			brightResult, brightErr := ocr.ReadFile(fpath, ocr.Options{BrightText: true})
+			brightResult, brightErr := ocr.ReadImage(img, ocr.Options{BrightText: true})
 			if brightErr == nil {
 				minX, minY, maxX, maxY, found = findButtonBounds(brightResult, text, 1)
 			}
@@ -761,35 +703,21 @@ func handleFindClickAndType(ctx context.Context, request mcp.CallToolRequest) (*
 		return mcp.NewToolResultError(fmt.Sprintf("failed to capture screen: %v", captureErr)), nil
 	}
 
-	screenshotDir := os.Getenv("GHOST_MCP_SCREENSHOT_DIR")
-	if screenshotDir == "" {
-		screenshotDir = os.TempDir()
-	}
-
-	filename := fmt.Sprintf("ghost-mcp-findclicktype-%d.png", time.Now().UnixNano())
-	fpath := filepath.Join(screenshotDir, filename)
-
-	if saveErr := robotgo.SavePng(img, fpath); saveErr != nil {
-		logging.Error("Failed to save screenshot: %v", saveErr)
-		return mcp.NewToolResultError(fmt.Sprintf("failed to save screenshot: %v", saveErr)), nil
-	}
-	if os.Getenv("GHOST_MCP_KEEP_SCREENSHOTS") != "1" {
-		defer os.Remove(fpath)
-	}
+	saveScreenshotIfKept(img, "ghost-mcp-findclicktype")
 
 	grayscale := getBoolParam(request, "grayscale", true)
 	var minX, minY, maxX, maxY int
 	var found bool
 
 	// Pass 1: Normal
-	ocrResult, ocrErr := ocr.ReadFile(fpath, ocr.Options{Color: !grayscale})
+	ocrResult, ocrErr := ocr.ReadImage(img, ocr.Options{Color: !grayscale})
 	if ocrErr == nil {
 		minX, minY, maxX, maxY, found = findButtonBounds(ocrResult, searchText, nth)
 	}
 
 	// Pass 2: Inverted
 	if !found && grayscale {
-		invertedResult, _ := ocr.ReadFile(fpath, ocr.Options{Inverted: true})
+		invertedResult, _ := ocr.ReadImage(img, ocr.Options{Inverted: true})
 		if invertedResult != nil {
 			minX, minY, maxX, maxY, found = findButtonBounds(invertedResult, searchText, nth)
 		}
@@ -797,7 +725,7 @@ func handleFindClickAndType(ctx context.Context, request mcp.CallToolRequest) (*
 
 	// Pass 3: Color mode
 	if !found && grayscale {
-		colorResult, _ := ocr.ReadFile(fpath, ocr.Options{Color: true})
+		colorResult, _ := ocr.ReadImage(img, ocr.Options{Color: true})
 		if colorResult != nil {
 			minX, minY, maxX, maxY, found = findButtonBounds(colorResult, searchText, nth)
 		}
@@ -805,7 +733,7 @@ func handleFindClickAndType(ctx context.Context, request mcp.CallToolRequest) (*
 
 	// Pass 4: Bright text extraction
 	if !found && grayscale {
-		brightResult, _ := ocr.ReadFile(fpath, ocr.Options{BrightText: true})
+		brightResult, _ := ocr.ReadImage(img, ocr.Options{BrightText: true})
 		if brightResult != nil {
 			minX, minY, maxX, maxY, found = findButtonBounds(brightResult, searchText, nth)
 		}
@@ -861,4 +789,22 @@ func handleFindClickAndType(ctx context.Context, request mcp.CallToolRequest) (*
 		`{"success":true,"found":%q,"box":{"x":%d,"y":%d,"width":%d,"height":%d},"clicked_x":%d,"clicked_y":%d,"actual_x":%d,"actual_y":%d,"characters_typed":%d,"enter_pressed":%t}`,
 		searchText, minX, minY, maxX-minX, maxY-minY, cx, cy, finalX, finalY, len(typeText), pressEnter,
 	)), nil
+}
+
+// saveScreenshotIfKept centralizes the logic to write a debug screenshot to disk
+// if GHOST_MCP_KEEP_SCREENSHOTS is explicitly enabled. Otherwise, it bypasses disk I/O.
+func saveScreenshotIfKept(img image.Image, prefix string) {
+	if os.Getenv("GHOST_MCP_KEEP_SCREENSHOTS") == "1" {
+		screenshotDir := os.Getenv("GHOST_MCP_SCREENSHOT_DIR")
+		if screenshotDir == "" {
+			screenshotDir = os.TempDir()
+		}
+		filename := fmt.Sprintf("%s-%d.png", prefix, time.Now().UnixNano())
+		fpath := filepath.Join(screenshotDir, filename)
+		if saveErr := robotgo.SavePng(img, fpath); saveErr != nil {
+			logging.Error("Failed to keep screenshot: %v", saveErr)
+		} else {
+			logging.Info("OCR screenshot kept at: %s", fpath)
+		}
+	}
 }
