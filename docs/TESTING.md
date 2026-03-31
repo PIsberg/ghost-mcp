@@ -7,6 +7,7 @@ This document describes how to test the Ghost MCP server, including unit tests, 
 - [Overview](#overview)
 - [Test Types](#test-types)
 - [Running Tests](#running-tests)
+- [Benchmarks](#benchmarks)
 - [Test Fixture](#test-fixture)
 - [Writing New Tests](#writing-new-tests)
 - [Troubleshooting](#troubleshooting)
@@ -153,6 +154,47 @@ test_runner.bat fixture
 ```
 
 Then open http://localhost:8765 in your browser.
+
+## Benchmarks
+
+Ghost MCP now includes fixture-backed OCR benchmarks that run against static screenshots instead of the live desktop. This keeps the measurements repeatable while still exercising the real OCR pipeline.
+
+### Benchmark Targets
+
+- `internal/ocr/benchmark_fixture_test.go`
+  Measures `ReadImage` on the saved OCR panel screenshot in grayscale and color modes.
+- `cmd/ghost-mcp/benchmark_fixture_test.go`
+  Measures `parallelFindText` on the saved fixture screenshot in grayscale and color-only modes.
+
+### Run Current Branch Benchmarks
+
+```powershell
+$env:PATH="$env:USERPROFILE\vcpkg\installed\x64-mingw-dynamic\bin;$env:PATH"
+$env:TESSDATA_PREFIX="$env:USERPROFILE\vcpkg\installed\x64-mingw-dynamic\share\tessdata"
+
+go test -run '^$' -bench 'BenchmarkReadImage_FixturePanel' -benchmem ./internal/ocr
+go test -run '^$' -bench 'BenchmarkParallelFindText_FixtureButtons' -benchmem ./cmd/ghost-mcp
+```
+
+### Compare Against `main`
+
+```powershell
+.\benchmarks\compare-ocr.ps1
+```
+
+The comparison runner:
+
+- Creates a temporary worktree for `origin/main`
+- Copies the benchmark files into that worktree so the same harness runs on both code versions
+- Saves timestamped JSON + raw text outputs under `benchmarks/results/history/`
+- Refreshes `benchmarks/results/latest-current.json`
+- Refreshes `benchmarks/results/latest-baseline.json`
+- Refreshes `benchmarks/results/latest-comparison.json`
+
+### Notes
+
+- The cross-branch comparison currently uses the shared `internal/ocr` benchmarks because those APIs exist on both `origin/main` and the optimized branch.
+- The `cmd/ghost-mcp` benchmarks are still saved in the current-branch result files, so future runs on branches that contain the benchmark harness can be compared directly via the same JSON history.
 
 ### Running Individual Tests
 

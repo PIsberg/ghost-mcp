@@ -1,0 +1,35 @@
+goos: windows
+goarch: amd64
+pkg: github.com/ghost-mcp/internal/ocr
+cpu: 12th Gen Intel(R) Core(TM) i7-1260P
+BenchmarkReadImage_FixturePanel_Grayscale-16    	       1	2291003200 ns/op	895379576 B/op	72491298 allocs/op
+BenchmarkReadImage_FixturePanel_Grayscale-16    	       1	2228614500 ns/op	895374584 B/op	72491295 allocs/op
+BenchmarkReadImage_FixturePanel_Grayscale-16    	       1	2289175900 ns/op	895369464 B/op	72491288 allocs/op
+BenchmarkReadImage_FixturePanel_Grayscale-16    	       1	2268072700 ns/op	895369496 B/op	72491288 allocs/op
+BenchmarkReadImage_FixturePanel_Grayscale-16    	       1	2234265400 ns/op	895369512 B/op	72491288 allocs/op
+BenchmarkReadImage_FixturePanel_Color-16        	       1	2880154100 ns/op	961073816 B/op	      92 allocs/op
+BenchmarkReadImage_FixturePanel_Color-16        	       1	3017379800 ns/op	961073816 B/op	      92 allocs/op
+BenchmarkReadImage_FixturePanel_Color-16        	       1	2886293100 ns/op	961073816 B/op	      92 allocs/op
+BenchmarkReadImage_FixturePanel_Color-16        	       1	2735024800 ns/op	961073816 B/op	      92 allocs/op
+BenchmarkReadImage_FixturePanel_Color-16        	       1	2713397200 ns/op	961073816 B/op	      92 allocs/op
+PASS
+ObjectCache(00007ffdf38c77c0)::~ObjectCache(): WARNING! LEAK! object 000001bf403e7120 still has count 18 (id C:\Users\isber\vcpkg\installed\x64-mingw-dynamic\share\tessdata/eng.traineddatalstm-punc-dawg)
+ObjectCache(00007ffdf38c77c0)::~ObjectCache(): WARNING! LEAK! object 000001bf6742ed60 still has count 18 (id C:\Users\isber\vcpkg\installed\x64-mingw-dynamic\share\tessdata/eng.traineddatalstm-word-dawg)
+ObjectCache(00007ffdf38c77c0)::~ObjectCache(): WARNING! LEAK! object 000001bf6742edd0 still has count 18 (id C:\Users\isber\vcpkg\installed\x64-mingw-dynamic\share\tessdata/eng.traineddatalstm-number-dawg)
+ok  	github.com/ghost-mcp/internal/ocr	27.246s
+goos: windows
+goarch: amd64
+pkg: github.com/ghost-mcp/cmd/ghost-mcp
+cpu: 12th Gen Intel(R) Core(TM) i7-1260P
+BenchmarkParallelFindText_FixtureButtons_Grayscale-16    	       1	5709180400 ns/op	3647189672 B/op	217474074 allocs/op
+BenchmarkParallelFindText_FixtureButtons_Grayscale-16    	       1	5718555200 ns/op	3647193640 B/op	217474074 allocs/op
+BenchmarkParallelFindText_FixtureButtons_Grayscale-16    	       1	5657078200 ns/op	3647184232 B/op	217474066 allocs/op
+BenchmarkParallelFindText_FixtureButtons_Grayscale-16    	       1	5654787100 ns/op	3647184232 B/op	217474066 allocs/op
+BenchmarkParallelFindText_FixtureButtons_Grayscale-16    	       1	6401307100 ns/op	3647181312 B/op	217474061 allocs/op
+BenchmarkParallelFindText_FixtureButtons_ColorOnly-16    	       1	2814508900 ns/op	961078032 B/op	     139 allocs/op
+BenchmarkParallelFindText_FixtureButtons_ColorOnly-16    	       1	2766883700 ns/op	961077040 B/op	     136 allocs/op
+BenchmarkParallelFindText_FixtureButtons_ColorOnly-16    	       1	3032709600 ns/op	961077040 B/op	     136 allocs/op
+BenchmarkParallelFindText_FixtureButtons_ColorOnly-16    	       1	2975833400 ns/op	961077040 B/op	     136 allocs/op
+BenchmarkParallelFindText_FixtureButtons_ColorOnly-16    	       1	3208774200 ns/op	961077040 B/op	     136 allocs/op
+PASS
+ok  	github.com/ghost-mcp/cmd/ghost-mcp	90.098s
