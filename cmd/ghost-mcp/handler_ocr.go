@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/ghost-mcp/internal/logging"
@@ -142,63 +143,41 @@ func handleFindAndClick(ctx context.Context, request mcp.CallToolRequest) (*mcp.
 
 	grayscale := getBoolParam(request, "grayscale", true)
 
-	// Pass 1: normal preprocessing (dark text on light backgrounds).
-	ocrResult, ocrErr := ocr.ReadImage(img, ocr.Options{Color: !grayscale})
-	if ocrErr != nil {
-		logging.Error("OCR failed: %v", ocrErr)
-		return mcp.NewToolResultError(fmt.Sprintf("OCR failed: %v", ocrErr)), nil
+	minX, minY, maxX, maxY, found, passName := parallelFindText(ctx, img, searchText, nth, grayscale)
+	if !found {
+		logging.Info("Text %q (occurrence %d) not found on screen", searchText, nth)
+		return mcp.NewToolResultError(fmt.Sprintf("text %q not found on screen (occurrence %d). TIP: Call find_elements (no args) to see all text OCR detected — this shows exactly what is visible and why the match failed.", searchText, nth)), nil
 	}
 
-	if result := findAndClickWord(ocrResult, searchText, nth, regionX, regionY, screenW, screenH, button, request); result != nil {
-		return result, nil
+	// Calculate center of the merged button bounds
+	cx := regionX + (minX+maxX)/2
+	cy := regionY + (minY+maxY)/2
+
+	if err := validate.Coords(cx, cy, screenW, screenH); err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("found text but center out of bounds: %v", err)), nil
 	}
 
-	// Pass 2 (inverted): white text on dark/coloured backgrounds becomes dark
-	// text on a lighter background — the pattern Tesseract is trained on.
-	// CSS buttons with white text on gradient backgrounds are the classic case.
-	// Only runs in grayscale mode; colour mode already preserves all info.
-	if grayscale {
-		logging.Info("find_and_click: %q not found on normal pass, retrying with inverted image", searchText)
-		invertedResult, invertedErr := ocr.ReadImage(img, ocr.Options{Inverted: true})
-		if invertedErr == nil {
-			if result := findAndClickWord(invertedResult, searchText, nth, regionX, regionY, screenW, screenH, button, request); result != nil {
-				return result, nil
-			}
-			logging.Info("find_and_click: %q not found on inverted pass either (%d words)", searchText, len(invertedResult.Words))
-		}
+	logging.Info("ACTION: Found %q (occurrence %d) via %s pass at box (%d,%d)-(%d,%d), clicking center (%d,%d) with %s",
+		searchText, nth, passName, minX, minY, maxX, maxY, cx, cy, button)
+	robotgo.Move(cx, cy)
+
+	if err := checkFailsafe(); err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	// Pass 3 (color mode): disable grayscale to preserve color contrast.
-	// Some colored buttons (green/blue/red with white text) are detected better
-	// when color information is preserved rather than converted to grayscale.
-	if grayscale {
-		logging.Info("find_and_click: %q not found on inverted pass, retrying with color mode", searchText)
-		colorResult, colorErr := ocr.ReadImage(img, ocr.Options{Color: true})
-		if colorErr == nil {
-			if result := findAndClickWord(colorResult, searchText, nth, regionX, regionY, screenW, screenH, button, request); result != nil {
-				return result, nil
-			}
-			logging.Info("find_and_click: %q not found on color pass either (%d words)", searchText, len(colorResult.Words))
-		}
-	}
+	robotgo.Click(button, false)
+	applyClickDelay(request)
 
-	// Pass 4 (bright-text): maps pixels with all RGB ≥ 240 → black, else → white.
-	// Uniquely captures pure-white button text (255,255,255) while ignoring near-white
-	// body text like #eee (238 < 240) and all coloured backgrounds (always have at
-	// least one channel < 240). Last resort for white text on dark/gradient pages.
-	if grayscale {
-		logging.Info("find_and_click: %q not found on color pass, retrying with bright-text extraction", searchText)
-		brightResult, brightErr := ocr.ReadImage(img, ocr.Options{BrightText: true})
-		if brightErr == nil {
-			if result := findAndClickWord(brightResult, searchText, nth, regionX, regionY, screenW, screenH, button, request); result != nil {
-				return result, nil
-			}
-			logging.Info("find_and_click: %q not found on bright-text pass either (%d words)", searchText, len(brightResult.Words))
-		}
+	finalX, finalY := robotgo.GetMousePos()
+	if finalX != cx || finalY != cy {
+		logging.Info("WARNING: cursor moved after click: requested (%d,%d) actual (%d,%d)", cx, cy, finalX, finalY)
 	}
+	logging.Info("ACTION COMPLETE: find_and_click %q at (%d, %d)", searchText, finalX, finalY)
 
-	logging.Info("Text %q (occurrence %d) not found on screen", searchText, nth)
-	return mcp.NewToolResultError(fmt.Sprintf("text %q not found on screen (occurrence %d). TIP: Call find_elements (no args) to see all text OCR detected — this shows exactly what is visible and why the match failed.", searchText, nth)), nil
+	return mcp.NewToolResultText(fmt.Sprintf(
+		`{"success":true,"found":%q,"box":{"x":%d,"y":%d,"width":%d,"height":%d},"requested_x":%d,"requested_y":%d,"actual_x":%d,"actual_y":%d,"button":%q,"occurrence":%d}`,
+		searchText, minX, minY, maxX-minX, maxY-minY, cx, cy, finalX, finalY, button, nth,
+	)), nil
 }
 
 // findButtonBounds finds the full bounding box of a button by merging adjacent
@@ -273,50 +252,7 @@ func abs(x int) int {
 	return x
 }
 
-// findAndClickWord searches ocrResult for the nth case-insensitive occurrence
-// of searchText, clicks the center of the full button (merged bounding box for
-// multi-word buttons), and returns the MCP result. Returns nil if the text is
-// not found (caller should try a different OCR pass or give up).
-func findAndClickWord(ocrResult *ocr.Result, searchText string, nth, regionX, regionY, screenW, screenH int, button string, request mcp.CallToolRequest) *mcp.CallToolResult {
-	minX, minY, maxX, maxY, found := findButtonBounds(ocrResult, searchText, nth)
-	if !found {
-		return nil
-	}
-
-	// Calculate center of the merged button bounds
-	// OCR coords are relative to the captured region; translate to screen coords.
-	cx := regionX + (minX+maxX)/2
-	cy := regionY + (minY+maxY)/2
-
-	if err := validate.Coords(cx, cy, screenW, screenH); err != nil {
-		result := mcp.NewToolResultError(fmt.Sprintf("found text but center out of bounds: %v", err))
-		return result
-	}
-
-	logging.Info("ACTION: Found %q (occurrence %d) at box (%d,%d)-(%d,%d), clicking center (%d,%d) with %s",
-		searchText, nth, minX, minY, maxX, maxY, cx, cy, button)
-	robotgo.Move(cx, cy)
-
-	if err := checkFailsafe(); err != nil {
-		result := mcp.NewToolResultError(err.Error())
-		return result
-	}
-
-	robotgo.Click(button, false)
-	applyClickDelay(request)
-
-	finalX, finalY := robotgo.GetMousePos()
-	if finalX != cx || finalY != cy {
-		logging.Info("WARNING: cursor moved after click: requested (%d,%d) actual (%d,%d)", cx, cy, finalX, finalY)
-	}
-	logging.Info("ACTION COMPLETE: find_and_click %q at (%d, %d)", searchText, finalX, finalY)
-
-	result := mcp.NewToolResultText(fmt.Sprintf(
-		`{"success":true,"found":%q,"box":{"x":%d,"y":%d,"width":%d,"height":%d},"requested_x":%d,"requested_y":%d,"actual_x":%d,"actual_y":%d,"button":%q,"occurrence":%d}`,
-		searchText, minX, minY, maxX-minX, maxY-minY, cx, cy, finalX, finalY, button, nth,
-	))
-	return result
-}
+// findAndClickWord removed in favor of direct clickFoundBounds logic
 
 // handleFindElements discovers all text elements on screen with their bounding boxes.
 // Use this to get an overview of clickable elements before targeting specific ones.
@@ -706,39 +642,8 @@ func handleFindClickAndType(ctx context.Context, request mcp.CallToolRequest) (*
 	saveScreenshotIfKept(img, "ghost-mcp-findclicktype")
 
 	grayscale := getBoolParam(request, "grayscale", true)
-	var minX, minY, maxX, maxY int
-	var found bool
 
-	// Pass 1: Normal
-	ocrResult, ocrErr := ocr.ReadImage(img, ocr.Options{Color: !grayscale})
-	if ocrErr == nil {
-		minX, minY, maxX, maxY, found = findButtonBounds(ocrResult, searchText, nth)
-	}
-
-	// Pass 2: Inverted
-	if !found && grayscale {
-		invertedResult, _ := ocr.ReadImage(img, ocr.Options{Inverted: true})
-		if invertedResult != nil {
-			minX, minY, maxX, maxY, found = findButtonBounds(invertedResult, searchText, nth)
-		}
-	}
-
-	// Pass 3: Color mode
-	if !found && grayscale {
-		colorResult, _ := ocr.ReadImage(img, ocr.Options{Color: true})
-		if colorResult != nil {
-			minX, minY, maxX, maxY, found = findButtonBounds(colorResult, searchText, nth)
-		}
-	}
-
-	// Pass 4: Bright text extraction
-	if !found && grayscale {
-		brightResult, _ := ocr.ReadImage(img, ocr.Options{BrightText: true})
-		if brightResult != nil {
-			minX, minY, maxX, maxY, found = findButtonBounds(brightResult, searchText, nth)
-		}
-	}
-
+	minX, minY, maxX, maxY, found, _ := parallelFindText(ctx, img, searchText, nth, grayscale)
 	if !found {
 		logging.Info("find_click_and_type: text %q (occurrence %d) not found", searchText, nth)
 		return mcp.NewToolResultError(fmt.Sprintf("text %q not found on screen (occurrence %d)", searchText, nth)), nil
@@ -807,4 +712,59 @@ func saveScreenshotIfKept(img image.Image, prefix string) {
 			logging.Info("OCR screenshot kept at: %s", fpath)
 		}
 	}
+}
+
+// parallelFindText concurrently executes up to 4 OCR passes (Normal, Inverted, BrightText, Color)
+// against the provided image and races them to find the first matching bounding box.
+func parallelFindText(ctx context.Context, img image.Image, searchText string, nth int, grayscale bool) (int, int, int, int, bool, string) {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	type match struct {
+		minX, minY, maxX, maxY int
+		pass                   string
+	}
+	matches := make(chan match, 4)
+	var wg sync.WaitGroup
+
+	runPass := func(opts ocr.Options, name string) {
+		defer wg.Done()
+
+		select {
+		case <-ctx.Done():
+			return // Another pass already found it
+		default:
+		}
+
+		ocrResult, err := ocr.ReadImage(img, opts)
+		if err == nil && ocrResult != nil {
+			if bMinX, bMinY, bMaxX, bMaxY, bFound := findButtonBounds(ocrResult, searchText, nth); bFound {
+				select {
+				case matches <- match{bMinX, bMinY, bMaxX, bMaxY, name}:
+					cancel() // Stop the other passes
+				case <-ctx.Done():
+				}
+			}
+		}
+	}
+
+	wg.Add(1)
+	go runPass(ocr.Options{Color: !grayscale}, "normal")
+
+	if grayscale {
+		wg.Add(3)
+		go runPass(ocr.Options{Inverted: true}, "inverted")
+		go runPass(ocr.Options{BrightText: true}, "bright-text")
+		go runPass(ocr.Options{Color: true}, "color")
+	}
+
+	go func() {
+		wg.Wait()
+		close(matches)
+	}()
+
+	if m, ok := <-matches; ok {
+		return m.minX, m.minY, m.maxX, m.maxY, true, m.pass
+	}
+	return 0, 0, 0, 0, false, ""
 }

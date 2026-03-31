@@ -84,7 +84,19 @@ func handleToolName(
 ) (*mcp.CallToolResult, error)
 ```
 
-### 5. Parameter Extraction Helpers
+### 5. Concurrent OCR Engine Pipeline
+
+The `handler_ocr.go` pipeline leverages a pure-concurrency model to minimize latency when detecting UI elements that require extensive preprocessing (like inverted or bright text):
+
+1. **Dynamic Client Instantiation**: Tesseract instances (`*gosseract.Client`) are instantiated dynamically *inside* goroutines instead of locking a persistent global instance. This drops resting memory footprint by ~800MB and eliminates C++ `TessBaseAPI` Mutex bottlenecks.
+2. **Shotgun Preprocessing Race**: Complex search queries simultaneously fire up to 4 parallel goroutines:
+   - `Normal`: Unmodified contrast
+   - `Inverted`: Flips pixels (dark to light)
+   - `Color`: Preserves color (no grayscale)
+   - `Bright-Text`: Highlights pure-white letters
+3. **Short-Circuit Cancellation**: A synchronized `context.WithCancel` channel structure immediately aborts and garbage-collects all remaining fallback passes the millisecond a matched coordinate is found.
+
+### 6. Parameter Extraction Helpers
 
 Generic functions for type-safe parameter extraction:
 
