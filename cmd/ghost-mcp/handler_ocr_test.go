@@ -4,9 +4,11 @@
 package main
 
 import (
+	"context"
 	"testing"
 
 	"github.com/ghost-mcp/internal/ocr"
+	"github.com/mark3labs/mcp-go/mcp"
 )
 
 // =============================================================================
@@ -198,5 +200,43 @@ func TestAbs(t *testing.T) {
 		if result != tt.expected {
 			t.Errorf("abs(%d) = %d, expected %d", tt.input, result, tt.expected)
 		}
+	}
+}
+
+// TestHandleFindClickAndTypeMissingText tests find_click_and_type with missing text parameter
+func TestHandleFindClickAndTypeMissingText(t *testing.T) {
+	request := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{
+			Arguments: map[string]interface{}{
+				"type_text": "hello",
+			},
+		},
+	}
+	ctx := context.TODO()
+	result, err := handleFindClickAndType(ctx, request)
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	}
+	if !result.IsError {
+		t.Error("Expected error result for missing text")
+	}
+}
+
+// TestHandleFindClickAndTypeMissingTypeText tests find_click_and_type with missing type_text parameter
+func TestHandleFindClickAndTypeMissingTypeText(t *testing.T) {
+	request := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{
+			Arguments: map[string]interface{}{
+				"text": "Login",
+			},
+		},
+	}
+	ctx := context.TODO()
+	result, err := handleFindClickAndType(ctx, request)
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	}
+	if !result.IsError {
+		t.Error("Expected error result for missing type_text")
 	}
 }

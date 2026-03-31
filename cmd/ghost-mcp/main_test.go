@@ -444,6 +444,57 @@ func TestHandleTypeTextMissingText(t *testing.T) {
 	}
 }
 
+// TestHandleTypeTextWithEnter tests type_text with press_enter parameter
+func TestHandleTypeTextWithEnter(t *testing.T) {
+	request := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{
+			Arguments: map[string]interface{}{
+				"text":        "Hello+Enter",
+				"press_enter": true,
+			},
+		},
+	}
+
+	ctx := context.Background()
+	result, err := handleTypeText(ctx, request)
+
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("Expected non-nil result")
+	}
+
+	var response map[string]interface{}
+	if err := json.Unmarshal([]byte(result.Content[0].(mcp.TextContent).Text), &response); err != nil {
+		t.Fatalf("Failed to parse result JSON: %v", err)
+	}
+
+	if success, ok := response["success"].(bool); !ok || !success {
+		t.Error("Expected success to be true")
+	}
+}
+
+// TestHandleClickAndTypeMissingParams tests click_and_type missing parameters
+func TestHandleClickAndTypeMissingParams(t *testing.T) {
+	request := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{
+			Arguments: map[string]interface{}{},
+		},
+	}
+
+	ctx := context.Background()
+	result, err := handleClickAndType(ctx, request)
+
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	}
+	if !result.IsError {
+		t.Error("Expected error result for missing params in click_and_type")
+	}
+}
+
 // TestHandlePressKeyValid tests the press_key tool with valid parameters
 func TestHandlePressKeyValid(t *testing.T) {
 	testCases := []string{"enter", "tab", "esc", "ctrl", "alt", "shift"}

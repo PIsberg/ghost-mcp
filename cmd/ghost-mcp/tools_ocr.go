@@ -202,4 +202,39 @@ TIPS:
 		mcp.WithNumber("width", mcp.Description("Width of region to scan (default: full screen width).")),
 		mcp.WithNumber("height", mcp.Description("Height of region to scan (default: full screen height).")),
 	), handleFindElements)
+
+	mcpServer.AddTool(mcp.NewTool("find_click_and_type",
+		mcp.WithDescription(`Combines find_and_click and type_text into a single, highly efficient atomic operation.
+This is the primary tool for filling out forms and interacting with text inputs.
+
+🎯 HOW IT WORKS:
+1. Performs OCR to find the specified label/text (e.g. "Username").
+2. Calculates the click target, optionally applying x_offset and y_offset to click beside or below the label.
+3. Clicks the calculated coordinate to focus the input field.
+4. Waits for the field to focus (delay_ms).
+5. Types the requested text.
+6. Optionally presses Enter.
+
+SPEED TIP: Use region constraints (x, y, width, height) to scan only the relevant form area.
+
+EXAMPLE: Clicking an input field to the right of a "Name:" label:
+{
+  "text": "Name:",
+  "type_text": "John Doe",
+  "x_offset": 100,
+  "delay_ms": 100
+}`),
+		mcp.WithString("text", mcp.Description("The label or text to search for (e.g. \"Email:\"). Case-insensitive substring match."), mcp.Required()),
+		mcp.WithString("type_text", mcp.Description("The exact text to type after clicking."), mcp.Required()),
+		mcp.WithNumber("x_offset", mcp.Description("Horizontal pixel offset from the center of the found text to click. Use positive for right, negative for left (default: 0).")),
+		mcp.WithNumber("y_offset", mcp.Description("Vertical pixel offset from the center of the found text to click. Use positive for below, negative for above (default: 0).")),
+		mcp.WithBoolean("press_enter", mcp.Description("If true, presses Enter after typing (default: false).")),
+		mcp.WithNumber("delay_ms", mcp.Description("Milliseconds to wait after clicking before typing (default: 100). Gives UI time to focus input.")),
+		mcp.WithNumber("nth", mcp.Description("Which occurrence to click if label appears multiple times (default: 1).")),
+		mcp.WithNumber("x", mcp.Description("X coordinate of region to scan (default: 0 = full screen).")),
+		mcp.WithNumber("y", mcp.Description("Y coordinate of region to scan (default: 0 = full screen).")),
+		mcp.WithNumber("width", mcp.Description("Width of region to scan (default: full screen).")),
+		mcp.WithNumber("height", mcp.Description("Height of region to scan (default: full screen).")),
+		mcp.WithBoolean("grayscale", mcp.Description("Use grayscale OCR (default: true).")),
+	), handleFindClickAndType)
 }

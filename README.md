@@ -35,7 +35,8 @@ Ghost MCP allows AI assistants like Claude to control your computer's mouse, key
 | `click_at` | Move mouse to coordinates and click in one operation. Preferred over separate move+click. | `x`, `y`, `button` (optional, default left) |
 | `double_click` | Move mouse to coordinates and double-click. Use for opening files or activating items. | `x`, `y` |
 | `scroll` | Move mouse to coordinates and scroll the wheel. | `x`, `y`, `direction` (up/down/left/right), `amount` (optional, default 3) |
-| `type_text` | Type text via keyboard. Use for input fields. | `text` |
+| `type_text` | Type text via keyboard. Use for input fields. | `text`, `press_enter` (optional, hit enter after typing) |
+| `click_and_type` | Move mouse, click, wait slightly, and type text. Fast unified atomic operation. | `x`, `y`, `type_text`, `button`, `delay_ms`, `press_enter` |
 | `press_key` | Press a single key. Use for Enter, Tab, shortcuts, etc. | `key` |
 | `take_screenshot` | Capture screen as base64 PNG. Optional region parameters. | `x`, `y`, `width`, `height`, `quality` |
 
@@ -45,6 +46,7 @@ Ghost MCP allows AI assistants like Claude to control your computer's mouse, key
 |------|-------------|------------|
 | `read_screen_text` | Read text from screen using OCR. Returns text and word positions. | `x`, `y`, `width`, `height`, `grayscale` |
 | `find_and_click` | Find text on screen with OCR and click its center. | `text`, `button`, `nth`, `x`, `y`, `width`, `height` |
+| `find_click_and_type` | Find text, click nearest bounds, and type string immediately. | `text`, `type_text`, `x_offset`, `y_offset`, `press_enter`, `delay_ms` |
 | `find_and_click_all` ⭐ | Click multiple buttons in ONE atomic operation. | `texts` (array), `button`, `delay_ms` |
 | `wait_for_text` ⭐ | Wait for text to appear or disappear. Verify UI changes. | `text`, `visible`, `timeout_ms`, `x`, `y`, `width`, `height` |
 | `find_elements` ⭐ | Discover all clickable text elements with coordinates. Fast alternative to screenshots. | `x`, `y`, `width`, `height` |

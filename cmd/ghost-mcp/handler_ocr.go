@@ -688,3 +688,177 @@ func getStringArrayParam(request mcp.CallToolRequest, name string) ([]string, er
 
 	return nil, fmt.Errorf("parameter %s must be an array or JSON array string", name)
 }
+
+// handleFindClickAndType searches for a bounding box around `text`, calculating
+// click target coordinates (applying `x_offset` and `y_offset`), moves mouse,
+// clicks, optionally waits, types `type_text`, and optionally presses enter.
+func handleFindClickAndType(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	logging.Debug("Handling find_click_and_type request")
+
+	searchText, err := getStringParam(request, "text")
+	if err != nil {
+		logging.Error("Invalid text parameter: %v", err)
+		return mcp.NewToolResultError(fmt.Sprintf("invalid text parameter: %v", err)), nil
+	}
+	if searchText == "" {
+		return mcp.NewToolResultError("text must not be empty"), nil
+	}
+
+	typeText, err := getStringParam(request, "type_text")
+	if err != nil {
+		logging.Error("Invalid type_text parameter: %v", err)
+		return mcp.NewToolResultError(fmt.Sprintf("invalid type_text parameter: %v", err)), nil
+	}
+
+	xOffset := 0
+	if offset, err := getIntParam(request, "x_offset"); err == nil {
+		xOffset = offset
+	}
+	yOffset := 0
+	if offset, err := getIntParam(request, "y_offset"); err == nil {
+		yOffset = offset
+	}
+
+	pressEnter := getBoolParam(request, "press_enter", false)
+
+	delayMS := 100
+	if d, err := getIntParam(request, "delay_ms"); err == nil {
+		if d >= 0 && d <= 10000 {
+			delayMS = d
+		}
+	}
+
+	nth := 1
+	if n, err := getIntParam(request, "nth"); err == nil {
+		if n >= 1 {
+			nth = n
+		}
+	}
+
+	screenW, screenH := robotgo.GetScreenSize()
+	regionX, regionY, regionW, regionH := 0, 0, screenW, screenH
+	if v, err := getIntParam(request, "x"); err == nil {
+		regionX = v
+	}
+	if v, err := getIntParam(request, "y"); err == nil {
+		regionY = v
+	}
+	if v, err := getIntParam(request, "width"); err == nil {
+		regionW = v
+	}
+	if v, err := getIntParam(request, "height"); err == nil {
+		regionH = v
+	}
+
+	if err := validate.ScreenRegion(regionX, regionY, regionW, regionH, screenW, screenH); err != nil {
+		logging.Error("Screen region validation failed: %v", err)
+		return mcp.NewToolResultError(fmt.Sprintf("invalid screen region: %v", err)), nil
+	}
+
+	img, captureErr := robotgo.CaptureImg(regionX, regionY, regionW, regionH)
+	if captureErr != nil {
+		logging.Error("Failed to capture screen: %v", captureErr)
+		return mcp.NewToolResultError(fmt.Sprintf("failed to capture screen: %v", captureErr)), nil
+	}
+
+	screenshotDir := os.Getenv("GHOST_MCP_SCREENSHOT_DIR")
+	if screenshotDir == "" {
+		screenshotDir = os.TempDir()
+	}
+
+	filename := fmt.Sprintf("ghost-mcp-findclicktype-%d.png", time.Now().UnixNano())
+	fpath := filepath.Join(screenshotDir, filename)
+
+	if saveErr := robotgo.SavePng(img, fpath); saveErr != nil {
+		logging.Error("Failed to save screenshot: %v", saveErr)
+		return mcp.NewToolResultError(fmt.Sprintf("failed to save screenshot: %v", saveErr)), nil
+	}
+	if os.Getenv("GHOST_MCP_KEEP_SCREENSHOTS") != "1" {
+		defer os.Remove(fpath)
+	}
+
+	grayscale := getBoolParam(request, "grayscale", true)
+	var minX, minY, maxX, maxY int
+	var found bool
+
+	// Pass 1: Normal
+	ocrResult, ocrErr := ocr.ReadFile(fpath, ocr.Options{Color: !grayscale})
+	if ocrErr == nil {
+		minX, minY, maxX, maxY, found = findButtonBounds(ocrResult, searchText, nth)
+	}
+
+	// Pass 2: Inverted
+	if !found && grayscale {
+		invertedResult, _ := ocr.ReadFile(fpath, ocr.Options{Inverted: true})
+		if invertedResult != nil {
+			minX, minY, maxX, maxY, found = findButtonBounds(invertedResult, searchText, nth)
+		}
+	}
+
+	// Pass 3: Color mode
+	if !found && grayscale {
+		colorResult, _ := ocr.ReadFile(fpath, ocr.Options{Color: true})
+		if colorResult != nil {
+			minX, minY, maxX, maxY, found = findButtonBounds(colorResult, searchText, nth)
+		}
+	}
+
+	// Pass 4: Bright text extraction
+	if !found && grayscale {
+		brightResult, _ := ocr.ReadFile(fpath, ocr.Options{BrightText: true})
+		if brightResult != nil {
+			minX, minY, maxX, maxY, found = findButtonBounds(brightResult, searchText, nth)
+		}
+	}
+
+	if !found {
+		logging.Info("find_click_and_type: text %q (occurrence %d) not found", searchText, nth)
+		return mcp.NewToolResultError(fmt.Sprintf("text %q not found on screen (occurrence %d)", searchText, nth)), nil
+	}
+
+	cx := regionX + (minX+maxX)/2 + xOffset
+	cy := regionY + (minY+maxY)/2 + yOffset
+
+	if err := validate.Coords(cx, cy, screenW, screenH); err != nil {
+		logging.Error("Target coordinate out of bounds: %v", err)
+		return mcp.NewToolResultError(fmt.Sprintf("target coordinate out of bounds: %v", err)), nil
+	}
+
+	logging.Info("ACTION: Found %q, calculated target (%d,%d) applying offset (%d,%d)", searchText, cx, cy, xOffset, yOffset)
+	robotgo.Move(cx, cy)
+
+	if err := checkFailsafe(); err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	robotgo.Click("left", false)
+
+	if delayMS > 0 {
+		time.Sleep(time.Duration(delayMS) * time.Millisecond)
+	}
+
+	if err := validate.Text(typeText); err != nil {
+		logging.Error("Text validation failed: %v", err)
+		return mcp.NewToolResultError(fmt.Sprintf("invalid text: %v", err)), nil
+	}
+
+	displayText := typeText
+	if len(displayText) > 50 {
+		displayText = displayText[:47] + "..."
+	}
+	logging.Info("ACTION: Typing text %q", displayText)
+	robotgo.TypeStr(typeText)
+
+	if pressEnter {
+		logging.Info("ACTION: Pressing enter after typing")
+		robotgo.KeyTap("enter")
+	}
+
+	finalX, finalY := robotgo.GetMousePos()
+	logging.Info("ACTION COMPLETE: find_click_and_type %q -> typed %d characters", searchText, len(typeText))
+
+	return mcp.NewToolResultText(fmt.Sprintf(
+		`{"success":true,"found":%q,"box":{"x":%d,"y":%d,"width":%d,"height":%d},"clicked_x":%d,"clicked_y":%d,"actual_x":%d,"actual_y":%d,"characters_typed":%d,"enter_pressed":%t}`,
+		searchText, minX, minY, maxX-minX, maxY-minY, cx, cy, finalX, finalY, len(typeText), pressEnter,
+	)), nil
+}
