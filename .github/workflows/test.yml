@@ -95,6 +95,7 @@ jobs:
           Write-Host "Pre-built bundle not found — will build via vcpkg"
           echo "DEPS_FROM_RELEASE=false" >> $env:GITHUB_ENV
         }
+        exit 0
 
     - name: Cache vcpkg binary archives (Windows fallback)
       if: matrix.os == 'windows-latest' && env.DEPS_FROM_RELEASE != 'true'
