@@ -15,6 +15,12 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 )
 
+func TestFindElementsDescriptionPrefersScrollUntilTextForOffscreenTargets(t *testing.T) {
+	if !strings.Contains(findElementsToolDescription, "scroll_until_text first") {
+		t.Fatalf("find_elements description missing scroll_until_text-first guidance")
+	}
+}
+
 // =============================================================================
 // FIND_BUTTON_BOUNDS TESTS
 // =============================================================================

@@ -236,6 +236,27 @@ func TestFindScrollMatchMissingOCRResult(t *testing.T) {
 	}
 }
 
+func TestScrollToolDescriptionPrefersScrollUntilText(t *testing.T) {
+	if !strings.Contains(scrollToolDescription, "do NOT start with find_elements or take_screenshot; try scroll_until_text first") {
+		t.Fatalf("scrollToolDescription missing early scroll_until_text guidance")
+	}
+}
+
+func TestScrollUntilTextDescriptionRejectsScreenshotLoops(t *testing.T) {
+	if !strings.Contains(scrollUntilTextToolDescription, "repeated manual scroll + screenshot loops") {
+		t.Fatalf("scrollUntilTextToolDescription missing anti-loop guidance")
+	}
+	if !strings.Contains(scrollUntilTextToolDescription, "use the returned match_box/requested_x/requested_y") {
+		t.Fatalf("scrollUntilTextToolDescription missing direct handoff guidance")
+	}
+}
+
+func TestScreenshotDescriptionDiscouragesLongPageSearch(t *testing.T) {
+	if !strings.Contains(screenshotToolDescription, "DO NOT use screenshots as the first step for long-page text search") {
+		t.Fatalf("screenshotToolDescription missing long-page search warning")
+	}
+}
+
 // =============================================================================
 // TOOL HANDLER TESTS
 // =============================================================================

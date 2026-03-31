@@ -62,6 +62,70 @@ const (
 // TokenEnvVar is the environment variable for the authentication token.
 const TokenEnvVar = "GHOST_MCP_TOKEN"
 
+const scrollToolDescription = `Move the mouse to (x, y) and scroll the mouse wheel. Use for scrolling lists, pages, and dropdowns.
+
+Scroll 'down' to reveal content below, 'up' to go back up. For horizontal content use 'left' or 'right'.
+
+The response includes visible_text plus smart feedback:
+- viewport_changed: false means the scroll likely did not reveal anything new
+- boundary_likely: true means you probably hit the top/bottom of the page
+- text_found: true means optional search_text is already visible after the scroll
+
+AMOUNT GUIDANCE — use small increments to avoid overshooting:
+- amount=3 (default): ~1/4 screen — use for fine positioning
+- amount=5: ~1/2 screen — use to reveal the next section
+- amount=10: ~full screen — jumps far, easy to overshoot; only use for large pages
+
+SEARCH WORKFLOW:
+- Prefer scroll_until_text for page search tasks
+- If the target text is not currently visible, do NOT start with find_elements or take_screenshot; try scroll_until_text first
+- If using scroll directly, keep amount at 3-5 while searching
+- Do not keep alternating up/down unless you are backtracking one step after overshooting
+- Stop when boundary_likely=true or viewport_changed=false
+
+x and y are optional and default to the screen centre, which is correct for most page scrolling. Only specify them when scrolling a specific widget (e.g. a side panel or dropdown list).`
+
+const scrollUntilTextToolDescription = `Search a long page more intelligently by scrolling in bounded steps until text becomes visible.
+
+Use this first when you are hunting for a label, button, input placeholder, or section title that is probably off-screen above or below the current viewport.
+
+DO NOT do this first:
+- find_elements on the full page
+- take_screenshot of the full page
+- repeated manual scroll + screenshot loops
+
+HOW IT STOPS:
+- found: the requested text is visible in the post-scroll OCR
+- boundary: scrolling stopped changing the viewport, so you likely hit the page edge
+- max_steps: the search budget was exhausted
+
+SMART DEFAULTS:
+- direction=down
+- amount=5
+- max_steps=8
+
+GUIDANCE:
+- Keep amount at 3-5 for search. Larger jumps overshoot and create oscillation.
+- Use x/y only when scrolling a specific panel or dropdown; otherwise omit them.
+- If this returns found=false with stop_reason=boundary, do not keep scrolling in the same direction.
+- If this finds the target, use the returned match_box/requested_x/requested_y for the next click or focus step before doing broader rediscovery.`
+
+const screenshotToolDescription = `Capture the screen and return it as an image.
+
+🚫 DO NOT take a screenshot before clicking — use find_and_click instead.
+🚫 DO NOT take a screenshot after every click to verify — use wait_for_text instead.
+🚫 DO NOT take a screenshot to find a button's coordinates — use find_and_click or find_elements instead.
+🚫 DO NOT use screenshots as the first step for long-page text search — use scroll_until_text first.
+
+WHEN TO USE take_screenshot:
+- The task explicitly requires seeing the visual layout (e.g. "describe the screen", "what color is the button").
+- The target has no text (icon, image, progress bar) so OCR cannot locate it.
+- Debugging: scroll_until_text, find_and_click, or find_elements returned unexpected results and you need to see what is on screen.
+
+SPEED TIPS:
+- Use quality=85 (JPEG) for a ~10× smaller image — much faster for the model to process.
+- Use region parameters (x, y, width, height) to capture only the relevant area.`
+
 // =============================================================================
 // GLOBAL STATE
 // =============================================================================
@@ -972,27 +1036,7 @@ Use coordinates from find_elements (center_x/center_y) or a known fixed position
 	), handleDoubleClick)
 
 	mcpServer.AddTool(mcp.NewTool("scroll",
-		mcp.WithDescription(`Move the mouse to (x, y) and scroll the mouse wheel. Use for scrolling lists, pages, and dropdowns.
-
-Scroll 'down' to reveal content below, 'up' to go back up. For horizontal content use 'left' or 'right'.
-
-The response includes visible_text plus smart feedback:
-- viewport_changed: false means the scroll likely did not reveal anything new
-- boundary_likely: true means you probably hit the top/bottom of the page
-- text_found: true means optional search_text is already visible after the scroll
-
-AMOUNT GUIDANCE — use small increments to avoid overshooting:
-- amount=3 (default): ~1/4 screen — use for fine positioning
-- amount=5: ~1/2 screen — use to reveal the next section
-- amount=10: ~full screen — jumps far, easy to overshoot; only use for large pages
-
-SEARCH WORKFLOW:
-- Prefer scroll_until_text for page search tasks
-- If using scroll directly, keep amount at 3-5 while searching
-- Do not keep alternating up/down unless you are backtracking one step after overshooting
-- Stop when boundary_likely=true or viewport_changed=false
-
-x and y are optional and default to the screen centre, which is correct for most page scrolling. Only specify them when scrolling a specific widget (e.g. a side panel or dropdown list).`),
+		mcp.WithDescription(scrollToolDescription),
 		mcp.WithNumber("x", mcp.Description("X coordinate to scroll at (pixels from left edge). Defaults to screen centre.")),
 		mcp.WithNumber("y", mcp.Description("Y coordinate to scroll at (pixels from top edge). Defaults to screen centre.")),
 		mcp.WithString("direction", mcp.Description("Scroll direction: 'up', 'down', 'left', or 'right'."), mcp.Required()),
@@ -1001,24 +1045,7 @@ x and y are optional and default to the screen centre, which is correct for most
 	), handleScroll)
 
 	mcpServer.AddTool(mcp.NewTool("scroll_until_text",
-		mcp.WithDescription(`Search a long page more intelligently by scrolling in bounded steps until text becomes visible.
-
-Use this instead of manual scroll loops when you are hunting for a label, button, or section title somewhere above or below the current viewport.
-
-HOW IT STOPS:
-- found: the requested text is visible in the post-scroll OCR
-- boundary: scrolling stopped changing the viewport, so you likely hit the page edge
-- max_steps: the search budget was exhausted
-
-SMART DEFAULTS:
-- direction=down
-- amount=5
-- max_steps=8
-
-GUIDANCE:
-- Keep amount at 3-5 for search. Larger jumps overshoot and create oscillation.
-- Use x/y only when scrolling a specific panel or dropdown; otherwise omit them.
-- If this returns found=false with stop_reason=boundary, do not keep scrolling in the same direction.`),
+		mcp.WithDescription(scrollUntilTextToolDescription),
 		mcp.WithString("text", mcp.Description("Text to search for while scrolling (case-insensitive substring match)."), mcp.Required()),
 		mcp.WithString("direction", mcp.Description("Search direction: 'down' (default) or 'up'.")),
 		mcp.WithNumber("amount", mcp.Description("Scroll step size for each move. Use 3-5 for search (default: 5).")),
@@ -1065,20 +1092,7 @@ Common uses: 'enter' to confirm/submit, 'tab' to move between fields, 'esc' to c
 	), handlePressKey)
 
 	mcpServer.AddTool(mcp.NewTool("take_screenshot",
-		mcp.WithDescription(`Capture the screen and return it as an image.
-
-🚫 DO NOT take a screenshot before clicking — use find_and_click instead.
-🚫 DO NOT take a screenshot after every click to verify — use wait_for_text instead.
-🚫 DO NOT take a screenshot to find a button's coordinates — use find_and_click or find_elements instead.
-
-WHEN TO USE take_screenshot:
-- The task explicitly requires seeing the visual layout (e.g. "describe the screen", "what color is the button").
-- The target has no text (icon, image, progress bar) so OCR cannot locate it.
-- Debugging: find_and_click or find_elements returned unexpected results and you need to see what is on screen.
-
-SPEED TIPS:
-- Use quality=85 (JPEG) for a ~10× smaller image — much faster for the model to process.
-- Use region parameters (x, y, width, height) to capture only the relevant area.`),
+		mcp.WithDescription(screenshotToolDescription),
 		mcp.WithNumber("x", mcp.Description("X coordinate of the top-left corner of the capture region in pixels (default: 0).")),
 		mcp.WithNumber("y", mcp.Description("Y coordinate of the top-left corner of the capture region in pixels (default: 0).")),
 		mcp.WithNumber("width", mcp.Description("Width of the capture region in pixels (default: full screen width).")),

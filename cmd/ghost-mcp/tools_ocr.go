@@ -5,6 +5,56 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 )
 
+const findElementsToolDescription = `DIAGNOSTIC TOOL ONLY — shows what OCR can see on screen. Do NOT use this to find buttons before clicking. Use find_and_click directly instead.
+
+For long-page search, do NOT use find_elements first. If the target text is probably off-screen, use scroll_until_text before any full-page OCR diagnostics.
+
+🎯 WHEN TO USE (after find_and_click already failed):
+- find_and_click couldn't find your text — use this to see what OCR actually detected
+- You need center_x/center_y coordinates for click_at (no text label available)
+- Auditing what text is visible in a region
+
+⚠️ IMPORTANT LIMITATIONS:
+- OCR detects TEXT ONLY — it cannot tell if text is on a button, link, or label
+- Same text may appear multiple times (e.g., "Submit" in header vs button)
+- Icons/images without text are NOT detected
+- Colored buttons (white text on blue/green/red) may not appear — find_and_click handles these better with its 3-pass OCR
+
+🚫 WHEN NOT TO USE:
+- You want to click a button — use find_and_click directly, do NOT scan first
+- The target text is probably off-screen — use scroll_until_text first, then diagnose only if bounded search fails
+- Need to see visual layout → use take_screenshot instead
+- Target has no text (icon button, image) → use take_screenshot
+
+DIAGNOSTIC WORKFLOW (only after find_and_click fails):
+1. find_and_click fails → call find_elements to see what OCR detected
+2. Examine results to identify target
+3. click_at with center_x/center_y from step 2
+
+EXAMPLE USAGE:
+// Find all elements in button area (faster than full screen)
+{"x": 0, "y": 600, "width": 800, "height": 200}
+
+// Response includes ready-to-use coordinates:
+{
+  "success": true,
+  "element_count": 5,
+  "elements": [
+    {"text": "Primary", "center_x": 174, "center_y": 770, "confidence": 95.2, "width": 80, "height": 35},
+    {"text": "Success", "center_x": 425, "center_y": 770, "confidence": 94.8, "width": 80, "height": 35}
+  ]
+}
+
+// Verify before clicking (optional but recommended for unknown UI):
+{"tool": "take_screenshot", "arguments": {"x": 150, "y": 750, "width": 120, "height": 50}}
+
+TIPS:
+- Use region parameters to scan specific areas (10x faster than full screen)
+- Elements filtered by confidence (min 50%) and size (min 20x10px)
+- center_x/center_y are ready to use with click_at or move_mouse
+- All coordinates use logical pixels
+- width/height help identify element type (wide+short = likely button)`
+
 // registerOCRTools registers the read_screen_text tool.
 // Requires Tesseract OCR libraries to be installed (e.g., via vcpkg).
 func registerOCRTools(mcpServer *server.MCPServer) {
@@ -151,52 +201,7 @@ TIPS:
 	), handleWaitForText)
 
 	mcpServer.AddTool(mcp.NewTool("find_elements",
-		mcp.WithDescription(`DIAGNOSTIC TOOL ONLY — shows what OCR can see on screen. Do NOT use this to find buttons before clicking. Use find_and_click directly instead.
-
-🎯 WHEN TO USE (after find_and_click already failed):
-- find_and_click couldn't find your text — use this to see what OCR actually detected
-- You need center_x/center_y coordinates for click_at (no text label available)
-- Auditing what text is visible in a region
-
-⚠️ IMPORTANT LIMITATIONS:
-- OCR detects TEXT ONLY — it cannot tell if text is on a button, link, or label
-- Same text may appear multiple times (e.g., "Submit" in header vs button)
-- Icons/images without text are NOT detected
-- Colored buttons (white text on blue/green/red) may not appear — find_and_click handles these better with its 3-pass OCR
-
-🚫 WHEN NOT TO USE:
-- You want to click a button — use find_and_click directly, do NOT scan first
-- Need to see visual layout → use take_screenshot instead
-- Target has no text (icon button, image) → use take_screenshot
-
-DIAGNOSTIC WORKFLOW (only after find_and_click fails):
-1. find_and_click fails → call find_elements to see what OCR detected
-2. Examine results to identify target
-3. click_at with center_x/center_y from step 2
-
-EXAMPLE USAGE:
-// Find all elements in button area (faster than full screen)
-{"x": 0, "y": 600, "width": 800, "height": 200}
-
-// Response includes ready-to-use coordinates:
-{
-  "success": true,
-  "element_count": 5,
-  "elements": [
-    {"text": "Primary", "center_x": 174, "center_y": 770, "confidence": 95.2, "width": 80, "height": 35},
-    {"text": "Success", "center_x": 425, "center_y": 770, "confidence": 94.8, "width": 80, "height": 35}
-  ]
-}
-
-// Verify before clicking (optional but recommended for unknown UI):
-{"tool": "take_screenshot", "arguments": {"x": 150, "y": 750, "width": 120, "height": 50}}
-
-TIPS:
-- Use region parameters to scan specific areas (10x faster than full screen)
-- Elements filtered by confidence (min 50%) and size (min 20x10px)
-- center_x/center_y are ready to use with click_at or move_mouse
-- All coordinates use logical pixels
-- width/height help identify element type (wide+short = likely button)`),
+		mcp.WithDescription(findElementsToolDescription),
 		mcp.WithNumber("x", mcp.Description("X coordinate of region to scan (default: 0 = full screen).")),
 		mcp.WithNumber("y", mcp.Description("Y coordinate of region to scan (default: 0 = full screen).")),
 		mcp.WithNumber("width", mcp.Description("Width of region to scan (default: full screen width).")),
