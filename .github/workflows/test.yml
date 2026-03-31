@@ -79,6 +79,7 @@ jobs:
         # Attempt to download the pre-built Tesseract + Leptonica bundle from
         # the GitHub Release created by the build-deps-windows workflow.
         # If the release does not exist yet, fall through to the vcpkg build below.
+        $ErrorActionPreference = 'Stop'
         $installDir = "$env:USERPROFILE\vcpkg\installed\x64-mingw-dynamic"
         New-Item -ItemType Directory -Force -Path $installDir | Out-Null
         try {
