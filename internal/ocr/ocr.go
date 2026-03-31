@@ -12,6 +12,7 @@ import (
 	"sync"
 
 	"github.com/otiai10/gosseract/v2"
+	"golang.org/x/image/bmp"
 	"golang.org/x/image/draw"
 )
 
@@ -254,12 +255,12 @@ func encodeForOCR(img image.Image, factor int, opts Options) ([]byte, error) {
 		preprocessed := brightTextToGray(img, 240)
 		b := preprocessed.Bounds()
 		dst := image.NewGray(image.Rect(0, 0, b.Dx()*factor, b.Dy()*factor))
-		draw.BiLinear.Scale(dst, dst.Bounds(), preprocessed, b, draw.Over, nil)
+		draw.NearestNeighbor.Scale(dst, dst.Bounds(), preprocessed, b, draw.Over, nil)
 		scaledImg = dst
 	} else if opts.Color {
 		b := img.Bounds()
 		dst := image.NewRGBA(image.Rect(0, 0, b.Dx()*factor, b.Dy()*factor))
-		draw.BiLinear.Scale(dst, dst.Bounds(), img, b, draw.Over, nil)
+		draw.NearestNeighbor.Scale(dst, dst.Bounds(), img, b, draw.Over, nil)
 		scaledImg = dst
 	} else {
 		preprocessed := toGrayscaleContrast(img)
@@ -268,13 +269,21 @@ func encodeForOCR(img image.Image, factor int, opts Options) ([]byte, error) {
 		}
 		b := preprocessed.Bounds()
 		dst := image.NewGray(image.Rect(0, 0, b.Dx()*factor, b.Dy()*factor))
-		draw.BiLinear.Scale(dst, dst.Bounds(), preprocessed, b, draw.Over, nil)
+		draw.NearestNeighbor.Scale(dst, dst.Bounds(), preprocessed, b, draw.Over, nil)
 		scaledImg = dst
 	}
 
 	var buf bytes.Buffer
-	if err := png.Encode(&buf, scaledImg); err != nil {
-		return nil, err
+	format := strings.ToLower(os.Getenv("GHOST_MCP_OCR_FORMAT"))
+	if format == "png" {
+		if err := png.Encode(&buf, scaledImg); err != nil {
+			return nil, err
+		}
+	} else {
+		// Default to raw uncompressed BMP for ultra-fast generation
+		if err := bmp.Encode(&buf, scaledImg); err != nil {
+			return nil, err
+		}
 	}
 	return buf.Bytes(), nil
 }

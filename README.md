@@ -253,6 +253,7 @@ Add this to your MCP client configuration to connect to Ghost MCP:
 |----------|-------------|---------|
 | `GHOST_MCP_TOKEN` | **Required.** Secret authentication token. Server refuses to start without it. | *(none — must be set)* |
 | `TESSDATA_PREFIX` | **Required for OCR.** Directory that directly contains `eng.traineddata` (NOT its parent). | *(none — OCR will fail if unset)* |
+| `GHOST_MCP_OCR_FORMAT` | Injection format for sending screen buffers to OCR engine natively (`bmp` or `png`) | `bmp` (lossless, uncompressed speed) |
 | `GHOST_MCP_AUDIT_LOG` | Directory for audit log files. Created automatically if absent. | `<UserConfigDir>/ghost-mcp/audit/` |
 | `GHOST_MCP_DEBUG` | Enable debug logging (`1` = on) | `0` (disabled) |
 | `GHOST_MCP_VISUAL` | Show visual cursor pulse on mouse actions (`1` = on) | `0` (disabled) |
