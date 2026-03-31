@@ -6,12 +6,14 @@ import (
 	"bytes"
 	"fmt"
 	"image"
+	"image/color"
 	"image/png"
 	"os"
 	"strings"
 	"sync"
 
 	"github.com/otiai10/gosseract/v2"
+	"golang.org/x/image/bmp"
 	"golang.org/x/image/draw"
 )
 
@@ -65,36 +67,88 @@ type Options struct {
 // Words below this are OCR noise and should be discarded.
 const MinConfidence = 30.0
 
-// sharedClient is a process-wide Tesseract client. Tesseract's Init() loads
-// trained data files from disk (~100–500 ms on first call). By reusing one
-// client across all ReadFile calls we pay that cost once per process lifetime
-// instead of once per OCR request.
-//
-// gosseract's internal init() guard (shouldInit flag) ensures tessdata is only
-// loaded on the first call; subsequent calls just call SetPixImage + Recognize.
-//
-// sharedClientMu serialises access because the Tesseract C++ API is not
-// thread-safe.
+const pooledClientWarmCount = 4
+
+type ocrClient interface {
+	SetImage(string) error
+	SetImageFromBytes([]byte) error
+	SetPageSegMode(gosseract.PageSegMode) error
+	GetBoundingBoxes(gosseract.PageIteratorLevel) ([]gosseract.BoundingBox, error)
+	Close() error
+}
+
+type gosseractClient struct {
+	*gosseract.Client
+}
+
 var (
-	sharedClient     *gosseract.Client
-	sharedClientMu   sync.Mutex
-	sharedClientErr  error
-	sharedClientOnce sync.Once
+	newOCRClient = func() ocrClient {
+		return gosseractClient{Client: gosseract.NewClient()}
+	}
+	warmClientOnce sync.Once
+	warmImageBytes = mustEncodeWarmupImage()
 )
 
-// getClient returns the process-wide Tesseract client, initialising it on the
-// first call. Returns an error if Tesseract could not be initialised.
-func getClient() (*gosseract.Client, error) {
-	sharedClientOnce.Do(func() {
-		c := gosseract.NewClient()
-		if err := c.SetPageSegMode(gosseract.PSM_SPARSE_TEXT); err != nil {
-			c.Close()
-			sharedClientErr = fmt.Errorf("init tesseract page seg mode: %w", err)
-			return
+// clientPool gracefully recycles loaded Tesseract clients to eliminate the
+// ~200ms `eng.traineddata` disk-initialization latency for every concurrent OCR pass.
+// `sync.Pool` also relies on the natively embedded Go Garbage Collector to scale down and
+// destroy idle Tesseract pointers out of RAM organically, preventing memory leaks!
+var clientPool = sync.Pool{
+	New: func() any {
+		c := newOCRClient()
+		// If we can't init, we silently return the client anyway, and let the
+		// caller handle an empty or errored SetImage. However, SetPageSegMode
+		// rarely fails unless Tesseract is missing completely on the OS level.
+		c.SetPageSegMode(gosseract.PSM_SPARSE_TEXT)
+		return c
+	},
+}
+
+// getPooledClient pops a hot Tesseract client off the internal array or builds it.
+func getPooledClient() ocrClient {
+	primeClientPool()
+	return clientPool.Get().(ocrClient)
+}
+
+// putPooledClient safely re-queues the client back into the idle pool.
+// gosseract does not expose a "clear current image" API, so the previous pix
+// buffer is released on the next SetImage*/Close call rather than at put time.
+func putPooledClient(c ocrClient) {
+	if c != nil {
+		clientPool.Put(c)
+	}
+}
+
+func primeClientPool() {
+	warmClientOnce.Do(func() {
+		warmed := make([]ocrClient, 0, pooledClientWarmCount)
+		for i := 0; i < pooledClientWarmCount; i++ {
+			client := clientPool.Get().(ocrClient)
+			_ = warmOCRClient(client)
+			warmed = append(warmed, client)
 		}
-		sharedClient = c
+		for _, client := range warmed {
+			clientPool.Put(client)
+		}
 	})
-	return sharedClient, sharedClientErr
+}
+
+func warmOCRClient(client ocrClient) error {
+	if err := client.SetImageFromBytes(warmImageBytes); err != nil {
+		return err
+	}
+	_, err := client.GetBoundingBoxes(gosseract.RIL_WORD)
+	return err
+}
+
+func mustEncodeWarmupImage() []byte {
+	img := image.NewGray(image.Rect(0, 0, 1, 1))
+	img.SetGray(0, 0, color.Gray{Y: 255})
+	buf, err := encodeForOCR(img, 1, Options{})
+	if err != nil {
+		panic(fmt.Sprintf("encode warmup image: %v", err))
+	}
+	return buf
 }
 
 // ScaleFactor is how much we upscale the image before OCR.
@@ -105,16 +159,9 @@ func getClient() (*gosseract.Client, error) {
 // (~9x pixels vs 4x) is acceptable for interactive use.
 const ScaleFactor = 3
 
-// ReadFile runs OCR on the image at the given file path and returns structured output.
 func ReadFile(imagePath string, opts Options) (*Result, error) {
-	client, err := getClient()
-	if err != nil {
-		return nil, fmt.Errorf("tesseract unavailable: %w. Make sure Tesseract OCR is installed: https://github.com/tesseract-ocr/tesseract", err)
-	}
-
-	// Serialise: Tesseract C++ API is not thread-safe.
-	sharedClientMu.Lock()
-	defer sharedClientMu.Unlock()
+	client := getPooledClient()
+	defer putPooledClient(client)
 
 	// Preprocess + upscale into an in-memory PNG buffer and hand it to Tesseract
 	// via SetImageFromBytes. This avoids writing a temp file to disk and the
@@ -136,36 +183,11 @@ func ReadFile(imagePath string, opts Options) (*Result, error) {
 	// runs the full Tesseract Init (loads tessdata). On all subsequent calls
 	// shouldInit==false so init() only sets the new pixel image — tessdata is
 	// already loaded in memory.
-	boxes, err := client.GetBoundingBoxes(gosseract.RIL_WORD)
+	result, err := readClientResult(client, ScaleFactor)
 	if err != nil {
 		return nil, fmt.Errorf("get bounding boxes: %w. Make sure Tesseract OCR is installed: https://github.com/tesseract-ocr/tesseract", err)
 	}
-
-	words := make([]Word, 0, len(boxes))
-	for _, b := range boxes {
-		if b.Word == "" || b.Confidence < MinConfidence {
-			continue
-		}
-		words = append(words, Word{
-			Text:       b.Word,
-			X:          b.Box.Min.X / ScaleFactor,
-			Y:          b.Box.Min.Y / ScaleFactor,
-			Width:      (b.Box.Max.X - b.Box.Min.X) / ScaleFactor,
-			Height:     (b.Box.Max.Y - b.Box.Min.Y) / ScaleFactor,
-			Confidence: b.Confidence,
-		})
-	}
-
-	// Reconstruct text from the filtered words so the text field matches words.
-	var sb strings.Builder
-	for i, w := range words {
-		if i > 0 {
-			sb.WriteByte(' ')
-		}
-		sb.WriteString(w.Text)
-	}
-
-	return &Result{Text: sb.String(), Words: words}, nil
+	return result, nil
 }
 
 // ReadImage runs OCR on an already-decoded image and returns structured output.
@@ -173,23 +195,73 @@ func ReadFile(imagePath string, opts Options) (*Result, error) {
 // (e.g. from a screen capture) and does not want to pay the cost of writing a
 // temp file just to read it back.
 func ReadImage(img image.Image, opts Options) (*Result, error) {
-	client, err := getClient()
+	prepared, err := PrepareImageSet(img, opts)
 	if err != nil {
-		return nil, fmt.Errorf("tesseract unavailable: %w. Make sure Tesseract OCR is installed: https://github.com/tesseract-ocr/tesseract", err)
+		return nil, err
+	}
+	return ReadPreparedBytes(prepared.Normal, ScaleFactor)
+}
+
+// PreparedImageSet stores preprocessed OCR-ready bytes so multiple passes can
+// reuse the expensive scaling work instead of each goroutine rebuilding it.
+type PreparedImageSet struct {
+	Normal     []byte
+	Inverted   []byte
+	BrightText []byte
+	Color      []byte
+}
+
+func PrepareImageSet(img image.Image, opts Options) (*PreparedImageSet, error) {
+	normal, err := encodeForOCR(img, ScaleFactor, opts)
+	if err != nil {
+		return nil, fmt.Errorf("preprocess image: %w", err)
 	}
 
-	sharedClientMu.Lock()
-	defer sharedClientMu.Unlock()
+	return &PreparedImageSet{Normal: normal}, nil
+}
 
-	imgBytes, prepErr := encodeForOCR(img, ScaleFactor, opts)
-	if prepErr == nil {
-		if err := client.SetImageFromBytes(imgBytes); err != nil {
-			return nil, fmt.Errorf("set image from bytes: %w", err)
+func PrepareParallelImageSet(img image.Image, grayscale bool) (*PreparedImageSet, error) {
+	set := &PreparedImageSet{}
+
+	if grayscale {
+		var err error
+		if set.Normal, err = encodeForOCR(img, ScaleFactor, Options{}); err != nil {
+			return nil, fmt.Errorf("preprocess normal image: %w", err)
 		}
-	} else {
-		return nil, fmt.Errorf("preprocess image: %w", prepErr)
+		if set.Inverted, err = encodeForOCR(img, ScaleFactor, Options{Inverted: true}); err != nil {
+			return nil, fmt.Errorf("preprocess inverted image: %w", err)
+		}
+		if set.BrightText, err = encodeForOCR(img, ScaleFactor, Options{BrightText: true}); err != nil {
+			return nil, fmt.Errorf("preprocess bright-text image: %w", err)
+		}
+		if set.Color, err = encodeForOCR(img, ScaleFactor, Options{Color: true}); err != nil {
+			return nil, fmt.Errorf("preprocess color image: %w", err)
+		}
+		return set, nil
 	}
 
+	colorBytes, err := encodeForOCR(img, ScaleFactor, Options{Color: true})
+	if err != nil {
+		return nil, fmt.Errorf("preprocess color image: %w", err)
+	}
+	set.Normal = colorBytes
+	set.Color = colorBytes
+	return set, nil
+}
+
+// ReadPreparedBytes runs OCR on already-preprocessed image bytes.
+func ReadPreparedBytes(imgBytes []byte, scaleFactor int) (*Result, error) {
+	client := getPooledClient()
+	defer putPooledClient(client)
+
+	if err := client.SetImageFromBytes(imgBytes); err != nil {
+		return nil, fmt.Errorf("set image from bytes: %w", err)
+	}
+
+	return readClientResult(client, scaleFactor)
+}
+
+func readClientResult(client ocrClient, scaleFactor int) (*Result, error) {
 	boxes, err := client.GetBoundingBoxes(gosseract.RIL_WORD)
 	if err != nil {
 		return nil, fmt.Errorf("get bounding boxes: %w", err)
@@ -202,10 +274,10 @@ func ReadImage(img image.Image, opts Options) (*Result, error) {
 		}
 		words = append(words, Word{
 			Text:       b.Word,
-			X:          b.Box.Min.X / ScaleFactor,
-			Y:          b.Box.Min.Y / ScaleFactor,
-			Width:      (b.Box.Max.X - b.Box.Min.X) / ScaleFactor,
-			Height:     (b.Box.Max.Y - b.Box.Min.Y) / ScaleFactor,
+			X:          b.Box.Min.X / scaleFactor,
+			Y:          b.Box.Min.Y / scaleFactor,
+			Width:      (b.Box.Max.X - b.Box.Min.X) / scaleFactor,
+			Height:     (b.Box.Max.Y - b.Box.Min.Y) / scaleFactor,
 			Confidence: b.Confidence,
 		})
 	}
@@ -252,31 +324,68 @@ func encodeForOCR(img image.Image, factor int, opts Options) ([]byte, error) {
 	var scaledImg image.Image
 	if opts.BrightText {
 		preprocessed := brightTextToGray(img, 240)
-		b := preprocessed.Bounds()
-		dst := image.NewGray(image.Rect(0, 0, b.Dx()*factor, b.Dy()*factor))
-		draw.BiLinear.Scale(dst, dst.Bounds(), preprocessed, b, draw.Over, nil)
-		scaledImg = dst
+		scaledImg = scaleGrayNearest(preprocessed, factor)
 	} else if opts.Color {
 		b := img.Bounds()
 		dst := image.NewRGBA(image.Rect(0, 0, b.Dx()*factor, b.Dy()*factor))
-		draw.BiLinear.Scale(dst, dst.Bounds(), img, b, draw.Over, nil)
+		draw.NearestNeighbor.Scale(dst, dst.Bounds(), img, b, draw.Over, nil)
 		scaledImg = dst
 	} else {
 		preprocessed := toGrayscaleContrast(img)
 		if opts.Inverted {
 			invertGray(preprocessed)
 		}
-		b := preprocessed.Bounds()
-		dst := image.NewGray(image.Rect(0, 0, b.Dx()*factor, b.Dy()*factor))
-		draw.BiLinear.Scale(dst, dst.Bounds(), preprocessed, b, draw.Over, nil)
-		scaledImg = dst
+		scaledImg = scaleGrayNearest(preprocessed, factor)
 	}
 
 	var buf bytes.Buffer
-	if err := png.Encode(&buf, scaledImg); err != nil {
-		return nil, err
+	format := strings.ToLower(os.Getenv("GHOST_MCP_OCR_FORMAT"))
+	if format == "png" {
+		if err := png.Encode(&buf, scaledImg); err != nil {
+			return nil, err
+		}
+	} else {
+		// Default to raw uncompressed BMP for ultra-fast generation
+		if err := bmp.Encode(&buf, scaledImg); err != nil {
+			return nil, err
+		}
 	}
 	return buf.Bytes(), nil
+}
+
+// scaleGrayNearest performs nearest-neighbor upscaling for grayscale images
+// without routing through x/image/draw's generic RGBA64 path, which creates
+// tens of millions of tiny allocation objects for large *image.Gray scales.
+func scaleGrayNearest(src *image.Gray, factor int) *image.Gray {
+	b := src.Bounds()
+	srcW, srcH := b.Dx(), b.Dy()
+
+	if factor <= 1 {
+		clone := image.NewGray(image.Rect(0, 0, srcW, srcH))
+		for y := 0; y < srcH; y++ {
+			srcOff := y * src.Stride
+			dstOff := y * clone.Stride
+			copy(clone.Pix[dstOff:dstOff+srcW], src.Pix[srcOff:srcOff+srcW])
+		}
+		return clone
+	}
+
+	dst := image.NewGray(image.Rect(0, 0, srcW*factor, srcH*factor))
+
+	for sy := 0; sy < srcH; sy++ {
+		srcRow := src.Pix[sy*src.Stride : sy*src.Stride+srcW]
+		for fy := 0; fy < factor; fy++ {
+			dstRow := dst.Pix[(sy*factor+fy)*dst.Stride : (sy*factor+fy)*dst.Stride+srcW*factor]
+			for sx, px := range srcRow {
+				base := sx * factor
+				for fx := 0; fx < factor; fx++ {
+					dstRow[base+fx] = px
+				}
+			}
+		}
+	}
+
+	return dst
 }
 
 // invertGray flips every pixel in-place: new = 255 - old.

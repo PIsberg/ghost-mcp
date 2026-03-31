@@ -84,7 +84,20 @@ func handleToolName(
 ) (*mcp.CallToolResult, error)
 ```
 
-### 5. Parameter Extraction Helpers
+### 5. Concurrent OCR Engine Pipeline
+
+The `handler_ocr.go` pipeline leverages a pure-concurrency model to minimize latency when detecting UI elements that require extensive preprocessing (like inverted or bright text):
+
+1. **Primed Tesseract Client Pool**: OCR uses a `sync.Pool` of `*gosseract.Client` instances. The pool lazily primes four clients on first use with a tiny warm-up image so `eng.traineddata` is loaded once per pooled worker instead of once per request. This removes repeated `TessBaseAPI::Init()` disk reads from steady-state OCR traffic while preserving lock-free concurrent access.
+2. **Prepared OCR Variant Set**: Before launching the OCR race, the handler preprocesses and upscales each required variant exactly once (`normal`, `inverted`, `bright-text`, `color`) and passes the encoded bytes into the worker goroutines. This moves the large scaling allocations out of the hot race and prevents four concurrent passes from rebuilding the same 3x images independently.
+   - `Normal`: Unmodified contrast
+   - `Inverted`: Flips pixels (dark to light)
+   - `Color`: Preserves color (no grayscale)
+   - `Bright-Text`: Highlights pure-white letters
+3. **Short-Circuit Cancellation**: A synchronized `context.WithCancel` channel structure immediately aborts and garbage-collects all remaining fallback passes the millisecond a matched coordinate is found.
+4. **Fast Wait Polling**: `wait_for_text` polls every 100ms instead of 500ms, so UI transition checks return closer to the actual screen change rather than spending most of their latency budget asleep between captures.
+
+### 6. Parameter Extraction Helpers
 
 Generic functions for type-safe parameter extraction:
 
@@ -522,5 +535,3 @@ Debug logs show:
 2. **Parameter errors**: Verify parameter types in schema
 3. **RobotGo failures**: Check platform permissions
 4. **Protocol errors**: Ensure no stdout pollution
-
-

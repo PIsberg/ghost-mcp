@@ -375,7 +375,7 @@ Waits for text to appear or disappear from the screen. Use this to verify UI sta
 - `visible=false` waits for text to disappear (default=true waits for appear)
 - Use region (x, y, width, height) to watch specific area (faster than full screen)
 - Default timeout=5000ms, max=30000ms
-- Checks every 500ms for efficiency
+- Checks every 100ms for faster UI transition detection
 
 ---
 

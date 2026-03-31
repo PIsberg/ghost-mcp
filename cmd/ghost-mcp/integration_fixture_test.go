@@ -208,6 +208,38 @@ func TestFixture_Input_TextField(t *testing.T) {
 	t.Log("✓ Typed text into input field")
 }
 
+// TestFixture_FindClickAndType verifies the atomic find_click_and_type tool.
+func TestFixture_FindClickAndType(t *testing.T) {
+	client, ctx, cleanup := setupFixtureTest(t)
+	defer cleanup()
+
+	// Clear the input field first from previous tests
+	_, _ = client.CallToolString(ctx, "find_and_click", map[string]interface{}{
+		"text":   "Clear",
+		"button": "left",
+		"nth":    1,
+	})
+
+	time.Sleep(3 * time.Second)
+
+	// find "Type here", click, type text and press enter
+	result, err := client.CallToolString(ctx, "find_click_and_type", map[string]interface{}{
+		"text":        "Type here",
+		"type_text":   "test find click and type",
+		"press_enter": true,
+	})
+	if err != nil {
+		t.Fatalf("Failed find_click_and_type: %v", err)
+	}
+
+	if !strings.Contains(result, `"success":true`) {
+		t.Fatalf("Tool returned error: %s", result)
+	}
+
+	verifyLastAction(t, ctx, client, "Typed")
+	t.Log("✓ Successfully tested find_click_and_type")
+}
+
 // TestFixture_Input_TextArea clicks the textarea and types multi-line text.
 func TestFixture_Input_TextArea(t *testing.T) {
 	client, ctx, cleanup := setupFixtureTest(t)

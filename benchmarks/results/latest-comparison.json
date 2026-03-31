@@ -1,0 +1,43 @@
+{
+  "generated_at": "2026-03-31T23:11:45",
+  "current": {
+    "branch": "improve-efficiency",
+    "short_commit": "c14b431",
+    "ref": "HEAD",
+    "commit": "c14b43170543a27e2a23cbde858530cd6c15ec85"
+  },
+  "baseline": {
+    "branch": "origin/main",
+    "short_commit": "53cebc2",
+    "ref": "origin/main",
+    "commit": "53cebc212201a10928adeae4cfd3579215e8ee25"
+  },
+  "benchmarks": {
+    "BenchmarkReadImage_FixturePanel_Color": {
+      "current_median_ns_per_op": 2690032100.0,
+      "baseline_median_ns_per_op": 6586394000.0,
+      "delta_ns_per_op": -3896361900.0,
+      "delta_pct": -59.1577409429196,
+      "current_median_bytes_per_op": 961073816.0,
+      "baseline_median_bytes_per_op": 1070724632.0,
+      "delta_bytes_per_op": -109650816.0,
+      "current_median_allocs_per_op": 92.0,
+      "baseline_median_allocs_per_op": 108.0,
+      "delta_allocs_per_op": -16.0
+    },
+    "BenchmarkReadImage_FixturePanel_Grayscale": {
+      "current_median_ns_per_op": 1134020200.0,
+      "baseline_median_ns_per_op": 3633466700.0,
+      "delta_ns_per_op": -2499446500.0,
+      "delta_pct": -68.7895804852154,
+      "current_median_bytes_per_op": 315439864.0,
+      "baseline_median_bytes_per_op": 857208408.0,
+      "delta_bytes_per_op": -541768544.0,
+      "current_median_allocs_per_op": 96.0,
+      "baseline_median_allocs_per_op": 108.0,
+      "delta_allocs_per_op": -12.0
+    }
+  },
+  "current_result": "benchmarks\\results\\history\\current-c14b431.json",
+  "baseline_result": "benchmarks\\results\\history\\baseline-53cebc2.json"
+}

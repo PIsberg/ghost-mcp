@@ -1,0 +1,143 @@
+{
+  "generated_at": "2026-03-31T23:10:51",
+  "label": "current",
+  "git": {
+    "branch": "improve-efficiency",
+    "short_commit": "c14b431",
+    "ref": "HEAD",
+    "commit": "c14b43170543a27e2a23cbde858530cd6c15ec85"
+  },
+  "benchmark_regex": "Benchmark(ReadImage_FixturePanel|ParallelFindText_FixtureButtons)",
+  "count": 5,
+  "benchmarks": {
+    "BenchmarkParallelFindText_FixtureButtons_ColorOnly": {
+      "runs": [
+        {
+          "ns_per_op": 2751450700.0,
+          "bytes_per_op": 961077936.0,
+          "allocs_per_op": 138.0
+        },
+        {
+          "ns_per_op": 2748764800.0,
+          "bytes_per_op": 961077040.0,
+          "allocs_per_op": 136.0
+        },
+        {
+          "ns_per_op": 2827169800.0,
+          "bytes_per_op": 961077136.0,
+          "allocs_per_op": 137.0
+        },
+        {
+          "ns_per_op": 2817477600.0,
+          "bytes_per_op": 961078144.0,
+          "allocs_per_op": 141.0
+        },
+        {
+          "ns_per_op": 2951617700.0,
+          "bytes_per_op": 961077040.0,
+          "allocs_per_op": 136.0
+        }
+      ],
+      "median_ns_per_op": 2817477600.0,
+      "median_bytes_per_op": 961077136.0,
+      "median_allocs_per_op": 137.0
+    },
+    "BenchmarkParallelFindText_FixtureButtons_Grayscale": {
+      "runs": [
+        {
+          "ns_per_op": 2199134800.0,
+          "bytes_per_op": 1907398272.0,
+          "allocs_per_op": 478.0
+        },
+        {
+          "ns_per_op": 2122827800.0,
+          "bytes_per_op": 1907392192.0,
+          "allocs_per_op": 468.0
+        },
+        {
+          "ns_per_op": 2186569000.0,
+          "bytes_per_op": 1907392736.0,
+          "allocs_per_op": 470.0
+        },
+        {
+          "ns_per_op": 2218444800.0,
+          "bytes_per_op": 1907398216.0,
+          "allocs_per_op": 472.0
+        },
+        {
+          "ns_per_op": 2191048500.0,
+          "bytes_per_op": 1907390752.0,
+          "allocs_per_op": 464.0
+        }
+      ],
+      "median_ns_per_op": 2191048500.0,
+      "median_bytes_per_op": 1907392736.0,
+      "median_allocs_per_op": 470.0
+    },
+    "BenchmarkReadImage_FixturePanel_Color": {
+      "runs": [
+        {
+          "ns_per_op": 2901396400.0,
+          "bytes_per_op": 961078872.0,
+          "allocs_per_op": 97.0
+        },
+        {
+          "ns_per_op": 2755560600.0,
+          "bytes_per_op": 961073816.0,
+          "allocs_per_op": 92.0
+        },
+        {
+          "ns_per_op": 2690032100.0,
+          "bytes_per_op": 961073832.0,
+          "allocs_per_op": 93.0
+        },
+        {
+          "ns_per_op": 2651911300.0,
+          "bytes_per_op": 961073816.0,
+          "allocs_per_op": 92.0
+        },
+        {
+          "ns_per_op": 2675672600.0,
+          "bytes_per_op": 961073816.0,
+          "allocs_per_op": 92.0
+        }
+      ],
+      "median_ns_per_op": 2690032100.0,
+      "median_bytes_per_op": 961073816.0,
+      "median_allocs_per_op": 92.0
+    },
+    "BenchmarkReadImage_FixturePanel_Grayscale": {
+      "runs": [
+        {
+          "ns_per_op": 1124068000.0,
+          "bytes_per_op": 315444904.0,
+          "allocs_per_op": 100.0
+        },
+        {
+          "ns_per_op": 1134020200.0,
+          "bytes_per_op": 315440024.0,
+          "allocs_per_op": 99.0
+        },
+        {
+          "ns_per_op": 1104429000.0,
+          "bytes_per_op": 315439848.0,
+          "allocs_per_op": 95.0
+        },
+        {
+          "ns_per_op": 1316377200.0,
+          "bytes_per_op": 315439864.0,
+          "allocs_per_op": 96.0
+        },
+        {
+          "ns_per_op": 1183067100.0,
+          "bytes_per_op": 315439848.0,
+          "allocs_per_op": 95.0
+        }
+      ],
+      "median_ns_per_op": 1134020200.0,
+      "median_bytes_per_op": 315439864.0,
+      "median_allocs_per_op": 96.0
+    }
+  },
+  "raw_output": "benchmarks\\results\\history\\current-c14b431.txt"
+}

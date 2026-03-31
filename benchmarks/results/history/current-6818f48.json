@@ -1,0 +1,143 @@
+{
+  "generated_at": "2026-03-31T23:00:42",
+  "label": "current",
+  "git": {
+    "ref": "HEAD",
+    "short_commit": "6818f48",
+    "branch": "improve-efficiency",
+    "commit": "6818f48bfedd3b4a7b6f770324ef6a4bdb444be7"
+  },
+  "benchmark_regex": "Benchmark(ReadImage_FixturePanel|ParallelFindText_FixtureButtons)",
+  "count": 5,
+  "benchmarks": {
+    "BenchmarkParallelFindText_FixtureButtons_ColorOnly": {
+      "runs": [
+        {
+          "ns_per_op": 2814508900.0,
+          "bytes_per_op": 961078032.0,
+          "allocs_per_op": 139.0
+        },
+        {
+          "ns_per_op": 2766883700.0,
+          "bytes_per_op": 961077040.0,
+          "allocs_per_op": 136.0
+        },
+        {
+          "ns_per_op": 3032709600.0,
+          "bytes_per_op": 961077040.0,
+          "allocs_per_op": 136.0
+        },
+        {
+          "ns_per_op": 2975833400.0,
+          "bytes_per_op": 961077040.0,
+          "allocs_per_op": 136.0
+        },
+        {
+          "ns_per_op": 3208774200.0,
+          "bytes_per_op": 961077040.0,
+          "allocs_per_op": 136.0
+        }
+      ],
+      "median_ns_per_op": 2975833400.0,
+      "median_bytes_per_op": 961077040.0,
+      "median_allocs_per_op": 136.0
+    },
+    "BenchmarkParallelFindText_FixtureButtons_Grayscale": {
+      "runs": [
+        {
+          "ns_per_op": 5709180400.0,
+          "bytes_per_op": 3647189672.0,
+          "allocs_per_op": 217474074.0
+        },
+        {
+          "ns_per_op": 5718555200.0,
+          "bytes_per_op": 3647193640.0,
+          "allocs_per_op": 217474074.0
+        },
+        {
+          "ns_per_op": 5657078200.0,
+          "bytes_per_op": 3647184232.0,
+          "allocs_per_op": 217474066.0
+        },
+        {
+          "ns_per_op": 5654787100.0,
+          "bytes_per_op": 3647184232.0,
+          "allocs_per_op": 217474066.0
+        },
+        {
+          "ns_per_op": 6401307100.0,
+          "bytes_per_op": 3647181312.0,
+          "allocs_per_op": 217474061.0
+        }
+      ],
+      "median_ns_per_op": 5709180400.0,
+      "median_bytes_per_op": 3647184232.0,
+      "median_allocs_per_op": 217474066.0
+    },
+    "BenchmarkReadImage_FixturePanel_Color": {
+      "runs": [
+        {
+          "ns_per_op": 2880154100.0,
+          "bytes_per_op": 961073816.0,
+          "allocs_per_op": 92.0
+        },
+        {
+          "ns_per_op": 3017379800.0,
+          "bytes_per_op": 961073816.0,
+          "allocs_per_op": 92.0
+        },
+        {
+          "ns_per_op": 2886293100.0,
+          "bytes_per_op": 961073816.0,
+          "allocs_per_op": 92.0
+        },
+        {
+          "ns_per_op": 2735024800.0,
+          "bytes_per_op": 961073816.0,
+          "allocs_per_op": 92.0
+        },
+        {
+          "ns_per_op": 2713397200.0,
+          "bytes_per_op": 961073816.0,
+          "allocs_per_op": 92.0
+        }
+      ],
+      "median_ns_per_op": 2880154100.0,
+      "median_bytes_per_op": 961073816.0,
+      "median_allocs_per_op": 92.0
+    },
+    "BenchmarkReadImage_FixturePanel_Grayscale": {
+      "runs": [
+        {
+          "ns_per_op": 2291003200.0,
+          "bytes_per_op": 895379576.0,
+          "allocs_per_op": 72491298.0
+        },
+        {
+          "ns_per_op": 2228614500.0,
+          "bytes_per_op": 895374584.0,
+          "allocs_per_op": 72491295.0
+        },
+        {
+          "ns_per_op": 2289175900.0,
+          "bytes_per_op": 895369464.0,
+          "allocs_per_op": 72491288.0
+        },
+        {
+          "ns_per_op": 2268072700.0,
+          "bytes_per_op": 895369496.0,
+          "allocs_per_op": 72491288.0
+        },
+        {
+          "ns_per_op": 2234265400.0,
+          "bytes_per_op": 895369512.0,
+          "allocs_per_op": 72491288.0
+        }
+      ],
+      "median_ns_per_op": 2268072700.0,
+      "median_bytes_per_op": 895369512.0,
+      "median_allocs_per_op": 72491288.0
+    }
+  },
+  "raw_output": "benchmarks\\results\\history\\current-6818f48.txt"
+}

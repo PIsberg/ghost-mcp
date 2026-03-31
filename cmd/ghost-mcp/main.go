@@ -367,6 +367,8 @@ func handleTypeText(ctx context.Context, request mcp.CallToolRequest) (*mcp.Call
 		return mcp.NewToolResultError(fmt.Sprintf("invalid text: %v", err)), nil
 	}
 
+	pressEnter := getBoolParam(request, "press_enter", false)
+
 	// Truncate long text for logging
 	displayText := text
 	if len(text) > 50 {
@@ -374,8 +376,82 @@ func handleTypeText(ctx context.Context, request mcp.CallToolRequest) (*mcp.Call
 	}
 	logging.Info("ACTION: Typing text: %q", displayText)
 	robotgo.TypeStr(text)
+
+	if pressEnter {
+		logging.Info("ACTION: Pressing enter after typing")
+		robotgo.KeyTap("enter")
+	}
+
 	logging.Info("ACTION COMPLETE: Typed %d characters", len(text))
-	return mcp.NewToolResultText(fmt.Sprintf(`{"success": true, "characters_typed": %d}`, len(text))), nil
+	return mcp.NewToolResultText(fmt.Sprintf(`{"success": true, "characters_typed": %d, "enter_pressed": %t}`, len(text), pressEnter)), nil
+}
+
+func handleClickAndType(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	logging.Debug("Handling click_and_type request")
+
+	x, err := getIntParam(request, "x")
+	if err != nil {
+		logging.Error("Invalid x parameter: %v", err)
+		return mcp.NewToolResultError(fmt.Sprintf("invalid x parameter: %v", err)), nil
+	}
+	y, err := getIntParam(request, "y")
+	if err != nil {
+		logging.Error("Invalid y parameter: %v", err)
+		return mcp.NewToolResultError(fmt.Sprintf("invalid y parameter: %v", err)), nil
+	}
+
+	text, err := getStringParam(request, "text")
+	if err != nil {
+		logging.Error("Invalid text parameter: %v", err)
+		return mcp.NewToolResultError(fmt.Sprintf("invalid text parameter: %v", err)), nil
+	}
+
+	if err := validate.Text(text); err != nil {
+		logging.Error("Text validation failed: %v", err)
+		return mcp.NewToolResultError(fmt.Sprintf("invalid text: %v", err)), nil
+	}
+
+	screenW, screenH := robotgo.GetScreenSize()
+	if err := validate.Coords(x, y, screenW, screenH); err != nil {
+		logging.Error("Coordinate validation failed: %v", err)
+		return mcp.NewToolResultError(fmt.Sprintf("invalid coordinates: %v", err)), nil
+	}
+
+	pressEnter := getBoolParam(request, "press_enter", false)
+
+	logging.Info("ACTION: Moving mouse to (%d, %d) for click and type", x, y)
+	robotgo.Move(x, y)
+
+	if os.Getenv("GHOST_MCP_VISUAL") == "1" {
+		visual.PulseCursor(x, y)
+	}
+
+	if err := checkFailsafe(); err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	robotgo.Click("left", false)
+	applyClickDelay(request)
+
+	displayText := text
+	if len(text) > 50 {
+		displayText = text[:47] + "..."
+	}
+	logging.Info("ACTION: Typing text: %q", displayText)
+	robotgo.TypeStr(text)
+
+	if pressEnter {
+		logging.Info("ACTION: Pressing enter after typing")
+		robotgo.KeyTap("enter")
+	}
+
+	finalX, finalY := robotgo.GetMousePos()
+	logging.Info("ACTION COMPLETE: Click and type at (%d, %d)", finalX, finalY)
+
+	return mcp.NewToolResultText(fmt.Sprintf(
+		`{"success": true, "x": %d, "y": %d, "characters_typed": %d, "enter_pressed": %t}`,
+		finalX, finalY, len(text), pressEnter,
+	)), nil
 }
 
 func handlePressKey(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -701,7 +777,19 @@ IF THE FIELD HAS NO DETECTABLE TEXT (e.g. dark/empty placeholder):
 
 For special characters or control sequences (Enter, Tab, Ctrl+C), use press_key instead. To verify the text was entered, use wait_for_text or read_screen_text on the input region — not a full screenshot.`),
 		mcp.WithString("text", mcp.Description("The exact text string to type. Supports Unicode. Do not include control characters — use press_key for Enter, Tab, Backspace etc."), mcp.Required()),
+		mcp.WithBoolean("press_enter", mcp.Description("If true, automatically presses the Enter key immediately after the text is typed (default: false).")),
 	), handleTypeText)
+
+	mcpServer.AddTool(mcp.NewTool("click_and_type",
+		mcp.WithDescription(`Move the mouse to (x, y), click to focus, and then type text. This is a single atomic operation that replaces separate click_at and type_text calls.
+
+Use this tool when you already have the absolute pixel coordinates (e.g. from read_screen_text or find_elements) and need to interact with an input field. Do not guess coordinates.`),
+		mcp.WithNumber("x", mcp.Description("X coordinate in pixels from the left edge of the screen."), mcp.Required()),
+		mcp.WithNumber("y", mcp.Description("Y coordinate in pixels from the top edge of the screen."), mcp.Required()),
+		mcp.WithString("text", mcp.Description("The exact text string to type. Supports Unicode."), mcp.Required()),
+		mcp.WithBoolean("press_enter", mcp.Description("If true, automatically presses the Enter key immediately after the text is typed (default: false).")),
+		mcp.WithNumber("delay_ms", mcp.Description("Milliseconds to wait after the click before typing begins. This gives the UI time to focus the input field (default: 100). Max: 10000.")),
+	), handleClickAndType)
 
 	mcpServer.AddTool(mcp.NewTool("press_key",
 		mcp.WithDescription(`Press a single keyboard key or key combination. Use for control keys, navigation, and shortcuts.

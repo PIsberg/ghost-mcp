@@ -4,9 +4,15 @@
 package main
 
 import (
+	"context"
+	"fmt"
+	"image"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/ghost-mcp/internal/ocr"
+	"github.com/mark3labs/mcp-go/mcp"
 )
 
 // =============================================================================
@@ -198,5 +204,181 @@ func TestAbs(t *testing.T) {
 		if result != tt.expected {
 			t.Errorf("abs(%d) = %d, expected %d", tt.input, result, tt.expected)
 		}
+	}
+}
+
+// TestHandleFindClickAndTypeMissingText tests find_click_and_type with missing text parameter
+func TestHandleFindClickAndTypeMissingText(t *testing.T) {
+	request := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{
+			Arguments: map[string]interface{}{
+				"type_text": "hello",
+			},
+		},
+	}
+	ctx := context.TODO()
+	result, err := handleFindClickAndType(ctx, request)
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	}
+	if !result.IsError {
+		t.Error("Expected error result for missing text")
+	}
+}
+
+// TestHandleFindClickAndTypeMissingTypeText tests find_click_and_type with missing type_text parameter
+func TestHandleFindClickAndTypeMissingTypeText(t *testing.T) {
+	request := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{
+			Arguments: map[string]interface{}{
+				"text": "Login",
+			},
+		},
+	}
+	ctx := context.TODO()
+	result, err := handleFindClickAndType(ctx, request)
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	}
+	if !result.IsError {
+		t.Error("Expected error result for missing type_text")
+	}
+}
+
+func TestParallelFindText_PreparesVariantsOnceAndUsesPreparedBytes(t *testing.T) {
+	originalPrepare := prepareParallelOCRImageSet
+	originalRead := readPreparedOCRImage
+	t.Cleanup(func() {
+		prepareParallelOCRImageSet = originalPrepare
+		readPreparedOCRImage = originalRead
+	})
+
+	var prepareCalls int
+	img := image.NewRGBA(image.Rect(0, 0, 10, 10))
+	prepared := &ocr.PreparedImageSet{
+		Normal:     []byte("normal"),
+		Inverted:   []byte("inverted"),
+		BrightText: []byte("bright"),
+		Color:      []byte("color"),
+	}
+	prepareParallelOCRImageSet = func(got image.Image, grayscale bool) (*ocr.PreparedImageSet, error) {
+		prepareCalls++
+		if got != img {
+			t.Fatalf("prepare called with unexpected image pointer")
+		}
+		if !grayscale {
+			t.Fatalf("expected grayscale=true")
+		}
+		return prepared, nil
+	}
+
+	seen := make(chan string, 4)
+	readPreparedOCRImage = func(imgBytes []byte, scaleFactor int) (*ocr.Result, error) {
+		seen <- string(imgBytes)
+		if scaleFactor != ocr.ScaleFactor {
+			t.Fatalf("scaleFactor = %d, want %d", scaleFactor, ocr.ScaleFactor)
+		}
+		if string(imgBytes) == "color" {
+			return &ocr.Result{Words: []ocr.Word{{Text: "Submit", X: 10, Y: 10, Width: 40, Height: 20, Confidence: 99}}}, nil
+		}
+		return &ocr.Result{}, nil
+	}
+
+	_, _, _, _, found, pass := parallelFindText(context.Background(), img, "Submit", 1, true)
+	if !found {
+		t.Fatal("expected text to be found")
+	}
+	if pass != "color" {
+		t.Fatalf("pass = %q, want color", pass)
+	}
+	if prepareCalls != 1 {
+		t.Fatalf("prepareCalls = %d, want 1", prepareCalls)
+	}
+
+	close(seen)
+	got := make(map[string]bool)
+	for name := range seen {
+		got[name] = true
+	}
+	if !got["normal"] || !got["inverted"] || !got["bright"] || !got["color"] {
+		t.Fatalf("prepared bytes used = %v", got)
+	}
+}
+
+func TestWaitForTextPollInterval_Is100ms(t *testing.T) {
+	if waitForTextPollInterval != 100*time.Millisecond {
+		t.Fatalf("waitForTextPollInterval = %v, want 100ms", waitForTextPollInterval)
+	}
+}
+
+func TestHandleWaitForText_UsesConfiguredPollInterval(t *testing.T) {
+	originalCapture := waitForTextCaptureImage
+	originalRead := waitForTextReadImage
+	originalSleep := waitForTextSleep
+	t.Cleanup(func() {
+		waitForTextCaptureImage = originalCapture
+		waitForTextReadImage = originalRead
+		waitForTextSleep = originalSleep
+	})
+
+	waitForTextCaptureImage = func(x, y, width, height int) (image.Image, error) {
+		return image.NewRGBA(image.Rect(0, 0, 2, 2)), nil
+	}
+	waitForTextReadImage = func(img image.Image, opts ocr.Options) (*ocr.Result, error) {
+		return &ocr.Result{}, nil
+	}
+
+	var slept []time.Duration
+	waitForTextSleep = func(d time.Duration) {
+		slept = append(slept, d)
+		time.Sleep(5 * time.Millisecond)
+	}
+
+	req := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{
+			Arguments: map[string]interface{}{
+				"text":       "NeverAppears",
+				"timeout_ms": float64(210),
+			},
+		},
+	}
+
+	result, err := handleWaitForText(context.Background(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !result.IsError {
+		t.Fatal("expected timeout error result")
+	}
+	if len(slept) == 0 {
+		t.Fatal("expected at least one sleep")
+	}
+	for _, d := range slept {
+		if d != waitForTextPollInterval {
+			t.Fatalf("sleep duration = %v, want %v", d, waitForTextPollInterval)
+		}
+	}
+	text := result.Content[0].(mcp.TextContent).Text
+	if !strings.Contains(text, "timeout waiting for text") {
+		t.Fatalf("unexpected result text: %s", text)
+	}
+}
+
+func TestParallelFindText_PreprocessFailureReturnsNotFound(t *testing.T) {
+	originalPrepare := prepareParallelOCRImageSet
+	t.Cleanup(func() {
+		prepareParallelOCRImageSet = originalPrepare
+	})
+
+	prepareParallelOCRImageSet = func(image.Image, bool) (*ocr.PreparedImageSet, error) {
+		return nil, fmt.Errorf("boom")
+	}
+
+	_, _, _, _, found, pass := parallelFindText(context.Background(), image.NewRGBA(image.Rect(0, 0, 1, 1)), "Submit", 1, true)
+	if found {
+		t.Fatal("expected not found when preprocessing fails")
+	}
+	if pass != "" {
+		t.Fatalf("pass = %q, want empty", pass)
 	}
 }

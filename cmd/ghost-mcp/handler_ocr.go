@@ -4,9 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"image"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/ghost-mcp/internal/logging"
@@ -15,6 +17,16 @@ import (
 	"github.com/go-vgo/robotgo"
 	"github.com/mark3labs/mcp-go/mcp"
 )
+
+var (
+	prepareParallelOCRImageSet = ocr.PrepareParallelImageSet
+	readPreparedOCRImage       = ocr.ReadPreparedBytes
+	waitForTextCaptureImage    = func(x, y, width, height int) (image.Image, error) { return robotgo.CaptureImg(x, y, width, height) }
+	waitForTextReadImage       = ocr.ReadImage
+	waitForTextSleep           = time.Sleep
+)
+
+const waitForTextPollInterval = 100 * time.Millisecond
 
 func handleReadScreenText(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	logging.Debug("Handling read_screen_text request")
@@ -44,27 +56,10 @@ func handleReadScreenText(ctx context.Context, request mcp.CallToolRequest) (*mc
 		return mcp.NewToolResultError(fmt.Sprintf("failed to capture screen: %v", captureErr)), nil
 	}
 
-	// Determine screenshot directory
-	screenshotDir := os.Getenv("GHOST_MCP_SCREENSHOT_DIR")
-	if screenshotDir == "" {
-		screenshotDir = os.TempDir()
-	}
-
-	filename := fmt.Sprintf("ghost-mcp-ocr-%d.png", time.Now().UnixNano())
-	fpath := filepath.Join(screenshotDir, filename)
-
-	if saveErr := robotgo.SavePng(img, fpath); saveErr != nil {
-		logging.Error("Failed to save screenshot for OCR: %v", saveErr)
-		return mcp.NewToolResultError(fmt.Sprintf("failed to save screenshot: %v", saveErr)), nil
-	}
-	if os.Getenv("GHOST_MCP_KEEP_SCREENSHOTS") != "1" {
-		defer os.Remove(fpath)
-	} else {
-		logging.Info("OCR screenshot kept at: %s", fpath)
-	}
+	saveScreenshotIfKept(img, "ghost-mcp-ocr")
 
 	grayscale := getBoolParam(request, "grayscale", true)
-	result, ocrErr := ocr.ReadFile(fpath, ocr.Options{Color: !grayscale})
+	result, ocrErr := ocr.ReadImage(img, ocr.Options{Color: !grayscale})
 	if ocrErr != nil {
 		logging.Error("OCR failed: %v", ocrErr)
 		return mcp.NewToolResultError(fmt.Sprintf("OCR failed: %v", ocrErr)), nil
@@ -154,81 +149,45 @@ func handleFindAndClick(ctx context.Context, request mcp.CallToolRequest) (*mcp.
 		return mcp.NewToolResultError(fmt.Sprintf("failed to capture screen: %v", captureErr)), nil
 	}
 
-	screenshotDir := os.Getenv("GHOST_MCP_SCREENSHOT_DIR")
-	if screenshotDir == "" {
-		screenshotDir = os.TempDir()
-	}
-
-	filename := fmt.Sprintf("ghost-mcp-findclick-%d.png", time.Now().UnixNano())
-	fpath := filepath.Join(screenshotDir, filename)
-
-	if saveErr := robotgo.SavePng(img, fpath); saveErr != nil {
-		logging.Error("Failed to save screenshot for OCR: %v", saveErr)
-		return mcp.NewToolResultError(fmt.Sprintf("failed to save screenshot: %v", saveErr)), nil
-	}
-	if os.Getenv("GHOST_MCP_KEEP_SCREENSHOTS") != "1" {
-		defer os.Remove(fpath)
-	}
+	saveScreenshotIfKept(img, "ghost-mcp-findclick")
 
 	grayscale := getBoolParam(request, "grayscale", true)
 
-	// Pass 1: normal preprocessing (dark text on light backgrounds).
-	ocrResult, ocrErr := ocr.ReadFile(fpath, ocr.Options{Color: !grayscale})
-	if ocrErr != nil {
-		logging.Error("OCR failed: %v", ocrErr)
-		return mcp.NewToolResultError(fmt.Sprintf("OCR failed: %v", ocrErr)), nil
+	minX, minY, maxX, maxY, found, passName := parallelFindText(ctx, img, searchText, nth, grayscale)
+	if !found {
+		logging.Info("Text %q (occurrence %d) not found on screen", searchText, nth)
+		return mcp.NewToolResultError(fmt.Sprintf("text %q not found on screen (occurrence %d). TIP: Call find_elements (no args) to see all text OCR detected — this shows exactly what is visible and why the match failed.", searchText, nth)), nil
 	}
 
-	if result := findAndClickWord(ocrResult, searchText, nth, regionX, regionY, screenW, screenH, button, request); result != nil {
-		return result, nil
+	// Calculate center of the merged button bounds
+	cx := regionX + (minX+maxX)/2
+	cy := regionY + (minY+maxY)/2
+
+	if err := validate.Coords(cx, cy, screenW, screenH); err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("found text but center out of bounds: %v", err)), nil
 	}
 
-	// Pass 2 (inverted): white text on dark/coloured backgrounds becomes dark
-	// text on a lighter background — the pattern Tesseract is trained on.
-	// CSS buttons with white text on gradient backgrounds are the classic case.
-	// Only runs in grayscale mode; colour mode already preserves all info.
-	if grayscale {
-		logging.Info("find_and_click: %q not found on normal pass, retrying with inverted image", searchText)
-		invertedResult, invertedErr := ocr.ReadFile(fpath, ocr.Options{Inverted: true})
-		if invertedErr == nil {
-			if result := findAndClickWord(invertedResult, searchText, nth, regionX, regionY, screenW, screenH, button, request); result != nil {
-				return result, nil
-			}
-			logging.Info("find_and_click: %q not found on inverted pass either (%d words)", searchText, len(invertedResult.Words))
-		}
+	logging.Info("ACTION: Found %q (occurrence %d) via %s pass at box (%d,%d)-(%d,%d), clicking center (%d,%d) with %s",
+		searchText, nth, passName, minX, minY, maxX, maxY, cx, cy, button)
+	robotgo.Move(cx, cy)
+
+	if err := checkFailsafe(); err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	// Pass 3 (color mode): disable grayscale to preserve color contrast.
-	// Some colored buttons (green/blue/red with white text) are detected better
-	// when color information is preserved rather than converted to grayscale.
-	if grayscale {
-		logging.Info("find_and_click: %q not found on inverted pass, retrying with color mode", searchText)
-		colorResult, colorErr := ocr.ReadFile(fpath, ocr.Options{Color: true})
-		if colorErr == nil {
-			if result := findAndClickWord(colorResult, searchText, nth, regionX, regionY, screenW, screenH, button, request); result != nil {
-				return result, nil
-			}
-			logging.Info("find_and_click: %q not found on color pass either (%d words)", searchText, len(colorResult.Words))
-		}
-	}
+	robotgo.Click(button, false)
+	applyClickDelay(request)
 
-	// Pass 4 (bright-text): maps pixels with all RGB ≥ 240 → black, else → white.
-	// Uniquely captures pure-white button text (255,255,255) while ignoring near-white
-	// body text like #eee (238 < 240) and all coloured backgrounds (always have at
-	// least one channel < 240). Last resort for white text on dark/gradient pages.
-	if grayscale {
-		logging.Info("find_and_click: %q not found on color pass, retrying with bright-text extraction", searchText)
-		brightResult, brightErr := ocr.ReadFile(fpath, ocr.Options{BrightText: true})
-		if brightErr == nil {
-			if result := findAndClickWord(brightResult, searchText, nth, regionX, regionY, screenW, screenH, button, request); result != nil {
-				return result, nil
-			}
-			logging.Info("find_and_click: %q not found on bright-text pass either (%d words)", searchText, len(brightResult.Words))
-		}
+	finalX, finalY := robotgo.GetMousePos()
+	if finalX != cx || finalY != cy {
+		logging.Info("WARNING: cursor moved after click: requested (%d,%d) actual (%d,%d)", cx, cy, finalX, finalY)
 	}
+	logging.Info("ACTION COMPLETE: find_and_click %q at (%d, %d)", searchText, finalX, finalY)
 
-	logging.Info("Text %q (occurrence %d) not found on screen", searchText, nth)
-	return mcp.NewToolResultError(fmt.Sprintf("text %q not found on screen (occurrence %d). TIP: Call find_elements (no args) to see all text OCR detected — this shows exactly what is visible and why the match failed.", searchText, nth)), nil
+	return mcp.NewToolResultText(fmt.Sprintf(
+		`{"success":true,"found":%q,"box":{"x":%d,"y":%d,"width":%d,"height":%d},"requested_x":%d,"requested_y":%d,"actual_x":%d,"actual_y":%d,"button":%q,"occurrence":%d}`,
+		searchText, minX, minY, maxX-minX, maxY-minY, cx, cy, finalX, finalY, button, nth,
+	)), nil
 }
 
 // findButtonBounds finds the full bounding box of a button by merging adjacent
@@ -303,50 +262,7 @@ func abs(x int) int {
 	return x
 }
 
-// findAndClickWord searches ocrResult for the nth case-insensitive occurrence
-// of searchText, clicks the center of the full button (merged bounding box for
-// multi-word buttons), and returns the MCP result. Returns nil if the text is
-// not found (caller should try a different OCR pass or give up).
-func findAndClickWord(ocrResult *ocr.Result, searchText string, nth, regionX, regionY, screenW, screenH int, button string, request mcp.CallToolRequest) *mcp.CallToolResult {
-	minX, minY, maxX, maxY, found := findButtonBounds(ocrResult, searchText, nth)
-	if !found {
-		return nil
-	}
-
-	// Calculate center of the merged button bounds
-	// OCR coords are relative to the captured region; translate to screen coords.
-	cx := regionX + (minX+maxX)/2
-	cy := regionY + (minY+maxY)/2
-
-	if err := validate.Coords(cx, cy, screenW, screenH); err != nil {
-		result := mcp.NewToolResultError(fmt.Sprintf("found text but center out of bounds: %v", err))
-		return result
-	}
-
-	logging.Info("ACTION: Found %q (occurrence %d) at box (%d,%d)-(%d,%d), clicking center (%d,%d) with %s",
-		searchText, nth, minX, minY, maxX, maxY, cx, cy, button)
-	robotgo.Move(cx, cy)
-
-	if err := checkFailsafe(); err != nil {
-		result := mcp.NewToolResultError(err.Error())
-		return result
-	}
-
-	robotgo.Click(button, false)
-	applyClickDelay(request)
-
-	finalX, finalY := robotgo.GetMousePos()
-	if finalX != cx || finalY != cy {
-		logging.Info("WARNING: cursor moved after click: requested (%d,%d) actual (%d,%d)", cx, cy, finalX, finalY)
-	}
-	logging.Info("ACTION COMPLETE: find_and_click %q at (%d, %d)", searchText, finalX, finalY)
-
-	result := mcp.NewToolResultText(fmt.Sprintf(
-		`{"success":true,"found":%q,"box":{"x":%d,"y":%d,"width":%d,"height":%d},"requested_x":%d,"requested_y":%d,"actual_x":%d,"actual_y":%d,"button":%q,"occurrence":%d}`,
-		searchText, minX, minY, maxX-minX, maxY-minY, cx, cy, finalX, finalY, button, nth,
-	))
-	return result
-}
+// findAndClickWord removed in favor of direct clickFoundBounds logic
 
 // handleFindElements discovers all text elements on screen with their bounding boxes.
 // Use this to get an overview of clickable elements before targeting specific ones.
@@ -378,24 +294,10 @@ func handleFindElements(ctx context.Context, request mcp.CallToolRequest) (*mcp.
 		return mcp.NewToolResultError(fmt.Sprintf("failed to capture screen: %v", captureErr)), nil
 	}
 
-	// Save temporarily for OCR
-	screenshotDir := os.Getenv("GHOST_MCP_SCREENSHOT_DIR")
-	if screenshotDir == "" {
-		screenshotDir = os.TempDir()
-	}
-	filename := fmt.Sprintf("ghost-mcp-findelements-%d.png", time.Now().UnixNano())
-	fpath := filepath.Join(screenshotDir, filename)
-
-	if saveErr := robotgo.SavePng(img, fpath); saveErr != nil {
-		logging.Error("Failed to save screenshot: %v", saveErr)
-		return mcp.NewToolResultError(fmt.Sprintf("failed to save screenshot: %v", saveErr)), nil
-	}
-	if os.Getenv("GHOST_MCP_KEEP_SCREENSHOTS") != "1" {
-		defer os.Remove(fpath)
-	}
+	saveScreenshotIfKept(img, "ghost-mcp-findelements")
 
 	// Run OCR with color mode for best element detection
-	ocrResult, ocrErr := ocr.ReadFile(fpath, ocr.Options{Color: true})
+	ocrResult, ocrErr := ocr.ReadImage(img, ocr.Options{Color: true})
 	if ocrErr != nil {
 		logging.Error("OCR failed: %v", ocrErr)
 		return mcp.NewToolResultError(fmt.Sprintf("OCR failed: %v", ocrErr)), nil
@@ -480,24 +382,10 @@ func handleFindAndClickAll(ctx context.Context, request mcp.CallToolRequest) (*m
 		return mcp.NewToolResultError(fmt.Sprintf("failed to capture screen: %v", captureErr)), nil
 	}
 
-	screenshotDir := os.Getenv("GHOST_MCP_SCREENSHOT_DIR")
-	if screenshotDir == "" {
-		screenshotDir = os.TempDir()
-	}
-
-	filename := fmt.Sprintf("ghost-mcp-findclickall-%d.png", time.Now().UnixNano())
-	fpath := filepath.Join(screenshotDir, filename)
-
-	if saveErr := robotgo.SavePng(img, fpath); saveErr != nil {
-		logging.Error("Failed to save screenshot: %v", saveErr)
-		return mcp.NewToolResultError(fmt.Sprintf("failed to save screenshot: %v", saveErr)), nil
-	}
-	if os.Getenv("GHOST_MCP_KEEP_SCREENSHOTS") != "1" {
-		defer os.Remove(fpath)
-	}
+	saveScreenshotIfKept(img, "ghost-mcp-findclickall")
 
 	// Run OCR once
-	ocrResult, ocrErr := ocr.ReadFile(fpath, ocr.Options{Color: true})
+	ocrResult, ocrErr := ocr.ReadImage(img, ocr.Options{Color: true})
 	if ocrErr != nil {
 		logging.Error("OCR failed: %v", ocrErr)
 		return mcp.NewToolResultError(fmt.Sprintf("OCR failed: %v", ocrErr)), nil
@@ -509,7 +397,7 @@ func handleFindAndClickAll(ctx context.Context, request mcp.CallToolRequest) (*m
 		minX, minY, maxX, maxY, found := findButtonBounds(ocrResult, text, 1)
 		if !found {
 			// Try inverted OCR for this text
-			invertedResult, invertedErr := ocr.ReadFile(fpath, ocr.Options{Inverted: true})
+			invertedResult, invertedErr := ocr.ReadImage(img, ocr.Options{Inverted: true})
 			if invertedErr == nil {
 				minX, minY, maxX, maxY, found = findButtonBounds(invertedResult, text, 1)
 			}
@@ -518,7 +406,7 @@ func handleFindAndClickAll(ctx context.Context, request mcp.CallToolRequest) (*m
 		if !found {
 			// Try bright-text extraction: pixels with all RGB ≥ 240 → black.
 			// Captures pure-white button labels on dark/gradient pages.
-			brightResult, brightErr := ocr.ReadFile(fpath, ocr.Options{BrightText: true})
+			brightResult, brightErr := ocr.ReadImage(img, ocr.Options{BrightText: true})
 			if brightErr == nil {
 				minX, minY, maxX, maxY, found = findButtonBounds(brightResult, text, 1)
 			}
@@ -614,12 +502,10 @@ func handleWaitForText(ctx context.Context, request mcp.CallToolRequest) (*mcp.C
 	}
 
 	startTime := time.Now()
-	intervalMS := 500 // Check every 500ms
-
 	for time.Since(startTime) < time.Duration(timeoutMS)*time.Millisecond {
-		img, captureErr := robotgo.CaptureImg(regionX, regionY, regionW, regionH)
+		img, captureErr := waitForTextCaptureImage(regionX, regionY, regionW, regionH)
 		if captureErr == nil {
-			ocrResult, ocrErr := ocr.ReadImage(img, ocr.Options{})
+			ocrResult, ocrErr := waitForTextReadImage(img, ocr.Options{})
 			if ocrErr == nil {
 				_, _, _, _, found := findButtonBounds(ocrResult, text, 1)
 				if visible && found {
@@ -639,7 +525,7 @@ func handleWaitForText(ctx context.Context, request mcp.CallToolRequest) (*mcp.C
 			}
 		}
 
-		time.Sleep(time.Duration(intervalMS) * time.Millisecond)
+		waitForTextSleep(waitForTextPollInterval)
 	}
 
 	logging.Info("wait_for_text: timeout waiting for %q (visible=%v)", text, visible)
@@ -687,4 +573,212 @@ func getStringArrayParam(request mcp.CallToolRequest, name string) ([]string, er
 	}
 
 	return nil, fmt.Errorf("parameter %s must be an array or JSON array string", name)
+}
+
+// handleFindClickAndType searches for a bounding box around `text`, calculating
+// click target coordinates (applying `x_offset` and `y_offset`), moves mouse,
+// clicks, optionally waits, types `type_text`, and optionally presses enter.
+func handleFindClickAndType(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	logging.Debug("Handling find_click_and_type request")
+
+	searchText, err := getStringParam(request, "text")
+	if err != nil {
+		logging.Error("Invalid text parameter: %v", err)
+		return mcp.NewToolResultError(fmt.Sprintf("invalid text parameter: %v", err)), nil
+	}
+	if searchText == "" {
+		return mcp.NewToolResultError("text must not be empty"), nil
+	}
+
+	typeText, err := getStringParam(request, "type_text")
+	if err != nil {
+		logging.Error("Invalid type_text parameter: %v", err)
+		return mcp.NewToolResultError(fmt.Sprintf("invalid type_text parameter: %v", err)), nil
+	}
+
+	xOffset := 0
+	if offset, err := getIntParam(request, "x_offset"); err == nil {
+		xOffset = offset
+	}
+	yOffset := 0
+	if offset, err := getIntParam(request, "y_offset"); err == nil {
+		yOffset = offset
+	}
+
+	pressEnter := getBoolParam(request, "press_enter", false)
+
+	delayMS := 100
+	if d, err := getIntParam(request, "delay_ms"); err == nil {
+		if d >= 0 && d <= 10000 {
+			delayMS = d
+		}
+	}
+
+	nth := 1
+	if n, err := getIntParam(request, "nth"); err == nil {
+		if n >= 1 {
+			nth = n
+		}
+	}
+
+	screenW, screenH := robotgo.GetScreenSize()
+	regionX, regionY, regionW, regionH := 0, 0, screenW, screenH
+	if v, err := getIntParam(request, "x"); err == nil {
+		regionX = v
+	}
+	if v, err := getIntParam(request, "y"); err == nil {
+		regionY = v
+	}
+	if v, err := getIntParam(request, "width"); err == nil {
+		regionW = v
+	}
+	if v, err := getIntParam(request, "height"); err == nil {
+		regionH = v
+	}
+
+	if err := validate.ScreenRegion(regionX, regionY, regionW, regionH, screenW, screenH); err != nil {
+		logging.Error("Screen region validation failed: %v", err)
+		return mcp.NewToolResultError(fmt.Sprintf("invalid screen region: %v", err)), nil
+	}
+
+	img, captureErr := robotgo.CaptureImg(regionX, regionY, regionW, regionH)
+	if captureErr != nil {
+		logging.Error("Failed to capture screen: %v", captureErr)
+		return mcp.NewToolResultError(fmt.Sprintf("failed to capture screen: %v", captureErr)), nil
+	}
+
+	saveScreenshotIfKept(img, "ghost-mcp-findclicktype")
+
+	grayscale := getBoolParam(request, "grayscale", true)
+
+	minX, minY, maxX, maxY, found, _ := parallelFindText(ctx, img, searchText, nth, grayscale)
+	if !found {
+		logging.Info("find_click_and_type: text %q (occurrence %d) not found", searchText, nth)
+		return mcp.NewToolResultError(fmt.Sprintf("text %q not found on screen (occurrence %d)", searchText, nth)), nil
+	}
+
+	cx := regionX + (minX+maxX)/2 + xOffset
+	cy := regionY + (minY+maxY)/2 + yOffset
+
+	if err := validate.Coords(cx, cy, screenW, screenH); err != nil {
+		logging.Error("Target coordinate out of bounds: %v", err)
+		return mcp.NewToolResultError(fmt.Sprintf("target coordinate out of bounds: %v", err)), nil
+	}
+
+	logging.Info("ACTION: Found %q, calculated target (%d,%d) applying offset (%d,%d)", searchText, cx, cy, xOffset, yOffset)
+	robotgo.Move(cx, cy)
+
+	if err := checkFailsafe(); err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	robotgo.Click("left", false)
+
+	if delayMS > 0 {
+		time.Sleep(time.Duration(delayMS) * time.Millisecond)
+	}
+
+	if err := validate.Text(typeText); err != nil {
+		logging.Error("Text validation failed: %v", err)
+		return mcp.NewToolResultError(fmt.Sprintf("invalid text: %v", err)), nil
+	}
+
+	displayText := typeText
+	if len(displayText) > 50 {
+		displayText = displayText[:47] + "..."
+	}
+	logging.Info("ACTION: Typing text %q", displayText)
+	robotgo.TypeStr(typeText)
+
+	if pressEnter {
+		logging.Info("ACTION: Pressing enter after typing")
+		robotgo.KeyTap("enter")
+	}
+
+	finalX, finalY := robotgo.GetMousePos()
+	logging.Info("ACTION COMPLETE: find_click_and_type %q -> typed %d characters", searchText, len(typeText))
+
+	return mcp.NewToolResultText(fmt.Sprintf(
+		`{"success":true,"found":%q,"box":{"x":%d,"y":%d,"width":%d,"height":%d},"clicked_x":%d,"clicked_y":%d,"actual_x":%d,"actual_y":%d,"characters_typed":%d,"enter_pressed":%t}`,
+		searchText, minX, minY, maxX-minX, maxY-minY, cx, cy, finalX, finalY, len(typeText), pressEnter,
+	)), nil
+}
+
+// saveScreenshotIfKept centralizes the logic to write a debug screenshot to disk
+// if GHOST_MCP_KEEP_SCREENSHOTS is explicitly enabled. Otherwise, it bypasses disk I/O.
+func saveScreenshotIfKept(img image.Image, prefix string) {
+	if os.Getenv("GHOST_MCP_KEEP_SCREENSHOTS") == "1" {
+		screenshotDir := os.Getenv("GHOST_MCP_SCREENSHOT_DIR")
+		if screenshotDir == "" {
+			screenshotDir = os.TempDir()
+		}
+		filename := fmt.Sprintf("%s-%d.png", prefix, time.Now().UnixNano())
+		fpath := filepath.Join(screenshotDir, filename)
+		if saveErr := robotgo.SavePng(img, fpath); saveErr != nil {
+			logging.Error("Failed to keep screenshot: %v", saveErr)
+		} else {
+			logging.Info("OCR screenshot kept at: %s", fpath)
+		}
+	}
+}
+
+// parallelFindText concurrently executes up to 4 OCR passes (Normal, Inverted, BrightText, Color)
+// against the provided image and races them to find the first matching bounding box.
+func parallelFindText(ctx context.Context, img image.Image, searchText string, nth int, grayscale bool) (int, int, int, int, bool, string) {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	prepared, err := prepareParallelOCRImageSet(img, grayscale)
+	if err != nil {
+		logging.Error("parallelFindText preprocessing failed: %v", err)
+		return 0, 0, 0, 0, false, ""
+	}
+
+	type match struct {
+		minX, minY, maxX, maxY int
+		pass                   string
+	}
+	matches := make(chan match, 4)
+	var wg sync.WaitGroup
+
+	runPass := func(imgBytes []byte, name string) {
+		defer wg.Done()
+
+		select {
+		case <-ctx.Done():
+			return // Another pass already found it
+		default:
+		}
+
+		ocrResult, err := readPreparedOCRImage(imgBytes, ocr.ScaleFactor)
+		if err == nil && ocrResult != nil {
+			if bMinX, bMinY, bMaxX, bMaxY, bFound := findButtonBounds(ocrResult, searchText, nth); bFound {
+				select {
+				case matches <- match{bMinX, bMinY, bMaxX, bMaxY, name}:
+					cancel() // Stop the other passes
+				case <-ctx.Done():
+				}
+			}
+		}
+	}
+
+	wg.Add(1)
+	go runPass(prepared.Normal, "normal")
+
+	if grayscale {
+		wg.Add(3)
+		go runPass(prepared.Inverted, "inverted")
+		go runPass(prepared.BrightText, "bright-text")
+		go runPass(prepared.Color, "color")
+	}
+
+	go func() {
+		wg.Wait()
+		close(matches)
+	}()
+
+	if m, ok := <-matches; ok {
+		return m.minX, m.minY, m.maxX, m.maxY, true, m.pass
+	}
+	return 0, 0, 0, 0, false, ""
 }
