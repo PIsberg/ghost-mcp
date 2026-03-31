@@ -16,6 +16,14 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
         go-version: ['1.24', '1.25']
+        exclude:
+          # Windows and macOS jobs are expensive / partial — only run them on
+          # the latest Go version. The older Go compat check is covered by the
+          # two Linux jobs which are cheapest and fastest.
+          - os: windows-latest
+            go-version: '1.24'
+          - os: macos-latest
+            go-version: '1.24'
 
     steps:
     - name: Harden the runner (Audit all outbound calls)
