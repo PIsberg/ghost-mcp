@@ -48,7 +48,7 @@ jobs:
 
     - name: Cache apt packages (Linux)
       if: matrix.os == 'ubuntu-latest'
-      uses: awalsh128/cache-apt-pkgs-action@4c82f82f6e23d1fc1f99f7e449aec854b79e9b3c # v1.4.3
+      uses: awalsh128/cache-apt-pkgs-action@acb598e5ddbc6f68a970c5da0688d2f3a9f04d05 # v1.6.0
       with:
         packages: >-
           gcc libx11-dev libx11-xcb-dev libxcb1-dev libxkbcommon-dev
@@ -106,7 +106,7 @@ jobs:
 
     - name: Cache vcpkg binary archives (Windows fallback)
       if: matrix.os == 'windows-latest' && env.DEPS_FROM_RELEASE != 'true'
-      uses: actions/cache@1bd1e32a3bdc45362d1e726936510720a7c6158d # v4.2.0
+      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
       with:
         path: ~/AppData/Local/vcpkg/archives
         key: vcpkg-x64-mingw-tesseract-leptonica-v1
