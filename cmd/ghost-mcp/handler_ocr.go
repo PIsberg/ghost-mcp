@@ -328,7 +328,14 @@ func formatFindTextFailureMessage(searchText string, nth int, regionX, regionY, 
 	if len(matches) > 0 {
 		msg += fmt.Sprintf(" Closest OCR matches: %q.", matches)
 	}
-	msg += ` TIP: If the target may be off-screen, use scroll_until_text. Otherwise call find_elements only if you need raw OCR diagnostics.`
+	
+	// Add helpful suggestions based on the search context
+	msg += ` SUGGESTIONS:`
+	msg += ` (1) For input fields, try the adjacent LABEL text (e.g., "Text Input:" or "Email:") instead of placeholder text.`
+	msg += ` (2) Use find_elements to discover what text is actually visible on screen.`
+	msg += ` (3) If the target may be off-screen, use scroll_until_text with scroll_direction="down".`
+	msg += ` (4) For input fields, try find_click_and_type which automatically searches for nearby labels.`
+	
 	return msg
 }
 
