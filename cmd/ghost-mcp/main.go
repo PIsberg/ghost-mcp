@@ -383,7 +383,7 @@ func handleScroll(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallTo
 	}
 
 	return mcp.NewToolResultText(fmt.Sprintf(
-		`{"success": true, "x": %d, "y": %d, "direction": "%s", "amount": %d, "visible_text": %q}`,
+		`{"success": true, "x": %d, "y": %d, "direction": "%s", "amount": %d, "visible_text": %q, "note": "Use visible_text to check content BEFORE calling more tools. Only call find_elements if you need to interact with something not in visible_text."}`,
 		x, y, direction, amount, visibleText,
 	)), nil
 }
