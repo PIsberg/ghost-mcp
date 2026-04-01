@@ -361,10 +361,10 @@ func buildFindTextFailureMessage(img image.Image, searchText string, nth int, re
 	// Find label candidates (words ending with ":")
 	labels := findLabelCandidates(ocrResult, 5)
 	
-	// Start with detected labels - make them impossible to miss!
+	// Start with detected labels - make them IMPOSSIBLE TO MISS
 	msg := ""
 	if len(labels) > 0 {
-		msg += fmt.Sprintf("VISIBLE LABELS ON SCREEN: %q. SEARCH FOR ONE OF THESE! ", labels)
+		msg += fmt.Sprintf("LABELS ON SCREEN: %v USE ONE OF THESE AS YOUR SEARCH TERM! ", labels)
 	}
 	
 	msg += formatFindTextFailureMessage(searchText, nth, regionX, regionY, regionW, regionH, matches)
@@ -463,9 +463,10 @@ func handleFindElements(ctx context.Context, request mcp.CallToolRequest) (*mcp.
 	}
 	labelsJSON += "]"
 
+	// Build JSON response - put labels FIRST so agent sees them immediately
 	return mcp.NewToolResultText(fmt.Sprintf(
-		`{"success":true,"element_count":%d,"region":{"x":%d,"y":%d,"width":%d,"height":%d},"elements":%s,"labels":%s,"note":"Use 'labels' array for quick access to field labels like \"Text Input:\" or \"Email:\". These are visible on screen NOW - no scrolling needed!"}`,
-		len(elements), regionX, regionY, regionW, regionH, elementsJSON, labelsJSON,
+		`{"success":true,"labels":%s,"label_note":"FIELD LABELS VISIBLE ON SCREEN - search for these exact texts!","element_count":%d,"region":{"x":%d,"y":%d,"width":%d,"height":%d},"elements":%s}`,
+		labelsJSON, len(elements), regionX, regionY, regionW, regionH, elementsJSON,
 	)), nil
 }
 
