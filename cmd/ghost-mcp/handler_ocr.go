@@ -2063,3 +2063,104 @@ func handleClearRegionCache(ctx context.Context, request mcp.CallToolRequest) (*
 
 	return mcp.NewToolResultText(`{"success":true,"message":"Region cache cleared"}`), nil
 }
+
+// =============================================================================
+// CLICK WITH VERIFICATION TOOLS
+// =============================================================================
+
+// handleClickUntilTextAppears clicks at coordinates and waits for text to appear
+func handleClickUntilTextAppears(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	logging.Debug("Handling click_until_text_appears request")
+
+	x, err := getIntParam(request, "x")
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("invalid x parameter: %v", err)), nil
+	}
+	y, err := getIntParam(request, "y")
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("invalid y parameter: %v", err)), nil
+	}
+
+	waitText, err := getStringParam(request, "wait_for_text")
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("wait_for_text is required: %v", err)), nil
+	}
+
+	button, _ := getStringParam(request, "button")
+	if button == "" {
+		button = "left"
+	}
+
+	timeoutMS := 5000
+	if n, err := getIntParam(request, "timeout_ms"); err == nil && n > 0 {
+		timeoutMS = n
+	}
+	if timeoutMS > 30000 {
+		timeoutMS = 30000
+	}
+
+	maxClicks := 3
+	if n, err := getIntParam(request, "max_clicks"); err == nil && n > 0 {
+		maxClicks = n
+	}
+
+	screenW, screenH := robotgo.GetScreenSize()
+	if err := validate.Coords(x, y, screenW, screenH); err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("invalid coordinates: %v", err)), nil
+	}
+
+	logging.Info("ACTION: Clicking (%d,%d) waiting for %q (timeout: %dms, max_clicks: %d)", x, y, waitText, timeoutMS, maxClicks)
+
+	// Check for repeated clicks warning
+	clickWarning := tracker.recordClick(x, y, button, true)
+	if clickWarning.ShouldStop {
+		return mcp.NewToolResultError(fmt.Sprintf(`{"error":"%s","suggestion":"You've clicked this spot %d times already. Stop and verify before continuing."}`, clickWarning.Reason, clickWarning.ClickCount)), nil
+	}
+
+	// Perform initial click
+	robotgo.Move(x, y)
+	robotgo.Click(button, false)
+	time.Sleep(200 * time.Millisecond)
+
+	// Poll for text appearance
+	startTime := time.Now()
+	clickCount := 1
+
+	for time.Since(startTime) < time.Duration(timeoutMS)*time.Millisecond {
+		// Capture and search for text
+		img, err := robotgo.CaptureImg(0, 0, screenW, screenH)
+		if err == nil {
+			ocrResult, ocrErr := ocr.ReadImage(img, ocr.Options{Color: true})
+			if ocrErr == nil && ocrResult != nil {
+				// Search for wait text
+				needle := strings.ToLower(strings.TrimSpace(waitText))
+				for _, w := range ocrResult.Words {
+					if strings.Contains(strings.ToLower(w.Text), needle) {
+						logging.Info("ACTION COMPLETE: Text %q appeared after %d clicks in %dms", waitText, clickCount, time.Since(startTime).Milliseconds())
+						return mcp.NewToolResultText(fmt.Sprintf(
+							`{"success":true,"text":%q,"clicks":%d,"waited_ms":%d,"found":true}`,
+							waitText, clickCount, time.Since(startTime).Milliseconds(),
+						)), nil
+					}
+				}
+			}
+		}
+
+		// Text not found - click again if under limit
+		if clickCount < maxClicks {
+			clickCount++
+			robotgo.Move(x, y)
+			robotgo.Click(button, false)
+			time.Sleep(500 * time.Millisecond)
+		} else {
+			time.Sleep(500 * time.Millisecond)
+		}
+	}
+
+	// Timeout - text never appeared
+	logging.Info("TIMEOUT: Text %q did not appear after %d clicks in %dms", waitText, clickCount, timeoutMS)
+	return mcp.NewToolResultError(fmt.Sprintf(
+		`{"success":false,"text":%q,"clicks":%d,"waited_ms":%d,"found":false,"error":"Text did not appear after %d clicks. The click may have missed or the expected text is different."}`,
+		waitText, clickCount, timeoutMS, clickCount,
+	)), nil
+}

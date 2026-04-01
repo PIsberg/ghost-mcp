@@ -293,4 +293,45 @@ Use this when:
 
 After clearing, the next find_and_click call will do a full-screen scan and rebuild the cache.`),
 	), handleClearRegionCache)
+
+	mcpServer.AddTool(mcp.NewTool("click_until_text_appears",
+		mcp.WithDescription(`CLICK WITH VERIFICATION: Clicks coordinates and waits for text to appear. Use this to verify your click had the expected effect.
+
+🎯 WHEN TO USE:
+- After clicking a button, wait for confirmation text (e.g., "Saved!", "Success")
+- Verify a menu opened by waiting for menu text
+- Confirm navigation by waiting for page title
+- Retry clicking if text doesn't appear (up to max_clicks times)
+
+🚫 WHEN NOT TO USE:
+- If you don't know the coordinates → use find_and_click instead
+- If there's no text verification → just use click_at
+
+HOW IT WORKS:
+1. Clicks at specified coordinates
+2. Polls screen every 500ms for wait_for_text
+3. If not found and max_clicks not reached, clicks again
+4. Stops when text appears OR timeout/max_clicks reached
+
+EXAMPLE: Click "Save" button at (400,300), wait for "Saved!" confirmation:
+{
+  "tool": "click_until_text_appears",
+  "arguments": {
+    "x": 400,
+    "y": 300,
+    "wait_for_text": "Saved!",
+    "timeout_ms": 5000,
+    "max_clicks": 3
+  }
+}
+
+Returns: {success: true/false, text: "...", clicks: N, waited_ms: N, found: true/false}
+On failure: Click may have missed, or expected text is different than actual.`),
+		mcp.WithNumber("x", mcp.Description("X coordinate to click."), mcp.Required()),
+		mcp.WithNumber("y", mcp.Description("Y coordinate to click."), mcp.Required()),
+		mcp.WithString("wait_for_text", mcp.Description("Text to wait for after clicking."), mcp.Required()),
+		mcp.WithString("button", mcp.Description("Mouse button: 'left' (default), 'right', or 'middle'.")),
+		mcp.WithNumber("timeout_ms", mcp.Description("Maximum time to wait in milliseconds (default: 5000, max: 30000).")),
+		mcp.WithNumber("max_clicks", mcp.Description("Maximum click attempts before giving up (default: 3).")),
+	), handleClickUntilTextAppears)
 }
