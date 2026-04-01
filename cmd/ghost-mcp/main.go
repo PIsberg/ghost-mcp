@@ -60,6 +60,30 @@ type serverState struct {
 	isShuttingDown bool
 }
 
+type scrollSearchConfig struct {
+	SearchText string
+	Direction  string
+	Amount     int
+	MaxScrolls int
+	Nth        int
+	ScrollX    int
+	ScrollY    int
+	RegionX    int
+	RegionY    int
+	RegionW    int
+	RegionH    int
+	Grayscale  bool
+}
+
+type scrollSearchResult struct {
+	MinX, MinY, MaxX, MaxY int
+	Found                  bool
+	PassName               string
+	VisibleText            string
+	ScrollCount            int
+	RepeatedViewport       bool
+}
+
 var state = &serverState{
 	shutdownChan: make(chan struct{}),
 }
@@ -364,6 +388,61 @@ func handleScroll(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallTo
 	)), nil
 }
 
+func scrollSearchForText(ctx context.Context, cfg scrollSearchConfig) (*scrollSearchResult, error) {
+	lastVisibleText := ""
+	for attempt := 0; attempt <= cfg.MaxScrolls; attempt++ {
+		img, captureErr := uiCaptureImage(cfg.RegionX, cfg.RegionY, cfg.RegionW, cfg.RegionH)
+		if captureErr != nil {
+			return nil, fmt.Errorf("failed to capture screen: %w", captureErr)
+		}
+
+		visibleText := ""
+		if ocrResult, ocrErr := uiReadImage(img, ocr.Options{Color: !cfg.Grayscale}); ocrErr == nil {
+			visibleText = ocrResult.Text
+		} else {
+			logging.Debug("scrollSearchForText visible-text OCR failed (non-fatal): %v", ocrErr)
+		}
+
+		minX, minY, maxX, maxY, found, passName := uiFindText(ctx, img, cfg.SearchText, cfg.Nth, cfg.Grayscale)
+		if found {
+			return &scrollSearchResult{
+				MinX:        minX,
+				MinY:        minY,
+				MaxX:        maxX,
+				MaxY:        maxY,
+				Found:       true,
+				PassName:    passName,
+				VisibleText: visibleText,
+				ScrollCount: attempt,
+			}, nil
+		}
+
+		if attempt == cfg.MaxScrolls {
+			return &scrollSearchResult{
+				VisibleText: visibleText,
+				ScrollCount: attempt,
+			}, nil
+		}
+
+		if attempt > 0 && visibleText != "" && visibleText == lastVisibleText {
+			return &scrollSearchResult{
+				VisibleText:      visibleText,
+				ScrollCount:      attempt,
+				RepeatedViewport: true,
+			}, nil
+		}
+		lastVisibleText = visibleText
+
+		uiMoveMouse(cfg.ScrollX, cfg.ScrollY)
+		if err := uiCheckFailsafe(); err != nil {
+			return nil, err
+		}
+		uiScrollDir(cfg.Amount, cfg.Direction)
+	}
+
+	return nil, fmt.Errorf("unreachable scrollSearchForText state")
+}
+
 func handleScrollUntilText(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	logging.Debug("Handling scroll_until_text request")
 
@@ -446,58 +525,47 @@ func handleScrollUntilText(ctx context.Context, request mcp.CallToolRequest) (*m
 		return mcp.NewToolResultError(fmt.Sprintf("invalid screen region: %v", err)), nil
 	}
 
-	lastVisibleText := ""
-	for attempt := 0; attempt <= maxScrolls; attempt++ {
-		img, captureErr := uiCaptureImage(regionX, regionY, regionW, regionH)
-		if captureErr != nil {
-			logging.Error("Failed to capture screen: %v", captureErr)
-			return mcp.NewToolResultError(fmt.Sprintf("failed to capture screen: %v", captureErr)), nil
-		}
-
-		visibleText := ""
-		if ocrResult, ocrErr := uiReadImage(img, ocr.Options{Color: !grayscale}); ocrErr == nil {
-			visibleText = ocrResult.Text
-		} else {
-			logging.Debug("scroll_until_text visible-text OCR failed (non-fatal): %v", ocrErr)
-		}
-
-		minX, minY, maxX, maxY, found, passName := uiFindText(ctx, img, searchText, nth, grayscale)
-		if found {
-			cx := regionX + (minX+maxX)/2
-			cy := regionY + (minY+maxY)/2
-			logging.Info("scroll_until_text: found %q after %d scrolls via %s pass", searchText, attempt, passName)
-			return mcp.NewToolResultText(fmt.Sprintf(
-				`{"success":true,"found":%q,"box":{"x":%d,"y":%d,"width":%d,"height":%d},"center_x":%d,"center_y":%d,"scroll_count":%d,"direction":%q,"amount":%d,"pass":%q,"visible_text":%q}`,
-				searchText, regionX+minX, regionY+minY, maxX-minX, maxY-minY, cx, cy, attempt, direction, amount, passName, visibleText,
-			)), nil
-		}
-
-		if attempt == maxScrolls {
-			logging.Info("scroll_until_text: text %q not found after max_scrolls=%d", searchText, maxScrolls)
-			return mcp.NewToolResultError(fmt.Sprintf(
-				`text %q not found after %d scrolls (%s by %d). Last visible_text: %q`,
-				searchText, maxScrolls, direction, amount, visibleText,
-			)), nil
-		}
-
-		if attempt > 0 && visibleText != "" && visibleText == lastVisibleText {
-			logging.Info("scroll_until_text: viewport repeated after %d scrolls while searching for %q", attempt, searchText)
-			return mcp.NewToolResultError(fmt.Sprintf(
-				`text %q not found after %d scrolls; viewport stopped changing, likely reached the end. Last visible_text: %q`,
-				searchText, attempt, visibleText,
-			)), nil
-		}
-		lastVisibleText = visibleText
-
-		logging.Info("scroll_until_text: attempt %d/%d did not find %q, scrolling %s by %d", attempt+1, maxScrolls, searchText, direction, amount)
-		uiMoveMouse(scrollX, scrollY)
-		if err := uiCheckFailsafe(); err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
-		}
-		uiScrollDir(amount, direction)
+	result, searchErr := scrollSearchForText(ctx, scrollSearchConfig{
+		SearchText: searchText,
+		Direction:  direction,
+		Amount:     amount,
+		MaxScrolls: maxScrolls,
+		Nth:        nth,
+		ScrollX:    scrollX,
+		ScrollY:    scrollY,
+		RegionX:    regionX,
+		RegionY:    regionY,
+		RegionW:    regionW,
+		RegionH:    regionH,
+		Grayscale:  grayscale,
+	})
+	if searchErr != nil {
+		logging.Error("scroll_until_text failed: %v", searchErr)
+		return mcp.NewToolResultError(searchErr.Error()), nil
 	}
 
-	return mcp.NewToolResultError("unreachable scroll_until_text state"), nil
+	if result.Found {
+		cx := regionX + (result.MinX+result.MaxX)/2
+		cy := regionY + (result.MinY+result.MaxY)/2
+		logging.Info("scroll_until_text: found %q after %d scrolls via %s pass", searchText, result.ScrollCount, result.PassName)
+		return mcp.NewToolResultText(fmt.Sprintf(
+			`{"success":true,"found":%q,"box":{"x":%d,"y":%d,"width":%d,"height":%d},"center_x":%d,"center_y":%d,"scroll_count":%d,"direction":%q,"amount":%d,"pass":%q,"visible_text":%q}`,
+			searchText, regionX+result.MinX, regionY+result.MinY, result.MaxX-result.MinX, result.MaxY-result.MinY, cx, cy, result.ScrollCount, direction, amount, result.PassName, result.VisibleText,
+		)), nil
+	}
+	if result.RepeatedViewport {
+		logging.Info("scroll_until_text: viewport repeated after %d scrolls while searching for %q", result.ScrollCount, searchText)
+		return mcp.NewToolResultError(fmt.Sprintf(
+			`text %q not found after %d scrolls; viewport stopped changing, likely reached the end. Last visible_text: %q`,
+			searchText, result.ScrollCount, result.VisibleText,
+		)), nil
+	}
+
+	logging.Info("scroll_until_text: text %q not found after max_scrolls=%d", searchText, maxScrolls)
+	return mcp.NewToolResultError(fmt.Sprintf(
+		`text %q not found after %d scrolls (%s by %d). Last visible_text: %q`,
+		searchText, maxScrolls, direction, amount, result.VisibleText,
+	)), nil
 }
 
 func handleTypeText(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {

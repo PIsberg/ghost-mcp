@@ -216,6 +216,8 @@ This is the primary tool for filling out forms and interacting with text inputs.
 6. Optionally presses Enter.
 
 SPEED TIP: Use region constraints (x, y, width, height) to scan only the relevant form area.
+MULTI-WORD LABELS: Works with OCR text split across adjacent words, e.g. "Type here or use".
+OFF-SCREEN FIELDS: If the input may be below the fold, set scroll_direction to let the tool scroll and keep searching in one call.
 
 EXAMPLE: Clicking an input field to the right of a "Name:" label:
 {
@@ -223,6 +225,14 @@ EXAMPLE: Clicking an input field to the right of a "Name:" label:
   "type_text": "John Doe",
   "x_offset": 100,
   "delay_ms": 100
+}
+
+EXAMPLE: Search downward for an off-screen placeholder, then type:
+{
+  "text": "Type here or use",
+  "type_text": "Ghost MCP rocks!",
+  "scroll_direction": "down",
+  "max_scrolls": 8
 }`),
 		mcp.WithString("text", mcp.Description("The label or text to search for (e.g. \"Email:\"). Case-insensitive substring match."), mcp.Required()),
 		mcp.WithString("type_text", mcp.Description("The exact text to type after clicking."), mcp.Required()),
@@ -235,6 +245,11 @@ EXAMPLE: Clicking an input field to the right of a "Name:" label:
 		mcp.WithNumber("y", mcp.Description("Y coordinate of region to scan (default: 0 = full screen).")),
 		mcp.WithNumber("width", mcp.Description("Width of region to scan (default: full screen).")),
 		mcp.WithNumber("height", mcp.Description("Height of region to scan (default: full screen).")),
+		mcp.WithString("scroll_direction", mcp.Description("Optional scroll direction ('up', 'down', 'left', 'right') to keep searching if the field is off-screen.")),
+		mcp.WithNumber("scroll_amount", mcp.Description("Scroll steps per retry when scroll_direction is set (default: 5).")),
+		mcp.WithNumber("max_scrolls", mcp.Description("Maximum scroll attempts when scroll_direction is set (default: 8).")),
+		mcp.WithNumber("scroll_x", mcp.Description("X coordinate to scroll at (default: screen center). Useful for scrolling a specific panel.")),
+		mcp.WithNumber("scroll_y", mcp.Description("Y coordinate to scroll at (default: screen center). Useful for scrolling a specific panel.")),
 		mcp.WithBoolean("grayscale", mcp.Description("Use grayscale OCR (default: true).")),
 	), handleFindClickAndType)
 }

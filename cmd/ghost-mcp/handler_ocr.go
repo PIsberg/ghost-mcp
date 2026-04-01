@@ -21,6 +21,7 @@ import (
 var (
 	prepareParallelOCRImageSet = ocr.PrepareParallelImageSet
 	readPreparedOCRImage       = ocr.ReadPreparedBytes
+	findTextWithScrolling      = scrollSearchForText
 	waitForTextCaptureImage    = func(x, y, width, height int) (image.Image, error) { return robotgo.CaptureImg(x, y, width, height) }
 	waitForTextSleep           = time.Sleep
 )
@@ -197,60 +198,57 @@ func handleFindAndClick(ctx context.Context, request mcp.CallToolRequest) (*mcp.
 // by returning the combined bounding box of all matching words on the same line.
 // Returns the merged bounds relative to the OCR image, or false if not found.
 func findButtonBounds(ocrResult *ocr.Result, searchText string, nth int) (minX, minY, maxX, maxY int, found bool) {
-	needle := strings.ToLower(searchText)
+	needle := strings.ToLower(strings.TrimSpace(searchText))
 	matchCount := 0
 
 	for i, w := range ocrResult.Words {
-		if !strings.Contains(strings.ToLower(w.Text), needle) {
-			continue
-		}
+		minX, minY = w.X, w.Y
+		maxX, maxY = w.X+w.Width, w.Y+w.Height
+		avgHeight := w.Height
+		avgWidth := w.Width
+		verticalThreshold := avgHeight / 3
+		maxHGap := avgWidth / 2
+		phrase := strings.ToLower(strings.TrimSpace(w.Text))
+		matched := strings.Contains(phrase, needle)
 
-		matchCount++
-		if matchCount == nth {
-			// Start with the matched word's bounds
-			minX, minY = w.X, w.Y
-			maxX, maxY = w.X+w.Width, w.Y+w.Height
-
-			// Look for adjacent words on the same horizontal line that are part
-			// of the same button label. Only merge words that are very close
-			// (within typical word spacing, not separate buttons).
-			avgHeight := w.Height
-			avgWidth := w.Width
-			verticalThreshold := avgHeight / 3 // Must be very close vertically
-			maxHGap := avgWidth / 2            // Max gap between words in same label
-
-			// Scan forward to merge adjacent words on same line
-			for j := i + 1; j < len(ocrResult.Words); j++ {
-				next := ocrResult.Words[j]
-				// Check if next word is horizontally aligned (within threshold)
-				nextCenterY := next.Y + next.Height/2
-				currCenterY := minY + (maxY-minY)/2
-				if abs(nextCenterY-currCenterY) > verticalThreshold {
-					continue // Not on same line
-				}
-				// Check if it's close horizontally (within typical word spacing)
-				hGap := next.X - maxX
-				if hGap >= 0 && hGap <= maxHGap {
-					// Merge this word
-					if next.X < minX {
-						minX = next.X
-					}
-					if next.Y < minY {
-						minY = next.Y
-					}
-					if next.X+next.Width > maxX {
-						maxX = next.X + next.Width
-					}
-					if next.Y+next.Height > maxY {
-						maxY = next.Y + next.Height
-					}
-				} else if hGap > maxHGap {
-					// Gap is too large - this is a different button/element
-					break
-				}
+		for j := i + 1; j < len(ocrResult.Words); j++ {
+			next := ocrResult.Words[j]
+			nextCenterY := next.Y + next.Height/2
+			currCenterY := minY + (maxY-minY)/2
+			if abs(nextCenterY-currCenterY) > verticalThreshold {
+				continue
+			}
+			hGap := next.X - maxX
+			if hGap < 0 {
+				continue
+			}
+			if hGap > maxHGap {
+				break
 			}
 
-			return minX, minY, maxX, maxY, true
+			if next.X < minX {
+				minX = next.X
+			}
+			if next.Y < minY {
+				minY = next.Y
+			}
+			if next.X+next.Width > maxX {
+				maxX = next.X + next.Width
+			}
+			if next.Y+next.Height > maxY {
+				maxY = next.Y + next.Height
+			}
+			phrase += " " + strings.ToLower(strings.TrimSpace(next.Text))
+			if strings.Contains(phrase, needle) {
+				matched = true
+			}
+		}
+
+		if matched {
+			matchCount++
+			if matchCount == nth {
+				return minX, minY, maxX, maxY, true
+			}
 		}
 	}
 	return 0, 0, 0, 0, false
@@ -642,8 +640,59 @@ func handleFindClickAndType(ctx context.Context, request mcp.CallToolRequest) (*
 	saveScreenshotIfKept(img, "ghost-mcp-findclicktype")
 
 	grayscale := getBoolParam(request, "grayscale", true)
+	scrollDirection, _ := getStringParam(request, "scroll_direction")
+	scrollAmount := 5
+	if v, err := getIntParam(request, "scroll_amount"); err == nil {
+		if v <= 0 {
+			return mcp.NewToolResultError("scroll_amount must be positive"), nil
+		}
+		scrollAmount = v
+	}
+	maxScrolls := 0
+	if scrollDirection != "" {
+		maxScrolls = 8
+	}
+	if v, err := getIntParam(request, "max_scrolls"); err == nil {
+		if v <= 0 {
+			return mcp.NewToolResultError("max_scrolls must be positive"), nil
+		}
+		maxScrolls = v
+	}
+	if maxScrolls > 0 && scrollDirection == "" {
+		return mcp.NewToolResultError("scroll_direction is required when max_scrolls is set"), nil
+	}
+	scrollX := screenW / 2
+	scrollY := screenH / 2
+	if v, err := getIntParam(request, "scroll_x"); err == nil {
+		scrollX = v
+	}
+	if v, err := getIntParam(request, "scroll_y"); err == nil {
+		scrollY = v
+	}
 
-	minX, minY, maxX, maxY, found, _ := parallelFindText(ctx, img, searchText, nth, grayscale)
+	minX, minY, maxX, maxY, found, passName := parallelFindText(ctx, img, searchText, nth, grayscale)
+	scrollCount := 0
+	if !found && scrollDirection != "" {
+		scrollResult, searchErr := findTextWithScrolling(ctx, scrollSearchConfig{
+			SearchText: searchText,
+			Direction:  scrollDirection,
+			Amount:     scrollAmount,
+			MaxScrolls: maxScrolls,
+			Nth:        nth,
+			ScrollX:    scrollX,
+			ScrollY:    scrollY,
+			RegionX:    regionX,
+			RegionY:    regionY,
+			RegionW:    regionW,
+			RegionH:    regionH,
+			Grayscale:  grayscale,
+		})
+		if searchErr != nil {
+			return mcp.NewToolResultError(searchErr.Error()), nil
+		}
+		minX, minY, maxX, maxY, found, passName = scrollResult.MinX, scrollResult.MinY, scrollResult.MaxX, scrollResult.MaxY, scrollResult.Found, scrollResult.PassName
+		scrollCount = scrollResult.ScrollCount
+	}
 	if !found {
 		logging.Info("find_click_and_type: text %q (occurrence %d) not found", searchText, nth)
 		return mcp.NewToolResultError(fmt.Sprintf("text %q not found on screen (occurrence %d)", searchText, nth)), nil
@@ -691,8 +740,8 @@ func handleFindClickAndType(ctx context.Context, request mcp.CallToolRequest) (*
 	logging.Info("ACTION COMPLETE: find_click_and_type %q -> typed %d characters", searchText, len(typeText))
 
 	return mcp.NewToolResultText(fmt.Sprintf(
-		`{"success":true,"found":%q,"box":{"x":%d,"y":%d,"width":%d,"height":%d},"clicked_x":%d,"clicked_y":%d,"actual_x":%d,"actual_y":%d,"characters_typed":%d,"enter_pressed":%t}`,
-		searchText, minX, minY, maxX-minX, maxY-minY, cx, cy, finalX, finalY, len(typeText), pressEnter,
+		`{"success":true,"found":%q,"box":{"x":%d,"y":%d,"width":%d,"height":%d},"clicked_x":%d,"clicked_y":%d,"actual_x":%d,"actual_y":%d,"characters_typed":%d,"enter_pressed":%t,"pass":%q,"scroll_count":%d}`,
+		searchText, minX, minY, maxX-minX, maxY-minY, cx, cy, finalX, finalY, len(typeText), pressEnter, passName, scrollCount,
 	)), nil
 }
 

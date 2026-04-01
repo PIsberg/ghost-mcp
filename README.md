@@ -47,7 +47,7 @@ Ghost MCP allows AI assistants like Claude to control your computer's mouse, key
 |------|-------------|------------|
 | `read_screen_text` | Read text from screen using OCR. Returns text and word positions. | `x`, `y`, `width`, `height`, `grayscale` |
 | `find_and_click` | Find text on screen with OCR and click its center. | `text`, `button`, `nth`, `x`, `y`, `width`, `height` |
-| `find_click_and_type` | Find text, click nearest bounds, and type string immediately. | `text`, `type_text`, `x_offset`, `y_offset`, `press_enter`, `delay_ms` |
+| `find_click_and_type` | Find a label/placeholder, click the inferred input target, and type immediately. Can optionally scroll while searching. | `text`, `type_text`, `x_offset`, `y_offset`, `press_enter`, `delay_ms`, `scroll_direction`, `scroll_amount`, `max_scrolls`, `scroll_x`, `scroll_y` |
 | `find_and_click_all` ⭐ | Click multiple buttons in ONE atomic operation. | `texts` (array), `button`, `delay_ms` |
 | `wait_for_text` ⭐ | Wait for text to appear or disappear. Verify UI changes. | `text`, `visible`, `timeout_ms`, `x`, `y`, `width`, `height` |
 | `find_elements` ⭐ | Discover all clickable text elements with coordinates. Fast alternative to screenshots. | `x`, `y`, `width`, `height` |

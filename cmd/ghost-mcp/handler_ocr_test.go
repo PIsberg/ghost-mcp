@@ -75,6 +75,25 @@ func TestFindButtonBounds_MultiWord(t *testing.T) {
 	}
 }
 
+func TestFindButtonBounds_MultiWordPhraseSearch(t *testing.T) {
+	result := &ocr.Result{
+		Words: []ocr.Word{
+			{Text: "Type", X: 100, Y: 50, Width: 40, Height: 24, Confidence: 95},
+			{Text: "here", X: 145, Y: 50, Width: 42, Height: 24, Confidence: 95},
+			{Text: "or", X: 192, Y: 50, Width: 18, Height: 24, Confidence: 95},
+			{Text: "use", X: 215, Y: 50, Width: 34, Height: 24, Confidence: 95},
+		},
+	}
+
+	minX, minY, maxX, maxY, found := findButtonBounds(result, "Type here or use", 1)
+	if !found {
+		t.Fatal("Expected to find multi-word phrase across adjacent OCR words")
+	}
+	if minX != 100 || minY != 50 || maxX != 249 || maxY != 74 {
+		t.Fatalf("Expected merged bounds (100,50)-(249,74), got (%d,%d)-(%d,%d)", minX, minY, maxX, maxY)
+	}
+}
+
 // TestFindButtonBounds_NthOccurrence tests finding the nth occurrence of a button
 func TestFindButtonBounds_NthOccurrence(t *testing.T) {
 	result := &ocr.Result{

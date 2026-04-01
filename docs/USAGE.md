@@ -677,6 +677,24 @@ Use `scroll_until_text` when the target is probably off-screen and you want one 
 ]
 ```
 
+### Find and fill an off-screen input in one call
+
+```json
+[
+  {
+    "tool": "find_click_and_type",
+    "arguments": {
+      "text": "Type here or use",
+      "type_text": "Ghost MCP rocks!",
+      "scroll_direction": "down",
+      "max_scrolls": 8
+    }
+  }
+]
+```
+
+> `find_click_and_type` now handles OCR text split across multiple adjacent words, so placeholders and labels like `Type here or use` no longer require manual `find_elements` or screenshot loops.
+
 ### Open a file with double-click
 
 ```json
