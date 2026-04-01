@@ -46,7 +46,7 @@ Ghost MCP allows AI assistants like Claude to control your computer's mouse, key
 | Tool | Description | Parameters |
 |------|-------------|------------|
 | `find_elements` ⭐ | Discover all clickable text elements with coordinates. Fast alternative to screenshots. | `x`, `y`, `width`, `height` |
-| `find_and_click` ⚡ | Find text on screen with OCR and click its center. **Automatically caches regions** for 10-25x faster repeat clicks. | `text`, `button`, `nth`, `x`, `y`, `width`, `height` |
+| `find_and_click` ⚡🎯 | Find text on screen with OCR and click its center. **Smart matching** prefers standalone buttons over text inside other elements. **Auto-caches regions** for 10-25x faster repeat clicks. | `text`, `button`, `nth`, `x`, `y`, `width`, `height` |
 | `find_click_and_type` | Find a label/placeholder, click the inferred input target, and type immediately. Can optionally scroll while searching. | `text`, `type_text`, `x_offset`, `y_offset`, `press_enter`, `delay_ms`, `scroll_direction`, `scroll_amount`, `max_scrolls`, `scroll_x`, `scroll_y` |
 | `find_and_click_all` ⭐ | Click multiple buttons in ONE atomic operation. | `texts` (array), `button`, `delay_ms` |
 | `wait_for_text` ⭐ | Wait for text to appear or disappear. Verify UI changes. | `text`, `visible`, `timeout_ms`, `x`, `y`, `width`, `height` |
@@ -61,6 +61,36 @@ Ghost MCP allows AI assistants like Claude to control your computer's mouse, key
 - **`wait_for_text`** - Properly verify UI state changes instead of guessing with screenshots
 - **`find_elements`** - Discover all clickable elements 10x faster than taking screenshots
 - **`scroll_until_text`** - Search long pages with one bounded tool call instead of repeated scroll + OCR loops
+
+### 🎯 Smart OCR Matching
+
+Ghost MCP uses an **intelligent scoring system** to find the best match for your text:
+
+**How it works:**
+Instead of simple substring matching, every OCR-detected word is scored:
+
+| Score | Match Type | Example |
+|-------|------------|---------|
+| 1000 | Exact match | Searching "Click Me!" finds "Click Me!" |
+| 500 | Prefix match | Searching "Click" finds "Click Me!" |
+| 400 | Suffix match | Searching "Click" finds "Button Click" |
+| 300 | Standalone word | Searching "Click" finds "Button Click" (separate word) |
+| 200 | Multi-word (all found) | Searching "Save Changes" finds both words |
+| 100 | Substring with boundaries | Weaker match |
+| 50 | Inside another word | Lowest priority (avoided) |
+
+**Why it matters:**
+```
+❌ OLD BEHAVIOR: Search "Click" → clicks "Button Click Tests" header
+✅ NEW BEHAVIOR: Search "Click" → clicks standalone "Click Me!" button
+```
+
+The system:
+1. Scores all matches using the table above
+2. Sorts by score (best first), then by area (smaller = more precise)
+3. Returns the best match for your click
+
+**Production-ready:** Handles real-world UI with headers, labels, and buttons that share common text.
 
 ### ⚡ Performance Optimization: Region Cache
 
