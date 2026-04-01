@@ -232,6 +232,13 @@ func handleFindAndClick(ctx context.Context, request mcp.CallToolRequest) (*mcp.
 		scrollAmount = n
 	}
 
+	// Multi-page search: navigate between pages while searching
+	nextPageKeys, _ := getStringParam(request, "next_page_keys")  // e.g., "Page_Down" or "Arrow_Down"
+	maxPages := 1
+	if n, err := getIntParam(request, "max_pages"); err == nil && n > 0 {
+		maxPages = n
+	}
+
 	screenW, screenH := robotgo.GetScreenSize()
 
 	// Check region cache first (only if user didn't specify custom region)
@@ -283,10 +290,16 @@ func handleFindAndClick(ctx context.Context, request mcp.CallToolRequest) (*mcp.
 		return mcp.NewToolResultError(fmt.Sprintf("invalid screen region: %v", err)), nil
 	}
 
-	// Scroll-and-search mode
+	// Scroll-and-search mode (same page)
 	if scrollDirection != "" && (scrollDirection == "down" || scrollDirection == "up") {
 		logging.Info("find_and_click: scroll-and-search mode, direction=%s, max_scrolls=%d", scrollDirection, maxScrolls)
 		return findAndClickWithScroll(ctx, request, searchText, button, nth, scrollDirection, maxScrolls, scrollAmount, screenW, screenH)
+	}
+
+	// Multi-page search mode (different pages/tabs)
+	if nextPageKeys != "" || maxPages > 1 {
+		logging.Info("find_and_click: multi-page search mode, max_pages=%d, next_keys=%s", maxPages, nextPageKeys)
+		return findAndClickMultiPage(ctx, request, searchText, button, nth, nextPageKeys, maxPages, screenW, screenH)
 	}
 
 	if cachedRegion != "" {
@@ -495,6 +508,97 @@ func findAndClickWithScroll(
 
 	// Text not found after all scrolls
 	logging.Info("Text %q not found after %d scrolls", searchText, maxScrolls)
+	img, _ := robotgo.CaptureImg(0, 0, screenW, screenH)
+	return mcp.NewToolResultError(buildFindTextFailureMessage(img, searchText, nth, 0, 0, screenW, screenH, true)), nil
+}
+
+// findAndClickMultiPage searches for text across multiple pages by navigating with keyboard.
+// Used when target element may be on a different page, tab, or screen.
+func findAndClickMultiPage(
+	ctx context.Context,
+	request mcp.CallToolRequest,
+	searchText, button string,
+	nth int,
+	nextPageKeys string,
+	maxPages int,
+	screenW, screenH int,
+) (*mcp.CallToolResult, error) {
+
+	// Default navigation keys if not specified
+	if nextPageKeys == "" {
+		nextPageKeys = "Page_Down"
+	}
+	keys := strings.Split(nextPageKeys, ",")
+
+	for page := 0; page < maxPages; page++ {
+		// Capture and search current page
+		img, captureErr := robotgo.CaptureImg(0, 0, screenW, screenH)
+		if captureErr != nil {
+			logging.Error("Failed to capture screen on page %d: %v", page, captureErr)
+			return mcp.NewToolResultError(fmt.Sprintf("failed to capture screen: %v", captureErr)), nil
+		}
+
+		grayscale := getBoolParam(request, "grayscale", true)
+		minX, minY, maxX, maxY, found, passName := parallelFindText(ctx, img, searchText, nth, grayscale)
+
+		if found {
+			// Calculate click position
+			cx := minX + (maxX-minX)/2
+			cy := minY + (maxY-minY)/2
+
+			if err := validate.Coords(cx, cy, screenW, screenH); err != nil {
+				return mcp.NewToolResultError(fmt.Sprintf("found text but center out of bounds: %v", err)), nil
+			}
+
+			// Update cache
+			normalizedText := normalizeText(searchText)
+			regionCache.Put(normalizedText, minX, minY, maxX-minX, maxY-minY, screenW, screenH)
+			logging.Info("REGION CACHE UPDATE: %q -> (%d,%d) %dx%d (found on page %d)", normalizedText, minX, minY, maxX-minX, maxY-minY, page)
+
+			logging.Info("ACTION: Found %q (occurrence %d) via %s pass on page %d at box (%d,%d)-(%d,%d), clicking center (%d,%d) with %s",
+				searchText, nth, passName, page, minX, minY, maxX, maxY, cx, cy, button)
+			robotgo.Move(cx, cy)
+
+			if err := checkFailsafe(); err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			robotgo.Click(button, false)
+			applyClickDelay(request)
+
+			finalX, finalY := robotgo.GetMousePos()
+			if finalX != cx || finalY != cy {
+				logging.Info("WARNING: cursor moved after click: requested (%d,%d) actual (%d,%d)", cx, cy, finalX, finalY)
+			}
+			logging.Info("ACTION COMPLETE: find_and_click %q at (%d, %d) after checking %d page(s)", searchText, finalX, finalY, page+1)
+
+			return mcp.NewToolResultText(fmt.Sprintf(
+				`{"success":true,"found":%q,"box":{"x":%d,"y":%d,"width":%d,"height":%d},"requested_x":%d,"requested_y":%d,"actual_x":%d,"actual_y":%d,"button":%q,"occurrence":%d,"page":%d}`,
+				searchText, minX, minY, maxX-minX, maxY-minY, cx, cy, finalX, finalY, button, nth, page,
+			)), nil
+		}
+
+		// Not found - navigate to next page
+		if page < maxPages-1 {
+			logging.Info("Text %q not found on page %d/%d, navigating to next page with keys: %v", searchText, page+1, maxPages, keys)
+
+			// Press navigation keys
+			for _, key := range keys {
+				key = strings.TrimSpace(key)
+				if key != "" {
+					robotgo.KeyTap(key)
+					time.Sleep(300 * time.Millisecond) // Wait for page load
+				}
+			}
+
+			if err := checkFailsafe(); err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+		}
+	}
+
+	// Text not found after checking all pages
+	logging.Info("Text %q not found after checking %d pages", searchText, maxPages)
 	img, _ := robotgo.CaptureImg(0, 0, screenW, screenH)
 	return mcp.NewToolResultError(buildFindTextFailureMessage(img, searchText, nth, 0, 0, screenW, screenH, true)), nil
 }

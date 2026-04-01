@@ -36,6 +36,8 @@ HOW IT WORKS:
 
 📜 SCROLL-AND-SEARCH: If text may be off-screen, add scroll_direction="down" to automatically scroll and search. The tool will scroll up to max_scrolls times until text is found.
 
+📄 MULTI-PAGE SEARCH: If text may be on another page/tab, add next_page_keys="Page_Down" and max_pages=5. The tool will navigate pages and search each one until found.
+
 COLORED BUTTONS (white text on blue/green/red/cyan): handled automatically by the color pass. No special parameters needed — just call find_and_click with the button label.
 
 IF TEXT NOT FOUND:
@@ -72,6 +74,8 @@ Use candidates to verify the AI chose the right element. If the clicked element 
 		mcp.WithString("scroll_direction", mcp.Description("Optional: scroll direction to search off-screen ('up' or 'down'). If set, tool will scroll and search until text is found.")),
 		mcp.WithNumber("max_scrolls", mcp.Description("Maximum scroll attempts when scroll_direction is set (default: 8).")),
 		mcp.WithNumber("scroll_amount", mcp.Description("Scroll amount per step when scroll_direction is set (default: 5).")),
+		mcp.WithString("next_page_keys", mcp.Description("Optional: keyboard keys to navigate to next page (e.g., 'Page_Down', 'Arrow_Down', 'Tab'). Use comma-separated for multiple keys. Enables multi-page search.")),
+		mcp.WithNumber("max_pages", mcp.Description("Maximum pages to search when next_page_keys is set (default: 1, set >1 for multi-page search).")),
 	), handleFindAndClick)
 
 	mcpServer.AddTool(mcp.NewTool("find_and_click_all",
