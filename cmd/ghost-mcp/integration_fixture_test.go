@@ -668,13 +668,22 @@ func TestFixture_OCR_Panel(t *testing.T) {
 	client, ctx, cleanup := setupFixtureTest(t)
 	defer cleanup()
 
-	text, _, err := client.ReadScreenText(ctx, nil)
+	elements, err := client.FindElements(ctx, nil)
 	if err != nil {
-		t.Fatalf("Failed to read screen: %v", err)
+		t.Fatalf("Failed to find elements: %v", err)
+	}
+
+	// Extract all text from elements
+	var text strings.Builder
+	for _, e := range elements {
+		if txt, ok := e["text"].(string); ok {
+			text.WriteString(txt)
+			text.WriteString(" ")
+		}
 	}
 
 	for _, word := range []string{"Ghost", "MCP", "Hello", "World"} {
-		if containsIgnoreCase(text, word) {
+		if containsIgnoreCase(text.String(), word) {
 			t.Logf("✓ Found expected word: %s", word)
 		} else {
 			t.Errorf("Expected word %q not found in OCR output", word)

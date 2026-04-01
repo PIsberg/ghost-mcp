@@ -368,7 +368,7 @@ func handleScroll(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallTo
 	logging.Info("ACTION COMPLETE: Scrolled %s by %d at (%d, %d)", direction, amount, x, y)
 
 	// Run a quick OCR pass on the centre half of the screen so the AI knows
-	// what is now visible without needing a separate screenshot + read_screen_text call.
+	// what is now visible without needing a separate screenshot + find_elements call.
 	visibleText := ""
 	stripY := screenH / 4
 	stripH := screenH / 2
@@ -986,7 +986,7 @@ x and y are optional and default to the screen centre, which is correct for most
 	), handleScroll)
 
 	mcpServer.AddTool(mcp.NewTool("scroll_until_text",
-		mcp.WithDescription(`BOUNDED SEARCH TOOL: scrolls and OCR-searches for text in one call. Use this instead of manually chaining scroll + read_screen_text + screenshots.
+		mcp.WithDescription(`BOUNDED SEARCH TOOL: scrolls and OCR-searches for text in one call. Use this instead of manually chaining scroll + find_elements + screenshots.
 
 🎯 WHEN TO USE:
 - You need to find text that is likely off-screen in a scrollable page, list, or panel
@@ -1035,7 +1035,7 @@ IF THE FIELD HAS NO DETECTABLE TEXT (e.g. dark/empty placeholder):
 - The input field is to the LEFT: click_at {"x": box.x - 200, "y": box.y + box.height/2}
 - Then type_text
 
-For special characters or control sequences (Enter, Tab, Ctrl+C), use press_key instead. To verify the text was entered, use wait_for_text or read_screen_text on the input region — not a full screenshot.`),
+For special characters or control sequences (Enter, Tab, Ctrl+C), use press_key instead. To verify the text was entered, use wait_for_text or find_elements on the input region — not a full screenshot.`),
 		mcp.WithString("text", mcp.Description("The exact text string to type. Supports Unicode. Do not include control characters — use press_key for Enter, Tab, Backspace etc."), mcp.Required()),
 		mcp.WithBoolean("press_enter", mcp.Description("If true, automatically presses the Enter key immediately after the text is typed (default: false).")),
 	), handleTypeText)
@@ -1043,7 +1043,7 @@ For special characters or control sequences (Enter, Tab, Ctrl+C), use press_key 
 	mcpServer.AddTool(mcp.NewTool("click_and_type",
 		mcp.WithDescription(`Move the mouse to (x, y), click to focus, and then type text. This is a single atomic operation that replaces separate click_at and type_text calls.
 
-Use this tool when you already have the absolute pixel coordinates (e.g. from read_screen_text or find_elements) and need to interact with an input field. Do not guess coordinates.`),
+Use this tool when you already have the absolute pixel coordinates (e.g. from find_elements) and need to interact with an input field. Do not guess coordinates.`),
 		mcp.WithNumber("x", mcp.Description("X coordinate in pixels from the left edge of the screen."), mcp.Required()),
 		mcp.WithNumber("y", mcp.Description("Y coordinate in pixels from the top edge of the screen."), mcp.Required()),
 		mcp.WithString("text", mcp.Description("The exact text string to type. Supports Unicode."), mcp.Required()),

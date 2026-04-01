@@ -5,12 +5,12 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 )
 
-// registerOCRTools registers the read_screen_text tool.
+// registerOCRTools registers the OCR-based tools.
 // Requires Tesseract OCR libraries to be installed (e.g., via vcpkg).
 func registerOCRTools(mcpServer *server.MCPServer) {
 
 	mcpServer.AddTool(mcp.NewTool("find_and_click",
-		mcp.WithDescription(`THE ONLY TOOL YOU NEED TO CLICK A BUTTON. Start here for every click task. Do NOT call get_screen_size, take_screenshot, read_screen_text, or find_elements first — just call this.
+		mcp.WithDescription(`THE ONLY TOOL YOU NEED TO CLICK A BUTTON. Start here for every click task. Do NOT call get_screen_size, take_screenshot, or find_elements first — just call this.
 
 🎯 WHEN TO USE:
 - You need to click a single button/link/menu item by its text label
