@@ -32,63 +32,7 @@ const (
 	waitForTextPollInterval = 100 * time.Millisecond
 )
 
-func handleReadScreenText(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	logging.Debug("Handling read_screen_text request")
 
-	screenW, screenH := robotgo.GetScreenSize()
-	x, _ := getIntParam(request, "x")
-	y, _ := getIntParam(request, "y")
-	width := screenW
-	height := screenH
-	if w, err := getIntParam(request, "width"); err == nil {
-		width = w
-	}
-	if h, err := getIntParam(request, "height"); err == nil {
-		height = h
-	}
-
-	if err := validate.ScreenRegion(x, y, width, height, screenW, screenH); err != nil {
-		logging.Error("Screen region validation failed: %v", err)
-		return mcp.NewToolResultError(fmt.Sprintf("invalid screen region: %v", err)), nil
-	}
-
-	logging.Info("Capturing screen for OCR at (%d, %d) size %dx%d", x, y, width, height)
-
-	img, captureErr := robotgo.CaptureImg(x, y, width, height)
-	if captureErr != nil {
-		logging.Error("Failed to capture screen: %v", captureErr)
-		return mcp.NewToolResultError(fmt.Sprintf("failed to capture screen: %v", captureErr)), nil
-	}
-
-	saveScreenshotIfKept(img, "ghost-mcp-ocr")
-
-	grayscale := getBoolParam(request, "grayscale", true)
-	result, ocrErr := ocr.ReadImage(img, ocr.Options{Color: !grayscale})
-	if ocrErr != nil {
-		logging.Error("OCR failed: %v", ocrErr)
-		return mcp.NewToolResultError(fmt.Sprintf("OCR failed: %v", ocrErr)), nil
-	}
-
-	logging.Info("OCR extracted %d words (grayscale=%v)", len(result.Words), grayscale)
-
-	// Build JSON response manually to avoid encoding/json import churn.
-	wordsJSON := "["
-	for i, w := range result.Words {
-		if i > 0 {
-			wordsJSON += ","
-		}
-		wordsJSON += fmt.Sprintf(
-			`{"text":%q,"x":%d,"y":%d,"width":%d,"height":%d,"confidence":%.1f}`,
-			w.Text, w.X, w.Y, w.Width, w.Height, w.Confidence,
-		)
-	}
-	wordsJSON += "]"
-
-	return mcp.NewToolResultText(fmt.Sprintf(
-		`{"success":true,"text":%q,"words":%s,"region":{"x":%d,"y":%d,"width":%d,"height":%d}}`,
-		result.Text, wordsJSON, x, y, width, height,
-	)), nil
-}
 
 func handleFindAndClick(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	logging.Debug("Handling find_and_click request")

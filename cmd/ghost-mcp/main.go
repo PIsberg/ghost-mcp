@@ -961,7 +961,9 @@ Use coordinates from find_elements (center_x/center_y) or a known fixed position
 
 Scroll 'down' to reveal content below, 'up' to go back up. For horizontal content use 'left' or 'right'.
 
-The response includes visible_text — the OCR text of the centre half of the screen after scrolling. Use this to know what is now on screen WITHOUT needing a separate read_screen_text or take_screenshot call.
+The response includes visible_text — the OCR text of the centre half of the screen after scrolling. Use this to know what is now on screen WITHOUT needing a separate find_elements or take_screenshot call.
+
+🚫 AFTER SCROLL, DO NOT call find_elements or take_screenshot unless you specifically need to interact with a region not covered by visible_text. visible_text already tells you what appeared!
 
 AMOUNT GUIDANCE — use small increments to avoid overshooting:
 - amount=3 (default): ~1/4 screen — use for fine positioning
@@ -1056,6 +1058,7 @@ Common uses: 'enter' to confirm/submit, 'tab' to move between fields, 'esc' to c
 🚫 DO NOT take a screenshot before clicking — use find_and_click instead.
 🚫 DO NOT take a screenshot after every click to verify — use wait_for_text instead.
 🚫 DO NOT take a screenshot to find a button's coordinates — use find_and_click or find_elements instead.
+🚫 FOR TEXT FIELDS, NEVER call take_screenshot before trying find_click_and_type, find_elements, or scroll_until_text.
 
 WHEN TO USE take_screenshot:
 - The task explicitly requires seeing the visual layout (e.g. "describe the screen", "what color is the button").
