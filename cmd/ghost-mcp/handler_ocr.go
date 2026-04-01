@@ -361,11 +361,13 @@ func buildFindTextFailureMessage(img image.Image, searchText string, nth int, re
 	// Find label candidates (words ending with ":")
 	labels := findLabelCandidates(ocrResult, 5)
 	
-	msg := formatFindTextFailureMessage(searchText, nth, regionX, regionY, regionW, regionH, matches)
-	
+	// Start with detected labels - make them impossible to miss!
+	msg := ""
 	if len(labels) > 0 {
-		msg += fmt.Sprintf(" DETECTED LABELS: %q - try searching for one of these!", labels)
+		msg += fmt.Sprintf("VISIBLE LABELS ON SCREEN: %q. SEARCH FOR ONE OF THESE! ", labels)
 	}
+	
+	msg += formatFindTextFailureMessage(searchText, nth, regionX, regionY, regionW, regionH, matches)
 	
 	return msg
 }
@@ -450,9 +452,20 @@ func handleFindElements(ctx context.Context, request mcp.CallToolRequest) (*mcp.
 	}
 	elementsJSON += "]"
 
+	// Extract labels (words ending with ":") for easy discovery
+	labels := findLabelCandidates(ocrResult, 10)
+	labelsJSON := "["
+	for i, label := range labels {
+		if i > 0 {
+			labelsJSON += ","
+		}
+		labelsJSON += fmt.Sprintf(`%q`, label)
+	}
+	labelsJSON += "]"
+
 	return mcp.NewToolResultText(fmt.Sprintf(
-		`{"success":true,"element_count":%d,"region":{"x":%d,"y":%d,"width":%d,"height":%d},"elements":%s}`,
-		len(elements), regionX, regionY, regionW, regionH, elementsJSON,
+		`{"success":true,"element_count":%d,"region":{"x":%d,"y":%d,"width":%d,"height":%d},"elements":%s,"labels":%s,"note":"Use 'labels' array for quick access to field labels like \"Text Input:\" or \"Email:\". These are visible on screen NOW - no scrolling needed!"}`,
+		len(elements), regionX, regionY, regionW, regionH, elementsJSON, labelsJSON,
 	)), nil
 }
 
