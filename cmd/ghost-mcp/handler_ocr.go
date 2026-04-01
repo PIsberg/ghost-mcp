@@ -524,11 +524,177 @@ func findAndClickMultiPage(
 	screenW, screenH int,
 ) (*mcp.CallToolResult, error) {
 
+	selectBest := getBoolParam(request, "select_best", false)
+
 	// Default navigation keys if not specified
 	if nextPageKeys == "" {
 		nextPageKeys = "Page_Down"
 	}
 	keys := strings.Split(nextPageKeys, ",")
+
+	// Mode 1: Select best - scan all pages first, collect matches, choose highest score
+	if selectBest {
+		return findAndClickMultiPageSelectBest(ctx, request, searchText, button, nth, nextPageKeys, maxPages, screenW, screenH, keys)
+	}
+
+	// Mode 2: First match - click the first match found (original behavior)
+	return findAndClickMultiPageFirstMatch(ctx, request, searchText, button, nth, nextPageKeys, maxPages, screenW, screenH, keys)
+}
+
+// findAndClickMultiPageSelectBest scans ALL pages first, collects all matches with scores,
+// then navigates to the page with the best match and clicks it.
+func findAndClickMultiPageSelectBest(
+	ctx context.Context,
+	request mcp.CallToolRequest,
+	searchText, button string,
+	nth int,
+	nextPageKeys string,
+	maxPages int,
+	screenW, screenH int,
+	keys []string,
+) (*mcp.CallToolResult, error) {
+
+	type pageMatch struct {
+		page                    int
+		minX, minY, maxX, maxY int
+		score                   int
+		phrase                  string
+	}
+	var allMatches []pageMatch
+
+	grayscale := getBoolParam(request, "grayscale", true)
+
+	// Phase 1: Scan all pages and collect matches
+	logging.Info("SELECT_BEST mode: scanning all %d pages first", maxPages)
+
+	for page := 0; page < maxPages; page++ {
+		// Capture current page
+		img, captureErr := robotgo.CaptureImg(0, 0, screenW, screenH)
+		if captureErr != nil {
+			logging.Error("Failed to capture screen on page %d: %v", page, captureErr)
+			return mcp.NewToolResultError(fmt.Sprintf("failed to capture screen: %v", captureErr)), nil
+		}
+
+		// Get all match candidates with scores
+		candidates := getMatchCandidates(searchText, img, grayscale)
+		if candidates != "[]" {
+			// Parse candidates and add page info
+			var parsed []struct {
+				Text   string `json:"text"`
+				Score  int    `json:"score"`
+				X      int    `json:"x"`
+				Y      int    `json:"y"`
+				Width  int    `json:"width"`
+				Height int    `json:"height"`
+			}
+			json.Unmarshal([]byte(candidates), &parsed)
+
+			for _, c := range parsed {
+				allMatches = append(allMatches, pageMatch{
+					page:   page,
+					minX:   c.X,
+					minY:   c.Y,
+					maxX:   c.X + c.Width,
+					maxY:   c.Y + c.Height,
+					score:  c.Score,
+					phrase: c.Text,
+				})
+			}
+			logging.Info("Page %d: found %d candidates for %q", page, len(parsed), searchText)
+		} else {
+			logging.Info("Page %d: no matches for %q", page, searchText)
+		}
+
+		// Navigate to next page (if not last)
+		if page < maxPages-1 {
+			for _, key := range keys {
+				key = strings.TrimSpace(key)
+				if key != "" {
+					robotgo.KeyTap(key)
+					time.Sleep(300 * time.Millisecond)
+				}
+			}
+			if err := checkFailsafe(); err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+		}
+	}
+
+	// Check if we found any matches
+	if len(allMatches) == 0 {
+		logging.Info("No matches found on any of %d pages", maxPages)
+		img, _ := robotgo.CaptureImg(0, 0, screenW, screenH)
+		return mcp.NewToolResultError(buildFindTextFailureMessage(img, searchText, nth, 0, 0, screenW, screenH, true)), nil
+	}
+
+	// Sort by score (highest first)
+	sort.Slice(allMatches, func(i, j int) bool {
+		return allMatches[i].score > allMatches[j].score
+	})
+
+	bestMatch := allMatches[0]
+	logging.Info("SELECT_BEST: best match is %q with score %d on page %d", bestMatch.phrase, bestMatch.score, bestMatch.page)
+
+	// Phase 2: Navigate back to the page with best match
+	// (Assuming page 0 is the starting page, we need to navigate forward)
+	if bestMatch.page > 0 {
+		logging.Info("Navigating to page %d for best match", bestMatch.page)
+		for p := 0; p < bestMatch.page; p++ {
+			for _, key := range keys {
+				key = strings.TrimSpace(key)
+				if key != "" {
+					robotgo.KeyTap(key)
+					time.Sleep(300 * time.Millisecond)
+				}
+			}
+		}
+		if err := checkFailsafe(); err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+	}
+
+	// Phase 3: Click the best match
+	cx := bestMatch.minX + (bestMatch.maxX-bestMatch.minX)/2
+	cy := bestMatch.minY + (bestMatch.maxY-bestMatch.minY)/2
+
+	if err := validate.Coords(cx, cy, screenW, screenH); err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("found text but center out of bounds: %v", err)), nil
+	}
+
+	// Update cache
+	normalizedText := normalizeText(searchText)
+	regionCache.Put(normalizedText, bestMatch.minX, bestMatch.minY, bestMatch.maxX-bestMatch.minX, bestMatch.maxY-bestMatch.minY, screenW, screenH)
+
+	logging.Info("ACTION: Clicking best match %q (score %d) on page %d at (%d,%d)", bestMatch.phrase, bestMatch.score, bestMatch.page, cx, cy)
+	robotgo.Move(cx, cy)
+
+	if err := checkFailsafe(); err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	robotgo.Click(button, false)
+	applyClickDelay(request)
+
+	finalX, finalY := robotgo.GetMousePos()
+	logging.Info("ACTION COMPLETE: find_and_click %q at (%d, %d) - best of %d candidates across %d pages", searchText, finalX, finalY, len(allMatches), maxPages)
+
+	return mcp.NewToolResultText(fmt.Sprintf(
+		`{"success":true,"found":%q,"box":{"x":%d,"y":%d,"width":%d,"height":%d},"requested_x":%d,"requested_y":%d,"actual_x":%d,"actual_y":%d,"button":%q,"occurrence":%d,"page":%d,"score":%d,"total_candidates":%d,"select_best":true}`,
+		searchText, bestMatch.minX, bestMatch.minY, bestMatch.maxX-bestMatch.minX, bestMatch.maxY-bestMatch.minY, cx, cy, finalX, finalY, button, nth, bestMatch.page, bestMatch.score, len(allMatches),
+	)), nil
+}
+
+// findAndClickMultiPageFirstMatch clicks the first match found (original behavior)
+func findAndClickMultiPageFirstMatch(
+	ctx context.Context,
+	request mcp.CallToolRequest,
+	searchText, button string,
+	nth int,
+	nextPageKeys string,
+	maxPages int,
+	screenW, screenH int,
+	keys []string,
+) (*mcp.CallToolResult, error) {
 
 	for page := 0; page < maxPages; page++ {
 		// Capture and search current page

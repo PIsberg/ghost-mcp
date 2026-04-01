@@ -38,6 +38,8 @@ HOW IT WORKS:
 
 📄 MULTI-PAGE SEARCH: If text may be on another page/tab, add next_page_keys="Page_Down" and max_pages=5. The tool will navigate pages and search each one until found.
 
+🎯 SELECT BEST MODE: Add select_best=true to scan ALL pages first, compare match scores, then click the highest-score match. Slower but more accurate - recommended for multi-page searches!
+
 COLORED BUTTONS (white text on blue/green/red/cyan): handled automatically by the color pass. No special parameters needed — just call find_and_click with the button label.
 
 IF TEXT NOT FOUND:
@@ -76,6 +78,7 @@ Use candidates to verify the AI chose the right element. If the clicked element 
 		mcp.WithNumber("scroll_amount", mcp.Description("Scroll amount per step when scroll_direction is set (default: 5).")),
 		mcp.WithString("next_page_keys", mcp.Description("Optional: keyboard keys to navigate to next page (e.g., 'Page_Down', 'Arrow_Down', 'Tab'). Use comma-separated for multiple keys. Enables multi-page search.")),
 		mcp.WithNumber("max_pages", mcp.Description("Maximum pages to search when next_page_keys is set (default: 1, set >1 for multi-page search).")),
+		mcp.WithBoolean("select_best", mcp.Description("If true, scans ALL pages first and clicks the highest-score match. If false (default), clicks first match found. Recommended for multi-page searches.")),
 	), handleFindAndClick)
 
 	mcpServer.AddTool(mcp.NewTool("find_and_click_all",
