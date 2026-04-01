@@ -335,6 +335,21 @@ func formatFindTextFailureMessage(searchText string, nth int, regionX, regionY, 
 	return msg
 }
 
+// findLabelCandidates extracts words ending with ":" which are likely field labels
+func findLabelCandidates(ocrResult *ocr.Result, limit int) []string {
+	labels := []string{}
+	for _, w := range ocrResult.Words {
+		text := strings.TrimSpace(w.Text)
+		if strings.HasSuffix(text, ":") && len(text) > 1 {
+			labels = append(labels, text)
+			if len(labels) >= limit {
+				break
+			}
+		}
+	}
+	return labels
+}
+
 func buildFindTextFailureMessage(img image.Image, searchText string, nth int, regionX, regionY, regionW, regionH int, grayscale bool) string {
 	ocrResult, err := ocr.ReadImage(img, ocr.Options{Color: !grayscale})
 	if err != nil || ocrResult == nil {
@@ -342,7 +357,17 @@ func buildFindTextFailureMessage(img image.Image, searchText string, nth int, re
 	}
 
 	matches := closestOCRMatches(ocrResult, searchText, 5)
-	return formatFindTextFailureMessage(searchText, nth, regionX, regionY, regionW, regionH, matches)
+	
+	// Find label candidates (words ending with ":")
+	labels := findLabelCandidates(ocrResult, 5)
+	
+	msg := formatFindTextFailureMessage(searchText, nth, regionX, regionY, regionW, regionH, matches)
+	
+	if len(labels) > 0 {
+		msg += fmt.Sprintf(" DETECTED LABELS: %q - try searching for one of these!", labels)
+	}
+	
+	return msg
 }
 
 // findAndClickWord removed in favor of direct clickFoundBounds logic
