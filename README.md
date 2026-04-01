@@ -46,10 +46,11 @@ Ghost MCP allows AI assistants like Claude to control your computer's mouse, key
 | Tool | Description | Parameters |
 |------|-------------|------------|
 | `find_elements` ⭐ | Discover all clickable text elements with coordinates. Fast alternative to screenshots. | `x`, `y`, `width`, `height` |
-| `find_and_click` ⚡🎯 | Find text on screen with OCR and click its center. **Smart matching** prefers standalone buttons over text inside other elements. **Auto-caches regions** for 10-25x faster repeat clicks. | `text`, `button`, `nth`, `x`, `y`, `width`, `height` |
+| `find_and_click` ⚡🎯🛡️ | Find text on screen with OCR and click its center. **Smart matching** prefers standalone buttons. **Auto-caches regions** for 10-25x faster clicks. **Built-in loop protection** (max 25 calls/session). | `text`, `button`, `nth`, `x`, `y`, `width`, `height`, `scroll_direction`, `max_scrolls`, `next_page_keys`, `max_pages`, `select_best` |
 | `find_click_and_type` | Find a label/placeholder, click the inferred input target, and type immediately. Can optionally scroll while searching. | `text`, `type_text`, `x_offset`, `y_offset`, `press_enter`, `delay_ms`, `scroll_direction`, `scroll_amount`, `max_scrolls`, `scroll_x`, `scroll_y` |
 | `find_and_click_all` ⭐ | Click multiple buttons in ONE atomic operation. | `texts` (array), `button`, `delay_ms` |
 | `wait_for_text` ⭐ | Wait for text to appear or disappear. Verify UI changes. | `text`, `visible`, `timeout_ms`, `x`, `y`, `width`, `height` |
+| `click_until_text_appears` 🆕🛡️ | Click coordinates and wait for text to appear. Auto-retries if text doesn't appear. **Prevents infinite click loops.** | `x`, `y`, `wait_for_text`, `button`, `timeout_ms`, `max_clicks` |
 | `get_region_cache_stats` | Get cache statistics (hits, misses, hit rate). Monitor optimization effectiveness. | None |
 | `clear_region_cache` | Clear all cached regions. Use after screen resolution changes or UI layout updates. | None |
 
@@ -61,6 +62,57 @@ Ghost MCP allows AI assistants like Claude to control your computer's mouse, key
 - **`wait_for_text`** - Properly verify UI state changes instead of guessing with screenshots
 - **`find_elements`** - Discover all clickable elements 10x faster than taking screenshots
 - **`scroll_until_text`** - Search long pages with one bounded tool call instead of repeated scroll + OCR loops
+- **`click_until_text_appears`** 🆕 - Click and wait for confirmation text. Auto-retries up to 3 times. Prevents infinite loops.
+
+### 🛡️ Safety Features & Loop Protection
+
+Ghost MCP includes **built-in safeguards** to prevent infinite retry loops and runaway automation:
+
+#### Global Call Limit (25 calls/session)
+```
+WARNING: Only 5 tool calls remaining before forced stop.
+MAXIMUM TOOL CALLS REACHED (25). Stop and try a completely different approach.
+```
+
+#### Consecutive Failure Detection (3 strikes)
+```
+GIVE UP RECOMMENDATION: Failed 3 times with "Submit". STOP trying this text.
+Try: (1) find_elements to see actual text, (2) shorter search term, 
+(3) scroll_direction if off-screen, or (4) completely different approach.
+```
+
+#### Repeated Click Detection (5 clicks at same spot)
+```json
+{
+  "success": true,
+  "warning": {
+    "should_stop": true,
+    "reason": "Clicked same coordinates (403,767) 5 times in 30 seconds",
+    "click_count": 5,
+    "message": "You've clicked this spot 5 times. Verify this is correct before continuing."
+  }
+}
+```
+
+#### Enhanced Error Responses
+Every error now includes:
+- `consecutive_failures`: How many times this search failed
+- `remaining_calls`: Calls left before forced stop
+- `suggestion`: Actionable next step (`scroll_may_help`, `no_matches_found`, etc.)
+- `candidates`: All OCR-detected text with confidence scores
+
+#### Response Example on Failure
+```json
+{
+  "error": "text \"Submit\" not found...",
+  "candidates": [
+    {"text": "Submit", "score": 100, "x": 50, "y": 50}
+  ],
+  "suggestion": "scroll_may_help",
+  "consecutive_failures": 2,
+  "remaining_calls": 18
+}
+```
 
 ### 🎯 Smart OCR Matching
 
