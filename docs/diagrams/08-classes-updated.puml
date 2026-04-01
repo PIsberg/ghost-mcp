@@ -1,0 +1,253 @@
+@startuml ghost-mcp-classes-updated
+title Ghost MCP Server - Component Diagram (Updated)
+
+package "cmd/ghost-mcp" {
+  class MCPServer {
+    +NewMCPServer()
+    +AddTool()
+    +ServeStdio()
+  }
+  
+  class Tool {
+    +Name: string
+    +Description: string
+    +InputSchema: object
+  }
+  
+  class CallToolRequest {
+    +Params: CallToolParams
+    +GetArguments()
+    +BindArguments()
+  }
+  
+  class CallToolResult {
+    +Content: []Content
+    +IsError: bool
+    +StructuredContent: any
+  }
+}
+
+package "Tool Handlers" {
+  class MouseHandlers {
+    +handleMoveMouse()
+    +handleClick()
+    +handleClickAt()
+    +handleDoubleClick()
+    +handleScroll()
+  }
+  
+  class KeyboardHandlers {
+    +handleTypeText()
+    +handlePressKey()
+    +handleClickAndType()
+  }
+  
+  class ScreenHandlers {
+    +handleTakeScreenshot()
+    +handleGetScreenSize()
+  }
+  
+  class OCRHandlers {
+    +handleFindAndClick()
+    +handleFindElements()
+    +handleFindClickAndType()
+    +handleFindAndClickAll()
+    +handleWaitForText()
+    +handleScrollUntilText()
+    +handleGetRegionCacheStats()
+    +handleClearRegionCache()
+    +handleClickUntilTextAppears()
+  }
+}
+
+package "Smart Matching" {
+  class RegionCache {
+    -entries: map[string]*RegionCacheEntry
+    -maxSize: int
+    -maxAge: Duration
+    -stats: CacheStats
+    +Get()
+    +Put()
+    +Clear()
+    +GetStats()
+    +evictOldest()
+  }
+  
+  class RegionCacheEntry {
+    +X: int
+    +Y: int
+    +Width: int
+    +Height: int
+    +LastUsed: time.Time
+    +HitCount: int
+    +ScreenW: int
+    +ScreenH: int
+  }
+  
+  class CacheStats {
+    +Hits: int64
+    +Misses: int64
+    +Evictions: int64
+    +Updates: int64
+  }
+  
+  class scoreMatch {
+    +scoreMatch()
+    +isWordBoundary()
+  }
+}
+
+package "Safety Features" {
+  class callTracker {
+    -consecutiveFailures: map[string]int
+    -clickHistory: []clickHistoryEntry
+    -totalCalls: int
+    +recordCall()
+    +recordClick()
+    +getTrackerStats()
+  }
+  
+  class clickHistoryEntry {
+    +x: int
+    +y: int
+    +timestamp: time.Time
+    +button: string
+    +success: bool
+  }
+  
+  class CallStats {
+    +TotalCalls: int
+    +ConsecutiveFailures: int
+    +RemainingCalls: int
+    +ShouldGiveUp: bool
+  }
+  
+  class ClickWarning {
+    +ShouldStop: bool
+    +Reason: string
+    +ClickCount: int
+  }
+}
+
+package "Internal Packages" {
+  package "internal/ocr" {
+    class OCRPipeline {
+      +ReadImage()
+      +HashImageFast()
+      +PrepareParallelImageSet()
+      +parallelFindText()
+    }
+    
+    class PreparedImageSet {
+      +Normal: []byte
+      +Inverted: []byte
+      +BrightText: []byte
+      +Color: []byte
+    }
+  }
+  
+  package "internal/audit" {
+    class AuditLogger {
+      +Log()
+      +VerifyLogFile()
+    }
+  }
+  
+  package "internal/validate" {
+    class Validators {
+      +Coords()
+      +ScreenRegion()
+      +Text()
+      +Key()
+    }
+  }
+  
+  package "internal/visual" {
+    class VisualFeedback {
+      +PulseCursor()
+    }
+  }
+}
+
+package "External" {
+  class robotgo {
+    +Move()
+    +Click()
+    +TypeStr()
+    +KeyTap()
+    +ScrollDir()
+    +CaptureImg()
+    +GetScreenSize()
+    +GetMousePos()
+  }
+  
+  class Tesseract {
+    +SetImage()
+    +GetUTF8Text()
+    +SetPageSegMode()
+  }
+}
+
+' Relationships
+MCPServer --> Tool
+MCPServer --> CallToolRequest
+MCPServer --> CallToolResult
+
+MouseHandlers --> CallToolRequest
+MouseHandlers --> CallToolResult
+KeyboardHandlers --> CallToolRequest
+KeyboardHandlers --> CallToolResult
+ScreenHandlers --> CallToolRequest
+ScreenHandlers --> CallToolResult
+OCRHandlers --> CallToolRequest
+OCRHandlers --> CallToolResult
+
+OCRHandlers --> RegionCache
+OCRHandlers --> scoreMatch
+OCRHandlers --> callTracker
+
+RegionCache --> RegionCacheEntry
+RegionCache --> CacheStats
+
+callTracker --> clickHistoryEntry
+callTracker --> CallStats
+callTracker --> ClickWarning
+
+OCRHandlers --> OCRPipeline
+OCRPipeline --> PreparedImageSet
+
+MouseHandlers --> robotgo
+KeyboardHandlers --> robotgo
+ScreenHandlers --> robotgo
+OCRHandlers --> robotgo
+
+OCRPipeline --> Tesseract
+
+note right of RegionCache
+  Region Caching:
+  - 100 entries max
+  - LRU eviction
+  - 24h expiration
+  - Case-insensitive
+  - Screen resolution aware
+end note
+
+note right of callTracker
+  Safety Limits:
+  - 25 calls/session
+  - 3 consecutive failures
+  - 5 clicks at same spot
+  - 30s click window
+end note
+
+note bottom of OCRHandlers
+  Smart Matching Scores:
+  1000 = Exact match
+  500  = Prefix match
+  400  = Suffix match
+  300  = Standalone word
+  100  = Substring
+  50   = Inside word
+end note
+
+@enduml

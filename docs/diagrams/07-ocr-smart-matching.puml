@@ -1,0 +1,54 @@
+@startuml ghost-mcp-ocr-smart-matching
+title Smart OCR Matching with Region Cache
+
+participant "AI Client" as client
+participant "find_and_click" as handler
+participant "RegionCache" as cache
+participant "OCR Engine" as ocr
+participant "smart matching" as smart
+participant "robotgo" as robot
+
+client -> handler: find_and_click("Click")
+activate handler
+
+handler -> cache: Get("click", screenW, screenH)
+activate cache
+
+alt Cache Hit
+    cache -->> handler: Entry {x, y, width, height}
+    handler -> handler: Use cached region
+    handler -> ocr: Scan cached region only
+else Cache Miss
+    cache -->> handler: Not Found
+    handler -> handler: Full screen OCR
+    handler -> ocr: Capture & OCR full screen
+end
+
+ocr --> handler: OCR Result
+handler -> smart: scoreMatch("click", words)
+activate smart
+smart --> handler: Best match {score, bounds}
+deactivate smart
+
+alt Text Found
+    handler -> handler: Calculate center
+    handler -> cache: Put("click", bounds)
+    activate cache
+    cache -->> handler: Cached
+    deactivate cache
+    handler -> robot: Move(cx, cy)
+    activate robot
+    robot --> handler: Moved
+    handler -> robot: Click()
+    robot --> handler: Clicked
+    deactivate robot
+    handler --> client: Success + candidates[]
+else Text Not Found
+    handler --> client: Error + suggestion
+end
+
+deactivate handler
+deactivate ocr
+deactivate cache
+
+@enduml
