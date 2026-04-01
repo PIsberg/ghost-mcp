@@ -9,6 +9,7 @@ import (
 	"context"
 	"encoding/json"
 	"image"
+	"image/color"
 	"strings"
 	"testing"
 	"time"
