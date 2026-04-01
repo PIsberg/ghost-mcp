@@ -389,12 +389,26 @@ func handleScroll(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallTo
 }
 
 func scrollSearchForText(ctx context.Context, cfg scrollSearchConfig) (*scrollSearchResult, error) {
-	lastVisibleText := ""
+	var lastHash uint64
+	var lastVisibleText string
+
 	for attempt := 0; attempt <= cfg.MaxScrolls; attempt++ {
 		img, captureErr := uiCaptureImage(cfg.RegionX, cfg.RegionY, cfg.RegionW, cfg.RegionH)
 		if captureErr != nil {
 			return nil, fmt.Errorf("failed to capture screen: %w", captureErr)
 		}
+
+		currentHash := ocr.HashImageFast(img)
+
+		// Abort immediately before doing expensive OCR if the viewport hasn't changed
+		if attempt > 0 && currentHash == lastHash {
+			return &scrollSearchResult{
+				VisibleText:      lastVisibleText,
+				ScrollCount:      attempt,
+				RepeatedViewport: true,
+			}, nil
+		}
+		lastHash = currentHash
 
 		visibleText := ""
 		if ocrResult, ocrErr := uiReadImage(img, ocr.Options{Color: !cfg.Grayscale}); ocrErr == nil {
@@ -402,6 +416,7 @@ func scrollSearchForText(ctx context.Context, cfg scrollSearchConfig) (*scrollSe
 		} else {
 			logging.Debug("scrollSearchForText visible-text OCR failed (non-fatal): %v", ocrErr)
 		}
+		lastVisibleText = visibleText
 
 		minX, minY, maxX, maxY, found, passName := uiFindText(ctx, img, cfg.SearchText, cfg.Nth, cfg.Grayscale)
 		if found {
@@ -423,15 +438,6 @@ func scrollSearchForText(ctx context.Context, cfg scrollSearchConfig) (*scrollSe
 				ScrollCount: attempt,
 			}, nil
 		}
-
-		if attempt > 0 && visibleText != "" && visibleText == lastVisibleText {
-			return &scrollSearchResult{
-				VisibleText:      visibleText,
-				ScrollCount:      attempt,
-				RepeatedViewport: true,
-			}, nil
-		}
-		lastVisibleText = visibleText
 
 		uiMoveMouse(cfg.ScrollX, cfg.ScrollY)
 		if err := uiCheckFailsafe(); err != nil {
