@@ -516,22 +516,15 @@ func handleFindAndClick(ctx context.Context, request mcp.CallToolRequest) (*mcp.
 
 	// Record successful click and check for repetition warning
 	clickWarning := tracker.recordClick(finalX, finalY, button, true)
-	
+
 	// Record success for this search term
 	tracker.recordCall("find_and_click", searchText, true)
 
-	// Build response with match candidates and scores
+	// Build response (minimal for speed - candidates only on failure)
 	response := fmt.Sprintf(
 		`{"success":true,"found":%q,"box":{"x":%d,"y":%d,"width":%d,"height":%d},"requested_x":%d,"requested_y":%d,"actual_x":%d,"actual_y":%d,"button":%q,"occurrence":%d}`,
 		searchText, minX, minY, maxX-minX, maxY-minY, cx, cy, finalX, finalY, button, nth,
 	)
-
-	// Add match candidates with scores for AI decision-making
-	candidates := getMatchCandidates(searchText, img, grayscale)
-	if len(candidates) > 0 {
-		// Append candidates as separate field
-		response = fmt.Sprintf(`%s,"candidates":%s}`, response[:len(response)-1], candidates)
-	}
 
 	// Add click warning if clicking same spot too many times
 	if clickWarning.ShouldStop {
