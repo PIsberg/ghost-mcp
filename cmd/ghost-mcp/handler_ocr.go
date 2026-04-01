@@ -37,24 +37,24 @@ const (
 // =============================================================================
 
 const (
-	MaxConsecutiveFailures = 3  // After 3 failures, suggest different approach
-	MaxSameCoordinateClicks = 5 // After 5 clicks at same spot, stop
-	MaxToolCallsPerSession = 25 // Global limit per session
+	MaxConsecutiveFailures  = 3  // After 3 failures, suggest different approach
+	MaxSameCoordinateClicks = 5  // After 5 clicks at same spot, stop
+	MaxToolCallsPerSession  = 25 // Global limit per session
 )
 
 type clickHistoryEntry struct {
-	x, y       int
-	timestamp  time.Time
-	button     string
-	success    bool
+	x, y      int
+	timestamp time.Time
+	button    string
+	success   bool
 }
 
 type callTracker struct {
-	mu                   sync.RWMutex
-	consecutiveFailures  map[string]int  // key: tool:text
-	clickHistory         []clickHistoryEntry
-	totalCalls           int
-	sessionStartTime     time.Time
+	mu                  sync.RWMutex
+	consecutiveFailures map[string]int // key: tool:text
+	clickHistory        []clickHistoryEntry
+	totalCalls          int
+	sessionStartTime    time.Time
 }
 
 var tracker = &callTracker{
@@ -159,23 +159,23 @@ func getTrackerStats() CallStats {
 
 // RegionCacheEntry stores a cached region for a text label
 type RegionCacheEntry struct {
-	X         int       `json:"x"`
-	Y         int       `json:"y"`
-	Width     int       `json:"width"`
-	Height    int       `json:"height"`
-	LastUsed  time.Time `json:"last_used"`
-	HitCount  int       `json:"hit_count"`
-	ScreenW   int       `json:"screen_w"` // Screen width when cached
-	ScreenH   int       `json:"screen_h"` // Screen height when cached
+	X        int       `json:"x"`
+	Y        int       `json:"y"`
+	Width    int       `json:"width"`
+	Height   int       `json:"height"`
+	LastUsed time.Time `json:"last_used"`
+	HitCount int       `json:"hit_count"`
+	ScreenW  int       `json:"screen_w"` // Screen width when cached
+	ScreenH  int       `json:"screen_h"` // Screen height when cached
 }
 
 // RegionCache stores frequently used UI element regions
 type RegionCache struct {
-	mu        sync.RWMutex
-	entries   map[string]*RegionCacheEntry
-	maxSize   int           // Maximum number of entries
-	maxAge    time.Duration // Maximum age before eviction
-	stats     CacheStats
+	mu      sync.RWMutex
+	entries map[string]*RegionCacheEntry
+	maxSize int           // Maximum number of entries
+	maxAge  time.Duration // Maximum age before eviction
+	stats   CacheStats
 }
 
 // CacheStats tracks cache performance
@@ -311,8 +311,6 @@ func normalizeText(text string) string {
 	return strings.ToLower(strings.TrimSpace(text))
 }
 
-
-
 func handleFindAndClick(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	logging.Debug("Handling find_and_click request")
 
@@ -360,7 +358,7 @@ func handleFindAndClick(ctx context.Context, request mcp.CallToolRequest) (*mcp.
 	}
 
 	// Multi-page search: navigate between pages while searching
-	nextPageKeys, _ := getStringParam(request, "next_page_keys")  // e.g., "Page_Down" or "Arrow_Down"
+	nextPageKeys, _ := getStringParam(request, "next_page_keys") // e.g., "Page_Down" or "Arrow_Down"
 	maxPages := 1
 	if n, err := getIntParam(request, "max_pages"); err == nil && n > 0 {
 		maxPages = n
@@ -449,28 +447,28 @@ func handleFindAndClick(ctx context.Context, request mcp.CallToolRequest) (*mcp.
 	minX, minY, maxX, maxY, found, passName := parallelFindText(ctx, img, searchText, nth, grayscale)
 	if !found {
 		logging.Info("Text %q (occurrence %d) not found on screen", searchText, nth)
-		
+
 		// Get candidates to show what WAS found (helps AI decide next action)
 		candidates := getMatchCandidates(searchText, img, grayscale)
-		
+
 		// Record failure and get updated stats
 		failStats := tracker.recordCall("find_and_click", searchText, false)
-		
+
 		// Check if we've failed too many times
 		var giveUpMessage string
 		if failStats.ConsecutiveFailures >= MaxConsecutiveFailures {
 			giveUpMessage = fmt.Sprintf(` GIVE UP RECOMMENDATION: Failed %d times with "%s". STOP trying this text. Try: (1) find_elements to see actual text, (2) shorter search term, (3) scroll_direction if off-screen, or (4) completely different approach.`, failStats.ConsecutiveFailures, searchText)
 		}
-		
+
 		// Check if we're running out of calls
 		remainingWarning := ""
 		if failStats.RemainingCalls <= 5 {
 			remainingWarning = fmt.Sprintf(` WARNING: Only %d tool calls remaining before forced stop.`, failStats.RemainingCalls)
 		}
-		
+
 		// Check if there are partial matches that might be off-screen
 		response := buildFindTextFailureMessage(img, searchText, nth, regionX, regionY, regionW, regionH, grayscale)
-		
+
 		// Add candidates and scroll suggestion
 		result := fmt.Sprintf(`{"error":%q,"candidates":%s,"suggestion":%s,"consecutive_failures":%d,"remaining_calls":%d}`,
 			response+giveUpMessage+remainingWarning,
@@ -547,12 +545,12 @@ func getMatchCandidates(searchText string, img image.Image, grayscale bool) stri
 	needleWords := strings.Fields(needle)
 
 	type candidate struct {
-		text        string
-		score       int     // Our match quality score (1000=exact, 500=prefix, etc.)
-		confidence  float64 // Tesseract OCR confidence (0-100)
-		x, y        int
-		width       int
-		height      int
+		text       string
+		score      int     // Our match quality score (1000=exact, 500=prefix, etc.)
+		confidence float64 // Tesseract OCR confidence (0-100)
+		x, y       int
+		width      int
+		height     int
 	}
 	var candidates []candidate
 
@@ -619,22 +617,22 @@ func getScrollSuggestion(searchText string, candidates string) string {
 	// Check for partial matches that suggest text might be nearby/off-screen
 	for _, c := range parsed {
 		candidateLower := strings.ToLower(c.Text)
-		
+
 		// Exact word match but low score = might be truncated/off-screen
 		if candidateLower == needle && c.Score < 500 {
 			return `"scroll_may_help"`
 		}
-		
+
 		// Prefix match = text starts with search term
 		if strings.HasPrefix(candidateLower, needle) && len(candidateLower) > len(needle) {
 			return `"text_continues_off_screen"`
 		}
-		
+
 		// Suffix match = text ends with search term, might be cut off at start
 		if strings.HasSuffix(candidateLower, needle) && len(candidateLower) > len(needle) {
 			return `"text_continues_off_screen"`
 		}
-		
+
 		// Contains as substring
 		if strings.Contains(candidateLower, needle) && c.Score < 300 {
 			return `"scroll_may_help"`
@@ -779,10 +777,10 @@ func findAndClickMultiPageSelectBest(
 ) (*mcp.CallToolResult, error) {
 
 	type pageMatch struct {
-		page                    int
+		page                   int
 		minX, minY, maxX, maxY int
-		score                   int
-		phrase                  string
+		score                  int
+		phrase                 string
 	}
 	var allMatches []pageMatch
 
@@ -1298,18 +1296,18 @@ func buildFindTextFailureMessage(img image.Image, searchText string, nth int, re
 	}
 
 	matches := closestOCRMatches(ocrResult, searchText, 5)
-	
+
 	// Find label candidates (words ending with ":")
 	labels := findLabelCandidates(ocrResult, 5)
-	
+
 	// Start with detected labels - make them IMPOSSIBLE TO MISS
 	msg := ""
 	if len(labels) > 0 {
 		msg += fmt.Sprintf("LABELS ON SCREEN: %v USE ONE OF THESE AS YOUR SEARCH TERM! ", labels)
 	}
-	
+
 	msg += formatFindTextFailureMessage(searchText, nth, regionX, regionY, regionW, regionH, matches)
-	
+
 	return msg
 }
 
@@ -1634,7 +1632,7 @@ func getStringArrayParam(request mcp.CallToolRequest, name string) ([]string, er
 // the searchText as a substring. Returns the bounds of the found label and its text.
 func findNearbyLabel(ocrResult *ocr.Result, searchText string) (minX, minY, maxX, maxY int, foundText string, found bool) {
 	needle := strings.ToLower(strings.TrimSpace(searchText))
-	
+
 	// First try to find labels that contain the search text
 	for _, w := range ocrResult.Words {
 		wordLower := strings.ToLower(strings.TrimSpace(w.Text))
@@ -1650,16 +1648,16 @@ func findNearbyLabel(ocrResult *ocr.Result, searchText string) (minX, minY, maxX
 			return w.X, w.Y, w.X + w.Width, w.Y + w.Height, w.Text, true
 		}
 	}
-	
+
 	// Try merging adjacent words on the same line to find multi-word labels
 	for i, w := range ocrResult.Words {
 		phrase := strings.ToLower(strings.TrimSpace(w.Text))
 		minX, minY = w.X, w.Y
-		maxX, maxY = w.X + w.Width, w.Y + w.Height
+		maxX, maxY = w.X+w.Width, w.Y+w.Height
 		avgHeight := w.Height
 		verticalThreshold := avgHeight / 2
 		maxHGap := avgHeight // Allow larger gaps for labels
-		
+
 		for j := i + 1; j < len(ocrResult.Words) && j < i+5; j++ {
 			next := ocrResult.Words[j]
 			nextCenterY := next.Y + next.Height/2
@@ -1671,19 +1669,19 @@ func findNearbyLabel(ocrResult *ocr.Result, searchText string) (minX, minY, maxX
 			if hGap < 0 || hGap > maxHGap {
 				continue
 			}
-			
+
 			// Extend bounds
 			maxX = next.X + next.Width
 			if next.Y < minY {
 				minY = next.Y
 			}
-			if next.Y + next.Height > maxY {
+			if next.Y+next.Height > maxY {
 				maxY = next.Y + next.Height
 			}
-			
+
 			phrase += " " + strings.ToLower(strings.TrimSpace(next.Text))
 		}
-		
+
 		// Check if merged phrase contains our search text
 		if strings.Contains(phrase, needle) && len(phrase) > len(needle) {
 			// Re-scan to get actual bounds
@@ -1693,9 +1691,9 @@ func findNearbyLabel(ocrResult *ocr.Result, searchText string) (minX, minY, maxX
 				if strings.Contains(checkPhrase, needle) {
 					// Find all words that form this label
 					labelMinX, labelMinY := checkWord.X, checkWord.Y
-					labelMaxX, labelMaxY := checkWord.X + checkWord.Width, checkWord.Y + checkWord.Height
+					labelMaxX, labelMaxY := checkWord.X+checkWord.Width, checkWord.Y+checkWord.Height
 					foundText = checkWord.Text
-					
+
 					for m := k + 1; m < len(ocrResult.Words) && m < k+5; m++ {
 						adjWord := ocrResult.Words[m]
 						adjCenterY := adjWord.Y + adjWord.Height/2
@@ -1711,7 +1709,7 @@ func findNearbyLabel(ocrResult *ocr.Result, searchText string) (minX, minY, maxX
 						if adjWord.Y < labelMinY {
 							labelMinY = adjWord.Y
 						}
-						if adjWord.Y + adjWord.Height > labelMaxY {
+						if adjWord.Y+adjWord.Height > labelMaxY {
 							labelMaxY = adjWord.Y + adjWord.Height
 						}
 						foundText += " " + adjWord.Text
@@ -1721,7 +1719,7 @@ func findNearbyLabel(ocrResult *ocr.Result, searchText string) (minX, minY, maxX
 			}
 		}
 	}
-	
+
 	return 0, 0, 0, 0, "", false
 }
 
@@ -1832,7 +1830,7 @@ func handleFindClickAndType(ctx context.Context, request mcp.CallToolRequest) (*
 
 	minX, minY, maxX, maxY, found, passName := parallelFindText(ctx, img, searchText, nth, grayscale)
 	scrollCount := 0
-	
+
 	// If not found, try label search BEFORE scrolling (much faster!)
 	labelFound := false
 	if !found {
@@ -1848,7 +1846,7 @@ func handleFindClickAndType(ctx context.Context, request mcp.CallToolRequest) (*
 			}
 		}
 	}
-	
+
 	// Only scroll if label search also failed
 	if !found && scrollDirection != "" {
 		scrollResult, searchErr := findTextWithScrolling(ctx, scrollSearchConfig{
@@ -1880,7 +1878,7 @@ func handleFindClickAndType(ctx context.Context, request mcp.CallToolRequest) (*
 	// Calculate click target - for labels, click to the right and below the label
 	cx := regionX + (minX+maxX)/2 + xOffset
 	cy := regionY + (minY+maxY)/2 + yOffset
-	
+
 	// If we found a label (not the exact text), click to the right of it
 	if labelFound && xOffset == 0 && yOffset == 0 {
 		cx = regionX + maxX + 50 // Click 50px to the right of the label
