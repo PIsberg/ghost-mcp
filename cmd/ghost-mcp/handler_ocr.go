@@ -33,6 +33,127 @@ const (
 )
 
 // =============================================================================
+// CALL LIMIT TRACKING - Prevent infinite loops
+// =============================================================================
+
+const (
+	MaxConsecutiveFailures = 3  // After 3 failures, suggest different approach
+	MaxSameCoordinateClicks = 5 // After 5 clicks at same spot, stop
+	MaxToolCallsPerSession = 25 // Global limit per session
+)
+
+type clickHistoryEntry struct {
+	x, y       int
+	timestamp  time.Time
+	button     string
+	success    bool
+}
+
+type callTracker struct {
+	mu                   sync.RWMutex
+	consecutiveFailures  map[string]int  // key: tool:text
+	clickHistory         []clickHistoryEntry
+	totalCalls           int
+	sessionStartTime     time.Time
+}
+
+var tracker = &callTracker{
+	consecutiveFailures: make(map[string]int),
+	clickHistory:        make([]clickHistoryEntry, 0),
+	sessionStartTime:    time.Now(),
+}
+
+// recordCall records a tool call and returns current stats
+func (t *callTracker) recordCall(tool, text string, success bool) CallStats {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	t.totalCalls++
+	key := fmt.Sprintf("%s:%s", tool, strings.ToLower(text))
+
+	if success {
+		t.consecutiveFailures[key] = 0
+	} else {
+		t.consecutiveFailures[key]++
+	}
+
+	return CallStats{
+		TotalCalls:          t.totalCalls,
+		ConsecutiveFailures: t.consecutiveFailures[key],
+		RemainingCalls:      MaxToolCallsPerSession - t.totalCalls,
+		ShouldGiveUp:        t.totalCalls >= MaxToolCallsPerSession,
+	}
+}
+
+// recordClick records a click at coordinates and checks for repetition
+func (t *callTracker) recordClick(x, y int, button string, success bool) ClickWarning {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	now := time.Now()
+	windowStart := now.Add(-30 * time.Second) // Look at last 30 seconds
+
+	// Count clicks at same coordinate within time window
+	sameCoordCount := 0
+	for _, entry := range t.clickHistory {
+		if entry.timestamp.After(windowStart) {
+			// Same coordinate within 10 pixels
+			if abs(entry.x-x) < 10 && abs(entry.y-y) < 10 {
+				sameCoordCount++
+			}
+		}
+	}
+
+	// Add to history (keep last 100 entries)
+	t.clickHistory = append(t.clickHistory, clickHistoryEntry{
+		x: x, y: y, timestamp: now, button: button, success: success,
+	})
+	if len(t.clickHistory) > 100 {
+		t.clickHistory = t.clickHistory[1:]
+	}
+
+	warning := ClickWarning{
+		ShouldStop: false,
+		Reason:     "",
+		ClickCount: sameCoordCount + 1,
+	}
+
+	if sameCoordCount >= MaxSameCoordinateClicks {
+		warning.ShouldStop = true
+		warning.Reason = fmt.Sprintf("Clicked same coordinates (%d,%d) %d times in 30 seconds", x, y, sameCoordCount+1)
+	}
+
+	return warning
+}
+
+// CallStats returns current call statistics
+type CallStats struct {
+	TotalCalls          int
+	ConsecutiveFailures int
+	RemainingCalls      int
+	ShouldGiveUp        bool
+}
+
+// ClickWarning warns about repeated clicks
+type ClickWarning struct {
+	ShouldStop bool
+	Reason     string
+	ClickCount int
+}
+
+// getTrackerStats returns current tracker stats (for debugging)
+func getTrackerStats() CallStats {
+	tracker.mu.RLock()
+	defer tracker.mu.RUnlock()
+
+	return CallStats{
+		TotalCalls:     tracker.totalCalls,
+		RemainingCalls: MaxToolCallsPerSession - tracker.totalCalls,
+		ShouldGiveUp:   tracker.totalCalls >= MaxToolCallsPerSession,
+	}
+}
+
+// =============================================================================
 // REGION CACHE FOR OPTIMIZATION
 // =============================================================================
 
@@ -204,6 +325,12 @@ func handleFindAndClick(ctx context.Context, request mcp.CallToolRequest) (*mcp.
 		return mcp.NewToolResultError("text must not be empty"), nil
 	}
 
+	// Check global call limit FIRST
+	stats := tracker.recordCall("find_and_click", searchText, true) // Will update success later
+	if stats.ShouldGiveUp {
+		return mcp.NewToolResultError(fmt.Sprintf(`{"error":"MAXIMUM TOOL CALLS REACHED (%d). Stop and try a completely different approach.","total_calls":%d,"suggestion":"Use find_elements to see what's actually on screen, or try a different search term."}`, MaxToolCallsPerSession, stats.TotalCalls)), nil
+	}
+
 	button, err := getStringParam(request, "button")
 	if err != nil {
 		button = "left"
@@ -326,14 +453,31 @@ func handleFindAndClick(ctx context.Context, request mcp.CallToolRequest) (*mcp.
 		// Get candidates to show what WAS found (helps AI decide next action)
 		candidates := getMatchCandidates(searchText, img, grayscale)
 		
+		// Record failure and get updated stats
+		failStats := tracker.recordCall("find_and_click", searchText, false)
+		
+		// Check if we've failed too many times
+		var giveUpMessage string
+		if failStats.ConsecutiveFailures >= MaxConsecutiveFailures {
+			giveUpMessage = fmt.Sprintf(` GIVE UP RECOMMENDATION: Failed %d times with "%s". STOP trying this text. Try: (1) find_elements to see actual text, (2) shorter search term, (3) scroll_direction if off-screen, or (4) completely different approach.`, failStats.ConsecutiveFailures, searchText)
+		}
+		
+		// Check if we're running out of calls
+		remainingWarning := ""
+		if failStats.RemainingCalls <= 5 {
+			remainingWarning = fmt.Sprintf(` WARNING: Only %d tool calls remaining before forced stop.`, failStats.RemainingCalls)
+		}
+		
 		// Check if there are partial matches that might be off-screen
 		response := buildFindTextFailureMessage(img, searchText, nth, regionX, regionY, regionW, regionH, grayscale)
 		
 		// Add candidates and scroll suggestion
-		result := fmt.Sprintf(`{"error":%q,"candidates":%s,"suggestion":%s}`,
-			response,
+		result := fmt.Sprintf(`{"error":%q,"candidates":%s,"suggestion":%s,"consecutive_failures":%d,"remaining_calls":%d}`,
+			response+giveUpMessage+remainingWarning,
 			candidates,
 			getScrollSuggestion(searchText, candidates),
+			failStats.ConsecutiveFailures,
+			failStats.RemainingCalls,
 		)
 		return mcp.NewToolResultError(result), nil
 	}
@@ -370,6 +514,12 @@ func handleFindAndClick(ctx context.Context, request mcp.CallToolRequest) (*mcp.
 	}
 	logging.Info("ACTION COMPLETE: find_and_click %q at (%d, %d)", searchText, finalX, finalY)
 
+	// Record successful click and check for repetition warning
+	clickWarning := tracker.recordClick(finalX, finalY, button, true)
+	
+	// Record success for this search term
+	tracker.recordCall("find_and_click", searchText, true)
+
 	// Build response with match candidates and scores
 	response := fmt.Sprintf(
 		`{"success":true,"found":%q,"box":{"x":%d,"y":%d,"width":%d,"height":%d},"requested_x":%d,"requested_y":%d,"actual_x":%d,"actual_y":%d,"button":%q,"occurrence":%d}`,
@@ -383,7 +533,13 @@ func handleFindAndClick(ctx context.Context, request mcp.CallToolRequest) (*mcp.
 		response = fmt.Sprintf(`%s,"candidates":%s}`, response[:len(response)-1], candidates)
 	}
 
-	return mcp.NewToolResultText(response), nil
+	// Add click warning if clicking same spot too many times
+	if clickWarning.ShouldStop {
+		response = fmt.Sprintf(`%s,"warning":{"should_stop":true,"reason":%q,"click_count":%d,"message":"You've clicked this spot %d times. Verify this is correct before continuing."}`,
+			response[:len(response)-1], clickWarning.Reason, clickWarning.ClickCount, clickWarning.ClickCount)
+	}
+
+	return mcp.NewToolResultText(response + "}"), nil
 }
 
 // getMatchCandidates returns all potential matches with their scores.

@@ -243,6 +243,12 @@ func handleClickAt(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallT
 		return mcp.NewToolResultError(fmt.Sprintf("invalid coordinates: %v", err)), nil
 	}
 
+	// Check for repeated clicks at same location
+	clickWarning := tracker.recordClick(x, y, button, true)
+	if clickWarning.ShouldStop {
+		logging.Error("REPEATED CLICK WARNING: %s", clickWarning.Reason)
+	}
+
 	logging.Info("ACTION: Moving mouse to (%d, %d) for %s click", x, y, button)
 	robotgo.Move(x, y)
 
@@ -263,10 +269,18 @@ func handleClickAt(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallT
 	}
 	logging.Info("ACTION COMPLETE: %s click at (%d, %d)", button, finalX, finalY)
 
-	return mcp.NewToolResultText(fmt.Sprintf(
+	response := fmt.Sprintf(
 		`{"success": true, "button": "%s", "requested_x": %d, "requested_y": %d, "actual_x": %d, "actual_y": %d}`,
 		button, x, y, finalX, finalY,
-	)), nil
+	)
+
+	// Add warning if clicking same spot too many times
+	if clickWarning.ShouldStop {
+		response = fmt.Sprintf(`%s,"warning":{"should_stop":true,"reason":%q,"click_count":%d,"message":"You've clicked this spot %d times in 30 seconds. Verify this is correct."}`,
+			response[:len(response)-1], clickWarning.Reason, clickWarning.ClickCount, clickWarning.ClickCount)
+	}
+
+	return mcp.NewToolResultText(response + "}"), nil
 }
 
 func handleDoubleClick(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
