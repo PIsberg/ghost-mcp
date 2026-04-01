@@ -525,7 +525,7 @@ func formatFindTextFailureMessage(searchText string, nth int, regionX, regionY, 
 	}
 
 	// Add specific actionable suggestions
-	msg += ` TRY THESE: (a) Search for LABEL text like "Text Input:" or "Email:" (not placeholder). (b) Use find_elements to see visible text. (c) Use scroll_until_text for off-screen content.`
+	msg += ` TRY THESE: (a) Search for LABEL text like "Text Input:" or "Email:" (not placeholder). (b) Use find_elements to see visible text. (c) Use scroll_until_text for off-screen content. (d) Try a SHORTER substring - if "CLICK ME!" fails, try "Click" (OCR may split spaced text).`
 
 	return msg
 }
