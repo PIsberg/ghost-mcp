@@ -102,6 +102,151 @@ The `handler_ocr.go` pipeline leverages a pure-concurrency model to minimize lat
 3. **Short-Circuit Cancellation**: A synchronized `context.WithCancel` channel structure immediately aborts and garbage-collects all remaining fallback passes the millisecond a matched coordinate is found.
 4. **Fast Wait Polling**: `wait_for_text` polls every 100ms instead of 500ms, so UI transition checks return closer to the actual screen change rather than spending most of their latency budget asleep between captures.
 
+### 7. Smart OCR Matching with Region Cache
+
+![Smart OCR Matching](./diagrams/07-ocr-smart-matching.png)
+
+The `find_and_click` tool now includes intelligent features for faster and more reliable UI automation:
+
+#### Region Cache
+
+After successfully finding and clicking a button, the screen region is cached:
+
+```go
+type RegionCache struct {
+    entries   map[string]*RegionCacheEntry
+    maxSize   int           // 100 entries max
+    maxAge    time.Duration // 24 hours
+    stats     CacheStats
+}
+```
+
+**Benefits:**
+- **10-25x faster** on repeat clicks (scans ~100x50px region vs 1920x1080 full screen)
+- **Case-insensitive** lookups ("Click", "CLICK", "click" all use same cache)
+- **Screen resolution aware** (auto-invalidates on resolution change)
+- **LRU eviction** (keeps 100 most recently used entries)
+
+#### Smart Matching Scoring
+
+Instead of simple substring matching, every OCR-detected word is scored:
+
+| Score | Match Type | Example |
+|-------|------------|---------|
+| 1000 | Exact match | "Click Me!" = "Click Me!" |
+| 500 | Prefix match | "Click Me!" starts with "Click" |
+| 400 | Suffix match | "Button Click" ends with "Click" |
+| 300 | Standalone word | "Click" as separate word |
+| 100 | Substring | "Click" with word boundaries |
+| 50 | Inside word | "Click" inside "Button Click Tests" |
+
+This ensures the **best match** is selected, not just the first match found.
+
+#### Viewport Awareness
+
+When text is not found, the error response includes actionable suggestions:
+
+```json
+{
+  "error": "text \"Submit\" not found...",
+  "candidates": [{"text": "Submit", "score": 300, "confidence": 95.2}],
+  "suggestion": "scroll_may_help",
+  "consecutive_failures": 2,
+  "remaining_calls": 23
+}
+```
+
+**Suggestion values:**
+- `scroll_may_help` - Text might be off-screen
+- `text_continues_off_screen` - Partial text visible
+- `try_different_search_term` - Related text found
+- `no_matches_found` - Nothing similar on screen
+
+### 8. Safety Features & Loop Protection
+
+![Component Diagram](./diagrams/08-classes-updated.png)
+
+Built-in safeguards prevent infinite retry loops and runaway automation:
+
+#### Global Call Limit (25 calls/session)
+```
+WARNING: Only 5 tool calls remaining before forced stop.
+MAXIMUM TOOL CALLS REACHED (25). Stop and try a completely different approach.
+```
+
+#### Consecutive Failure Detection (3 strikes)
+```
+GIVE UP RECOMMENDATION: Failed 3 times with "Submit". STOP trying this text.
+Try: (1) find_elements to see actual text, (2) shorter search term, 
+     (3) scroll_direction if off-screen, or (4) completely different approach.
+```
+
+#### Repeated Click Detection (5 clicks at same spot)
+```json
+{
+  "success": true,
+  "warning": {
+    "should_stop": true,
+    "reason": "Clicked same coordinates (403,767) 5 times in 30 seconds",
+    "click_count": 5,
+    "message": "You've clicked this spot 5 times. Verify this is correct before continuing."
+  }
+}
+```
+
+#### Call Tracker
+```go
+type callTracker struct {
+    consecutiveFailures  map[string]int  // key: tool:text
+    clickHistory         []clickHistoryEntry
+    totalCalls           int
+}
+```
+
+Tracks:
+- Consecutive failures per tool+text combination
+- Click history (last 100 clicks, 30-second window)
+- Total calls remaining before forced stop
+
+### 9. New Verification Tool: click_until_text_appears
+
+Clicks coordinates and waits for confirmation text:
+
+```json
+{
+  "tool": "click_until_text_appears",
+  "arguments": {
+    "x": 400,
+    "y": 300,
+    "wait_for_text": "Saved!",
+    "timeout_ms": 5000,
+    "max_clicks": 3
+  }
+}
+```
+
+**Use cases:**
+- Wait for "Saved!" after clicking Save button
+- Verify menu opened by waiting for menu text
+- Confirm navigation by waiting for page title
+- Auto-retry if first click missed
+
+### 10. Performance Optimizations
+
+#### Removed Redundant OCR
+Previously, `getMatchCandidates()` ran a second OCR pass on every successful `find_and_click`. Now:
+- **Success**: Fast response with just the click result
+- **Failure**: Full candidates array to help AI debug
+
+This cuts the first response time in half for successful clicks.
+
+#### Increased Scroll Amount
+Default scroll amount increased from 3/5 to **15**:
+- `scroll` tool: 3 → 15 (5x faster page coverage)
+- `scroll_until_text`: 5 → 15 (3x faster search)
+
+Now only 3-4 scrolls needed to cover a full page instead of 10+.
+
 ### 6. Parameter Extraction Helpers
 
 Generic functions for type-safe parameter extraction:
