@@ -339,7 +339,14 @@ func handleFindAndClick(ctx context.Context, request mcp.CallToolRequest) (*mcp.
 // Returns the merged bounds relative to the OCR image, or false if not found.
 func findButtonBounds(ocrResult *ocr.Result, searchText string, nth int) (minX, minY, maxX, maxY int, found bool) {
 	needle := strings.ToLower(strings.TrimSpace(searchText))
-	matchCount := 0
+	needleWords := strings.Fields(needle) // Split into words for smarter matching
+
+	type match struct {
+		minX, minY, maxX, maxY int
+		score                  int
+		phrase                 string
+	}
+	var matches []match
 
 	for i, w := range ocrResult.Words {
 		minX, minY = w.X, w.Y
@@ -347,10 +354,13 @@ func findButtonBounds(ocrResult *ocr.Result, searchText string, nth int) (minX, 
 		avgHeight := w.Height
 		avgWidth := w.Width
 		verticalThreshold := avgHeight / 3
-		maxHGap := avgWidth / 2
+		maxHGap := avgWidth * 2 // More generous gap for multi-word buttons
 		phrase := strings.ToLower(strings.TrimSpace(w.Text))
-		matched := strings.Contains(phrase, needle)
 
+		// Score this match
+		score := scoreMatch(phrase, needle, needleWords)
+
+		// Try to merge adjacent words on the same line
 		for j := i + 1; j < len(ocrResult.Words); j++ {
 			next := ocrResult.Words[j]
 			nextCenterY := next.Y + next.Height/2
@@ -379,19 +389,95 @@ func findButtonBounds(ocrResult *ocr.Result, searchText string, nth int) (minX, 
 				maxY = next.Y + next.Height
 			}
 			phrase += " " + strings.ToLower(strings.TrimSpace(next.Text))
-			if strings.Contains(phrase, needle) {
-				matched = true
+			newScore := scoreMatch(phrase, needle, needleWords)
+			if newScore > score {
+				score = newScore
 			}
 		}
 
-		if matched {
-			matchCount++
-			if matchCount == nth {
-				return minX, minY, maxX, maxY, true
-			}
+		// Only consider matches with positive score
+		if score > 0 {
+			matches = append(matches, match{minX, minY, maxX, maxY, score, phrase})
 		}
 	}
+
+	// Sort by score (descending), then by area (prefer smaller, more precise matches)
+	sort.Slice(matches, func(i, j int) bool {
+		if matches[i].score != matches[j].score {
+			return matches[i].score > matches[j].score
+		}
+		areaI := (matches[i].maxX - matches[i].minX) * (matches[i].maxY - matches[i].minY)
+		areaJ := (matches[j].maxX - matches[j].minX) * (matches[j].maxY - matches[j].minY)
+		return areaI < areaJ
+	})
+
+	// Return the nth best match
+	if len(matches) >= nth {
+		return matches[nth-1].minX, matches[nth-1].minY, matches[nth-1].maxX, matches[nth-1].maxY, true
+	}
 	return 0, 0, 0, 0, false
+}
+
+// scoreMatch scores how well a phrase matches the search text.
+// Higher scores = better matches. Returns 0 for no match.
+func scoreMatch(phrase, needle string, needleWords []string) int {
+	// Exact match (case-insensitive) = highest score
+	if phrase == needle {
+		return 1000
+	}
+
+	// Starts with needle (e.g., "Click Me!" matches "Click") = high score
+	if strings.HasPrefix(phrase, needle) {
+		return 500
+	}
+
+	// Ends with needle = medium-high score
+	if strings.HasSuffix(phrase, needle) {
+		return 400
+	}
+
+	// Contains needle as a complete word = medium score
+	phraseWords := strings.Fields(phrase)
+	for _, pw := range phraseWords {
+		if pw == needle {
+			return 300
+		}
+	}
+
+	// Multi-word needle: check if all words appear in order
+	if len(needleWords) > 1 {
+		phraseLower := " " + phrase + " "
+		allWordsFound := true
+		for _, nw := range needleWords {
+			if !strings.Contains(phraseLower, " "+nw+" ") {
+				allWordsFound = false
+				break
+			}
+		}
+		if allWordsFound {
+			return 200
+		}
+	}
+
+	// Contains needle as substring (weakest match, may be inside another word)
+	if strings.Contains(phrase, needle) {
+		// Penalize if needle appears to be inside a larger word
+		// e.g., "Click" in "Button Click Tests" gets lower score than standalone "Click"
+		needleIndex := strings.Index(phrase, needle)
+		before := needleIndex > 0 && !isWordBoundary(phrase[needleIndex-1])
+		after := needleIndex+len(needle) < len(phrase) && !isWordBoundary(phrase[needleIndex+len(needle)])
+		if before || after {
+			return 50 // Inside another word
+		}
+		return 100 // Substring but with word boundaries
+	}
+
+	return 0 // No match
+}
+
+// isWordBoundary returns true if the character is a word boundary (space, punctuation, etc.)
+func isWordBoundary(c byte) bool {
+	return c == ' ' || c == '-' || c == '_' || c == '.' || c == ',' || c == '!' || c == '?' || c == ':' || c == ';'
 }
 
 // abs returns the absolute value of an integer.

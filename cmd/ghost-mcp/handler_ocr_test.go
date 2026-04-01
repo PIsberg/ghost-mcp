@@ -796,3 +796,124 @@ func TestHandleClearRegionCache(t *testing.T) {
 		t.Error("Result should indicate success")
 	}
 }
+
+// =============================================================================
+// SMART MATCHING TESTS
+// =============================================================================
+
+// TestScoreMatch_ExactMatch tests exact match scoring
+func TestScoreMatch_ExactMatch(t *testing.T) {
+	needleWords := []string{"click"}
+	score := scoreMatch("click", "click", needleWords)
+	if score != 1000 {
+		t.Errorf("Exact match should score 1000, got %d", score)
+	}
+}
+
+// TestScoreMatch_PrefixMatch tests prefix match scoring
+func TestScoreMatch_PrefixMatch(t *testing.T) {
+	needleWords := []string{"click"}
+	score := scoreMatch("click me!", "click", needleWords)
+	if score != 500 {
+		t.Errorf("Prefix match should score 500, got %d", score)
+	}
+}
+
+// TestScoreMatch_StandaloneWord tests standalone word scoring
+func TestScoreMatch_StandaloneWord(t *testing.T) {
+	needleWords := []string{"click"}
+	
+	// "Click" as standalone word in phrase
+	score := scoreMatch("button click", "click", needleWords)
+	if score != 300 {
+		t.Errorf("Standalone word should score 300, got %d", score)
+	}
+}
+
+// TestScoreMatch_SubstringInsideWord tests substring inside another word
+func TestScoreMatch_SubstringInsideWord(t *testing.T) {
+	needleWords := []string{"click"}
+	
+	// "Click" inside "Button Click Tests" - should get lower score
+	score := scoreMatch("button click tests", "click", needleWords)
+	if score != 100 {
+		t.Errorf("Substring with boundaries should score 100, got %d", score)
+	}
+}
+
+// TestScoreMatch_NoMatch tests no match scoring
+func TestScoreMatch_NoMatch(t *testing.T) {
+	needleWords := []string{"click"}
+	score := scoreMatch("submit", "click", needleWords)
+	if score != 0 {
+		t.Errorf("No match should score 0, got %d", score)
+	}
+}
+
+// TestFindButtonBounds_PrefersStandaloneWord tests that standalone words are preferred
+func TestFindButtonBounds_PrefersStandaloneWord(t *testing.T) {
+	result := &ocr.Result{
+		Words: []ocr.Word{
+			{Text: "Button", X: 100, Y: 50, Width: 60, Height: 30, Confidence: 95},
+			{Text: "Click", X: 165, Y: 50, Width: 50, Height: 30, Confidence: 95},  // Part of "Button Click Tests"
+			{Text: "Tests", X: 220, Y: 50, Width: 50, Height: 30, Confidence: 95},
+			{Text: "Click", X: 100, Y: 200, Width: 60, Height: 40, Confidence: 95}, // Standalone "Click" button
+		},
+	}
+
+	_, minY, _, _, found := findButtonBounds(result, "Click", 1)
+	if !found {
+		t.Fatal("Expected to find 'Click' button")
+	}
+	
+	// Should find the standalone "Click" at (100, 200), not the one in "Button Click Tests"
+	if minY != 200 {
+		t.Errorf("Expected standalone 'Click' at Y=200, got Y=%d (found 'Button Click Tests' instead)", minY)
+	}
+}
+
+// TestFindButtonBounds_MultiWordButton tests multi-word button matching
+func TestFindButtonBounds_MultiWordButton(t *testing.T) {
+	result := &ocr.Result{
+		Words: []ocr.Word{
+			{Text: "Save", X: 100, Y: 50, Width: 60, Height: 30, Confidence: 95},
+			{Text: "Changes", X: 165, Y: 50, Width: 80, Height: 30, Confidence: 95},
+		},
+	}
+
+	minX, minY, maxX, maxY, found := findButtonBounds(result, "Save Changes", 1)
+	if !found {
+		t.Fatal("Expected to find 'Save Changes' button")
+	}
+	if minX != 100 || maxX != 245 {
+		t.Errorf("Expected merged bounds (100,50)-(245,80), got (%d,%d)-(%d,%d)", minX, minY, maxX, maxY)
+	}
+}
+
+// TestIsWordBoundary tests word boundary detection
+func TestIsWordBoundary(t *testing.T) {
+	tests := []struct {
+		char     byte
+		expected bool
+	}{
+		{' ', true},
+		{'-', true},
+		{'_', true},
+		{'.', true},
+		{',', true},
+		{'!', true},
+		{'?', true},
+		{':', true},
+		{';', true},
+		{'a', false},
+		{'Z', false},
+		{'1', false},
+	}
+
+	for _, tt := range tests {
+		result := isWordBoundary(tt.char)
+		if result != tt.expected {
+			t.Errorf("isWordBoundary(%q) = %v, want %v", tt.char, result, tt.expected)
+		}
+	}
+}
