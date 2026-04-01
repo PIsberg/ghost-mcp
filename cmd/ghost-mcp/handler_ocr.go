@@ -344,10 +344,79 @@ func handleFindAndClick(ctx context.Context, request mcp.CallToolRequest) (*mcp.
 	}
 	logging.Info("ACTION COMPLETE: find_and_click %q at (%d, %d)", searchText, finalX, finalY)
 
-	return mcp.NewToolResultText(fmt.Sprintf(
+	// Build response with match candidates and scores
+	response := fmt.Sprintf(
 		`{"success":true,"found":%q,"box":{"x":%d,"y":%d,"width":%d,"height":%d},"requested_x":%d,"requested_y":%d,"actual_x":%d,"actual_y":%d,"button":%q,"occurrence":%d}`,
 		searchText, minX, minY, maxX-minX, maxY-minY, cx, cy, finalX, finalY, button, nth,
-	)), nil
+	)
+
+	// Add match candidates with scores for AI decision-making
+	candidates := getMatchCandidates(searchText, img, grayscale)
+	if len(candidates) > 0 {
+		// Append candidates as separate field
+		response = fmt.Sprintf(`%s,"candidates":%s}`, response[:len(response)-1], candidates)
+	}
+
+	return mcp.NewToolResultText(response), nil
+}
+
+// getMatchCandidates returns all potential matches with their scores.
+// This helps AI understand which text elements were considered and their confidence.
+func getMatchCandidates(searchText string, img image.Image, grayscale bool) string {
+	ocrResult, err := ocr.ReadImage(img, ocr.Options{Color: !grayscale})
+	if err != nil || ocrResult == nil {
+		return "[]"
+	}
+
+	needle := strings.ToLower(strings.TrimSpace(searchText))
+	needleWords := strings.Fields(needle)
+
+	type candidate struct {
+		text   string
+		score  int
+		x, y   int
+		width  int
+		height int
+	}
+	var candidates []candidate
+
+	for _, w := range ocrResult.Words {
+		phrase := strings.ToLower(strings.TrimSpace(w.Text))
+		score := scoreMatch(phrase, needle, needleWords)
+		if score > 0 {
+			candidates = append(candidates, candidate{
+				text:   w.Text,
+				score:  score,
+				x:      w.X,
+				y:      w.Y,
+				width:  w.Width,
+				height: w.Height,
+			})
+		}
+	}
+
+	// Sort by score descending
+	sort.Slice(candidates, func(i, j int) bool {
+		return candidates[i].score > candidates[j].score
+	})
+
+	// Limit to top 5 candidates
+	if len(candidates) > 5 {
+		candidates = candidates[:5]
+	}
+
+	// Build JSON array
+	json := "["
+	for i, c := range candidates {
+		if i > 0 {
+			json += ","
+		}
+		json += fmt.Sprintf(`{"text":%q,"score":%d,"x":%d,"y":%d,"width":%d,"height":%d}`,
+			c.text, c.score, c.x, c.y, c.width, c.height)
+	}
+	json += "]"
+
+	return json
 }
 
 // findAndClickWithScroll scrolls the screen searching for text, then clicks it.

@@ -44,11 +44,22 @@ IF TEXT NOT FOUND:
 - If the target may be off-screen, add scroll_direction="down" or use scroll_until_text
 - Call find_elements only if you need raw OCR diagnostics after those hints
 
-RESPONSE: {success, found, box: {x,y,width,height}, requested_x/y, actual_x/y, button, occurrence}
+RESPONSE: {success, found, box: {x,y,width,height}, requested_x/y, actual_x/y, button, occurrence, candidates}
 - box is the OCR text bounding box (tight around characters, not the full button background)
 - requested_x/y is the center of that box — where the click is aimed
 - actual_x/y is where the mouse actually landed (verify this matches expected)
-- For standard buttons with symmetric padding the text center == button center, so the click lands correctly`),
+- candidates is an array of all potential matches with scores (see SMART MATCHING below)
+- For standard buttons with symmetric padding the text center == button center, so the click lands correctly
+
+SMART MATCHING SCORES (in candidates array):
+- score:1000 = Exact match ("Click Me!" = "Click Me!") ← BEST
+- score:500 = Prefix match ("Click Me!" starts with "Click")
+- score:400 = Suffix match ("Button Click" ends with "Click")
+- score:300 = Standalone word ("Click" as separate word) ← GOOD
+- score:100 = Substring with boundaries
+- score:50 = Inside another word (avoid) ← AVOID
+
+Use candidates to verify the AI chose the right element. If the clicked element has low score (50-100), consider using a more specific search term.`),
 		mcp.WithString("text", mcp.Description("Text to search for (case-insensitive substring match). Example: \"save\" matches \"Save\", \"SAVE ALL\"."), mcp.Required()),
 		mcp.WithString("button", mcp.Description("Mouse button: 'left' (default), 'right', or 'middle'.")),
 		mcp.WithNumber("nth", mcp.Description("Which occurrence to click if text appears multiple times (default: 1 = first).")),
