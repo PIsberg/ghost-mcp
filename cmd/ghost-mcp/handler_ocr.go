@@ -890,6 +890,24 @@ func handleFindClickAndType(ctx context.Context, request mcp.CallToolRequest) (*
 
 	minX, minY, maxX, maxY, found, passName := parallelFindText(ctx, img, searchText, nth, grayscale)
 	scrollCount := 0
+	
+	// If not found, try label search BEFORE scrolling (much faster!)
+	labelFound := false
+	if !found {
+		ocrResult, ocrErr := ocr.ReadImage(img, ocr.Options{Color: !grayscale})
+		if ocrErr == nil && ocrResult != nil {
+			labelMinX, labelMinY, labelMaxX, labelMaxY, labelFoundText, labelFoundResult := findNearbyLabel(ocrResult, searchText)
+			if labelFoundResult {
+				minX, minY, maxX, maxY = labelMinX, labelMinY, labelMaxX, labelMaxY
+				found = true
+				passName = "label"
+				labelFound = true
+				logging.Info("find_click_and_type: found label %q for search text %q", labelFoundText, searchText)
+			}
+		}
+	}
+	
+	// Only scroll if label search also failed
 	if !found && scrollDirection != "" {
 		scrollResult, searchErr := findTextWithScrolling(ctx, scrollSearchConfig{
 			SearchText: searchText,
@@ -911,24 +929,7 @@ func handleFindClickAndType(ctx context.Context, request mcp.CallToolRequest) (*
 		minX, minY, maxX, maxY, found, passName = scrollResult.MinX, scrollResult.MinY, scrollResult.MaxX, scrollResult.MaxY, scrollResult.Found, scrollResult.PassName
 		scrollCount = scrollResult.ScrollCount
 	}
-	
-	// If still not found, try to find a nearby label that matches
-	labelFound := false
-	if !found {
-		// Run OCR to get all elements
-		ocrResult, ocrErr := ocr.ReadImage(img, ocr.Options{Color: !grayscale})
-		if ocrErr == nil && ocrResult != nil {
-			labelMinX, labelMinY, labelMaxX, labelMaxY, labelFoundText, labelFoundResult := findNearbyLabel(ocrResult, searchText)
-			if labelFoundResult {
-				minX, minY, maxX, maxY = labelMinX, labelMinY, labelMaxX, labelMaxY
-				found = true
-				passName = "label"
-				labelFound = true
-				logging.Info("find_click_and_type: found label %q for search text %q", labelFoundText, searchText)
-			}
-		}
-	}
-	
+
 	if !found {
 		logging.Info("find_click_and_type: text %q (occurrence %d) not found", searchText, nth)
 		return mcp.NewToolResultError(buildFindTextFailureMessage(img, searchText, nth, regionX, regionY, regionW, regionH, grayscale)), nil
