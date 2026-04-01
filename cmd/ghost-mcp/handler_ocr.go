@@ -645,6 +645,102 @@ func getStringArrayParam(request mcp.CallToolRequest, name string) ([]string, er
 	return nil, fmt.Errorf("parameter %s must be an array or JSON array string", name)
 }
 
+// findNearbyLabel searches for common label patterns near input fields when the
+// exact searchText is not found. It looks for labels ending with ":" or containing
+// the searchText as a substring. Returns the bounds of the found label and its text.
+func findNearbyLabel(ocrResult *ocr.Result, searchText string) (minX, minY, maxX, maxY int, foundText string, found bool) {
+	needle := strings.ToLower(strings.TrimSpace(searchText))
+	
+	// First try to find labels that contain the search text
+	for _, w := range ocrResult.Words {
+		wordLower := strings.ToLower(strings.TrimSpace(w.Text))
+		if wordLower == "" {
+			continue
+		}
+		// Look for labels ending with colon (common pattern: "Label:")
+		if strings.HasSuffix(wordLower, ":") && strings.Contains(wordLower, needle) {
+			return w.X, w.Y, w.X + w.Width, w.Y + w.Height, w.Text, true
+		}
+		// Look for exact substring match
+		if strings.Contains(wordLower, needle) && w.Width >= 30 {
+			return w.X, w.Y, w.X + w.Width, w.Y + w.Height, w.Text, true
+		}
+	}
+	
+	// Try merging adjacent words on the same line to find multi-word labels
+	for i, w := range ocrResult.Words {
+		phrase := strings.ToLower(strings.TrimSpace(w.Text))
+		minX, minY = w.X, w.Y
+		maxX, maxY = w.X + w.Width, w.Y + w.Height
+		avgHeight := w.Height
+		verticalThreshold := avgHeight / 2
+		maxHGap := avgHeight // Allow larger gaps for labels
+		
+		for j := i + 1; j < len(ocrResult.Words) && j < i+5; j++ {
+			next := ocrResult.Words[j]
+			nextCenterY := next.Y + next.Height/2
+			currCenterY := minY + (maxY-minY)/2
+			if abs(nextCenterY-currCenterY) > verticalThreshold {
+				continue
+			}
+			hGap := next.X - maxX
+			if hGap < 0 || hGap > maxHGap {
+				continue
+			}
+			
+			// Extend bounds
+			maxX = next.X + next.Width
+			if next.Y < minY {
+				minY = next.Y
+			}
+			if next.Y + next.Height > maxY {
+				maxY = next.Y + next.Height
+			}
+			
+			phrase += " " + strings.ToLower(strings.TrimSpace(next.Text))
+		}
+		
+		// Check if merged phrase contains our search text
+		if strings.Contains(phrase, needle) && len(phrase) > len(needle) {
+			// Re-scan to get actual bounds
+			for k := i; k < len(ocrResult.Words) && k < i+5; k++ {
+				checkWord := ocrResult.Words[k]
+				checkPhrase := strings.ToLower(strings.TrimSpace(checkWord.Text))
+				if strings.Contains(checkPhrase, needle) {
+					// Find all words that form this label
+					labelMinX, labelMinY := checkWord.X, checkWord.Y
+					labelMaxX, labelMaxY := checkWord.X + checkWord.Width, checkWord.Y + checkWord.Height
+					foundText = checkWord.Text
+					
+					for m := k + 1; m < len(ocrResult.Words) && m < k+5; m++ {
+						adjWord := ocrResult.Words[m]
+						adjCenterY := adjWord.Y + adjWord.Height/2
+						labelCenterY := labelMinY + (labelMaxY-labelMinY)/2
+						if abs(adjCenterY-labelCenterY) > verticalThreshold {
+							break
+						}
+						hGap := adjWord.X - labelMaxX
+						if hGap < 0 || hGap > maxHGap {
+							break
+						}
+						labelMaxX = adjWord.X + adjWord.Width
+						if adjWord.Y < labelMinY {
+							labelMinY = adjWord.Y
+						}
+						if adjWord.Y + adjWord.Height > labelMaxY {
+							labelMaxY = adjWord.Y + adjWord.Height
+						}
+						foundText += " " + adjWord.Text
+					}
+					return labelMinX, labelMinY, labelMaxX, labelMaxY, foundText, true
+				}
+			}
+		}
+	}
+	
+	return 0, 0, 0, 0, "", false
+}
+
 // handleFindClickAndType searches for a bounding box around `text`, calculating
 // click target coordinates (applying `x_offset` and `y_offset`), moves mouse,
 // clicks, optionally waits, types `type_text`, and optionally presses enter.
@@ -773,13 +869,38 @@ func handleFindClickAndType(ctx context.Context, request mcp.CallToolRequest) (*
 		minX, minY, maxX, maxY, found, passName = scrollResult.MinX, scrollResult.MinY, scrollResult.MaxX, scrollResult.MaxY, scrollResult.Found, scrollResult.PassName
 		scrollCount = scrollResult.ScrollCount
 	}
+	
+	// If still not found, try to find a nearby label that matches
+	labelFound := false
+	if !found {
+		// Run OCR to get all elements
+		ocrResult, ocrErr := ocr.ReadImage(img, ocr.Options{Color: !grayscale})
+		if ocrErr == nil && ocrResult != nil {
+			labelMinX, labelMinY, labelMaxX, labelMaxY, labelFoundText, labelFoundResult := findNearbyLabel(ocrResult, searchText)
+			if labelFoundResult {
+				minX, minY, maxX, maxY = labelMinX, labelMinY, labelMaxX, labelMaxY
+				found = true
+				passName = "label"
+				labelFound = true
+				logging.Info("find_click_and_type: found label %q for search text %q", labelFoundText, searchText)
+			}
+		}
+	}
+	
 	if !found {
 		logging.Info("find_click_and_type: text %q (occurrence %d) not found", searchText, nth)
 		return mcp.NewToolResultError(buildFindTextFailureMessage(img, searchText, nth, regionX, regionY, regionW, regionH, grayscale)), nil
 	}
 
+	// Calculate click target - for labels, click to the right and below the label
 	cx := regionX + (minX+maxX)/2 + xOffset
 	cy := regionY + (minY+maxY)/2 + yOffset
+	
+	// If we found a label (not the exact text), click to the right of it
+	if labelFound && xOffset == 0 && yOffset == 0 {
+		cx = regionX + maxX + 50 // Click 50px to the right of the label
+		cy = regionY + (minY+maxY)/2
+	}
 
 	if err := validate.Coords(cx, cy, screenW, screenH); err != nil {
 		logging.Error("Target coordinate out of bounds: %v", err)
@@ -817,11 +938,15 @@ func handleFindClickAndType(ctx context.Context, request mcp.CallToolRequest) (*
 	}
 
 	finalX, finalY := robotgo.GetMousePos()
+	foundText := searchText
+	if labelFound {
+		foundText = searchText // Keep original search text in response
+	}
 	logging.Info("ACTION COMPLETE: find_click_and_type %q -> typed %d characters", searchText, len(typeText))
 
 	return mcp.NewToolResultText(fmt.Sprintf(
-		`{"success":true,"found":%q,"box":{"x":%d,"y":%d,"width":%d,"height":%d},"clicked_x":%d,"clicked_y":%d,"actual_x":%d,"actual_y":%d,"characters_typed":%d,"enter_pressed":%t,"pass":%q,"scroll_count":%d}`,
-		searchText, minX, minY, maxX-minX, maxY-minY, cx, cy, finalX, finalY, len(typeText), pressEnter, passName, scrollCount,
+		`{"success":true,"found":%q,"box":{"x":%d,"y":%d,"width":%d,"height":%d},"clicked_x":%d,"clicked_y":%d,"actual_x":%d,"actual_y":%d,"characters_typed":%d,"enter_pressed":%t,"pass":%q,"scroll_count":%d,"label_found":%t}`,
+		foundText, minX, minY, maxX-minX, maxY-minY, cx, cy, finalX, finalY, len(typeText), pressEnter, passName, scrollCount, labelFound,
 	)), nil
 }
 
