@@ -199,7 +199,8 @@ func (rc *RegionCache) Get(text string, screenW, screenH int) (*RegionCacheEntry
 	rc.mu.RLock()
 	defer rc.mu.RUnlock()
 
-	entry, exists := rc.entries[text]
+	normalizedText := normalizeText(text)
+	entry, exists := rc.entries[normalizedText]
 	if !exists {
 		return nil, false
 	}
@@ -222,12 +223,14 @@ func (rc *RegionCache) Put(text string, x, y, width, height, screenW, screenH in
 	rc.mu.Lock()
 	defer rc.mu.Unlock()
 
+	normalizedText := normalizeText(text)
+
 	// Check if we need to evict entries
 	if len(rc.entries) >= rc.maxSize {
 		rc.evictOldest()
 	}
 
-	entry, exists := rc.entries[text]
+	entry, exists := rc.entries[normalizedText]
 	if exists {
 		// Update existing entry
 		entry.X = x
@@ -241,7 +244,7 @@ func (rc *RegionCache) Put(text string, x, y, width, height, screenW, screenH in
 		rc.stats.Updates++
 	} else {
 		// Create new entry
-		rc.entries[text] = &RegionCacheEntry{
+		rc.entries[normalizedText] = &RegionCacheEntry{
 			X:        x,
 			Y:        y,
 			Width:    width,
