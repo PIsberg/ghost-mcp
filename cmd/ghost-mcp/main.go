@@ -358,7 +358,9 @@ func handleScroll(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallTo
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	amount := 3
+	// Default amount=15 for faster page coverage (was 3)
+	// On most systems: amount=10 ≈ half page, amount=15 ≈ 2/3 page, amount=30 ≈ full page
+	amount := 15
 	if a, err := getIntParam(request, "amount"); err == nil {
 		if a <= 0 {
 			return mcp.NewToolResultError("amount must be positive"), nil
@@ -485,7 +487,8 @@ func handleScrollUntilText(ctx context.Context, request mcp.CallToolRequest) (*m
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	amount := 5
+	// Default amount=15 for faster page coverage (was 5)
+	amount := 15
 	if a, err := getIntParam(request, "amount"); err == nil {
 		if a <= 0 {
 			return mcp.NewToolResultError("amount must be positive"), nil
@@ -986,17 +989,17 @@ The response includes visible_text — the OCR text of the centre half of the sc
 🚫 AFTER SCROLL, DO NOT call find_elements or take_screenshot unless you specifically need to interact with a region not covered by visible_text. visible_text already tells you what appeared!
 
 AMOUNT GUIDANCE — use small increments to avoid overshooting:
-- amount=3 (default): ~1/4 screen — use for fine positioning
-- amount=5: ~1/2 screen — use to reveal the next section
-- amount=10: ~full screen — jumps far, easy to overshoot; only use for large pages
+- amount=15 (default): ~2/3 screen — best for general page navigation
+- amount=5: ~1/4 screen — use for fine control or small sections
+- amount=30: ~full screen — use for very long pages
 
-SEARCH WORKFLOW: scroll down by 5, check visible_text for your target; repeat if not found. Scroll up by 5 to backtrack if you overshoot.
+SEARCH WORKFLOW: scroll down by 15, check visible_text for your target; repeat if not found. Only 3-4 scrolls needed to cover a full page!
 
 x and y are optional and default to the screen centre, which is correct for most page scrolling. Only specify them when scrolling a specific widget (e.g. a side panel or dropdown list).`),
 		mcp.WithNumber("x", mcp.Description("X coordinate to scroll at (pixels from left edge). Defaults to screen centre.")),
 		mcp.WithNumber("y", mcp.Description("Y coordinate to scroll at (pixels from top edge). Defaults to screen centre.")),
 		mcp.WithString("direction", mcp.Description("Scroll direction: 'up', 'down', 'left', or 'right'."), mcp.Required()),
-		mcp.WithNumber("amount", mcp.Description("Number of scroll steps (default: 3 ≈ 1/4 screen). amount=5 ≈ half screen. amount=10 jumps far — avoid for precise navigation.")),
+		mcp.WithNumber("amount", mcp.Description("Number of scroll steps (default: 15 ≈ 2/3 screen). amount=5 for fine control. amount=30 for very long pages.")),
 	), handleScroll)
 
 	mcpServer.AddTool(mcp.NewTool("scroll_until_text",
