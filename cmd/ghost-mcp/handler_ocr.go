@@ -7,6 +7,7 @@ import (
 	"image"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -159,7 +160,7 @@ func handleFindAndClick(ctx context.Context, request mcp.CallToolRequest) (*mcp.
 	minX, minY, maxX, maxY, found, passName := parallelFindText(ctx, img, searchText, nth, grayscale)
 	if !found {
 		logging.Info("Text %q (occurrence %d) not found on screen", searchText, nth)
-		return mcp.NewToolResultError(fmt.Sprintf("text %q not found on screen (occurrence %d). TIP: Call find_elements (no args) to see all text OCR detected — this shows exactly what is visible and why the match failed.", searchText, nth)), nil
+		return mcp.NewToolResultError(buildFindTextFailureMessage(img, searchText, nth, regionX, regionY, regionW, regionH, grayscale)), nil
 	}
 
 	// Calculate center of the merged button bounds
@@ -260,6 +261,141 @@ func abs(x int) int {
 		return -x
 	}
 	return x
+}
+
+type ocrCandidate struct {
+	text  string
+	score int
+}
+
+func levenshteinDistance(a, b string) int {
+	if a == b {
+		return 0
+	}
+	if len(a) == 0 {
+		return len(b)
+	}
+	if len(b) == 0 {
+		return len(a)
+	}
+
+	prev := make([]int, len(b)+1)
+	curr := make([]int, len(b)+1)
+	for j := range prev {
+		prev[j] = j
+	}
+
+	for i := 1; i <= len(a); i++ {
+		curr[0] = i
+		for j := 1; j <= len(b); j++ {
+			cost := 0
+			if a[i-1] != b[j-1] {
+				cost = 1
+			}
+			insertCost := curr[j-1] + 1
+			deleteCost := prev[j] + 1
+			replaceCost := prev[j-1] + cost
+			curr[j] = min(insertCost, min(deleteCost, replaceCost))
+		}
+		prev, curr = curr, prev
+	}
+	return prev[len(b)]
+}
+
+func closestOCRMatches(ocrResult *ocr.Result, searchText string, limit int) []string {
+	if ocrResult == nil || limit <= 0 {
+		return nil
+	}
+
+	needle := strings.ToLower(strings.TrimSpace(searchText))
+	if needle == "" {
+		return nil
+	}
+
+	seen := make(map[string]bool)
+	candidates := make([]ocrCandidate, 0, len(ocrResult.Words))
+	for i, w := range ocrResult.Words {
+		phrase := strings.TrimSpace(w.Text)
+		if phrase == "" {
+			continue
+		}
+		candidateText := phrase
+		addCandidate := func(text string) {
+			normalized := strings.ToLower(strings.TrimSpace(text))
+			if normalized == "" || seen[normalized] {
+				return
+			}
+			seen[normalized] = true
+			score := levenshteinDistance(needle, normalized)
+			if strings.Contains(normalized, needle) || strings.Contains(needle, normalized) {
+				score -= 4
+			}
+			candidates = append(candidates, ocrCandidate{text: text, score: score})
+		}
+		addCandidate(candidateText)
+
+		maxX := w.X + w.Width
+		avgHeight := w.Height
+		avgWidth := w.Width
+		verticalThreshold := avgHeight / 3
+		maxHGap := avgWidth / 2
+		for j := i + 1; j < len(ocrResult.Words) && j < i+4; j++ {
+			next := ocrResult.Words[j]
+			nextCenterY := next.Y + next.Height/2
+			currCenterY := w.Y + w.Height/2
+			if abs(nextCenterY-currCenterY) > verticalThreshold {
+				continue
+			}
+			hGap := next.X - maxX
+			if hGap < 0 {
+				continue
+			}
+			if hGap > maxHGap {
+				break
+			}
+			candidateText += " " + strings.TrimSpace(next.Text)
+			maxX = next.X + next.Width
+			addCandidate(candidateText)
+		}
+	}
+
+	sort.SliceStable(candidates, func(i, j int) bool {
+		if candidates[i].score == candidates[j].score {
+			return len(candidates[i].text) < len(candidates[j].text)
+		}
+		return candidates[i].score < candidates[j].score
+	})
+
+	out := make([]string, 0, min(limit, len(candidates)))
+	for _, candidate := range candidates {
+		out = append(out, candidate.text)
+		if len(out) == limit {
+			break
+		}
+	}
+	return out
+}
+
+func formatFindTextFailureMessage(searchText string, nth int, regionX, regionY, regionW, regionH int, matches []string) string {
+	msg := fmt.Sprintf(
+		`text %q not found on screen (occurrence %d). Search region: x=%d y=%d width=%d height=%d.`,
+		searchText, nth, regionX, regionY, regionW, regionH,
+	)
+	if len(matches) > 0 {
+		msg += fmt.Sprintf(" Closest OCR matches: %q.", matches)
+	}
+	msg += ` TIP: If the target may be off-screen, use scroll_until_text. Otherwise call find_elements only if you need raw OCR diagnostics.`
+	return msg
+}
+
+func buildFindTextFailureMessage(img image.Image, searchText string, nth int, regionX, regionY, regionW, regionH int, grayscale bool) string {
+	ocrResult, err := ocr.ReadImage(img, ocr.Options{Color: !grayscale})
+	if err != nil || ocrResult == nil {
+		return formatFindTextFailureMessage(searchText, nth, regionX, regionY, regionW, regionH, nil)
+	}
+
+	matches := closestOCRMatches(ocrResult, searchText, 5)
+	return formatFindTextFailureMessage(searchText, nth, regionX, regionY, regionW, regionH, matches)
 }
 
 // findAndClickWord removed in favor of direct clickFoundBounds logic
@@ -695,7 +831,7 @@ func handleFindClickAndType(ctx context.Context, request mcp.CallToolRequest) (*
 	}
 	if !found {
 		logging.Info("find_click_and_type: text %q (occurrence %d) not found", searchText, nth)
-		return mcp.NewToolResultError(fmt.Sprintf("text %q not found on screen (occurrence %d)", searchText, nth)), nil
+		return mcp.NewToolResultError(buildFindTextFailureMessage(img, searchText, nth, regionX, regionY, regionW, regionH, grayscale)), nil
 	}
 
 	cx := regionX + (minX+maxX)/2 + xOffset

@@ -867,7 +867,7 @@ Scans the full screen with OCR, finds the nth word matching `text`, and clicks i
 { "success": true, "found": "Submit", "x": 188, "y": 2768, "button": "left", "occurrence": 1 }
 ```
 
-Returns an error result if the text is not found on screen.
+Returns an error result if the text is not found on screen. The error now includes the searched region, closest OCR matches, and a hint to try `scroll_until_text` before falling back to manual diagnostics.
 
 ---
 

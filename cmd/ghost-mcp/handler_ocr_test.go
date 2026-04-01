@@ -206,6 +206,39 @@ func TestFindButtonBounds_FixtureButtons(t *testing.T) {
 	}
 }
 
+func TestClosestOCRMatches_PrioritizesNearbyPhrases(t *testing.T) {
+	result := &ocr.Result{
+		Words: []ocr.Word{
+			{Text: "Type", X: 100, Y: 50, Width: 40, Height: 24, Confidence: 95},
+			{Text: "here", X: 145, Y: 50, Width: 42, Height: 24, Confidence: 95},
+			{Text: "localhost:8765", X: 100, Y: 100, Width: 110, Height: 24, Confidence: 95},
+			{Text: "Clear", X: 220, Y: 100, Width: 38, Height: 24, Confidence: 95},
+		},
+	}
+
+	got := closestOCRMatches(result, "Type here or use", 3)
+	if len(got) == 0 {
+		t.Fatal("expected closest OCR matches")
+	}
+	if got[0] != "Type here" {
+		t.Fatalf("first closest match = %q, want %q", got[0], "Type here")
+	}
+}
+
+func TestFormatFindTextFailureMessage_IncludesCandidatesAndRegion(t *testing.T) {
+	msg := formatFindTextFailureMessage("Type here or use", 1, 10, 20, 300, 100, []string{"Type here", "localhost:8765"})
+
+	if !strings.Contains(msg, `Search region: x=10 y=20 width=300 height=100`) {
+		t.Fatalf("expected region details in failure message: %s", msg)
+	}
+	if !strings.Contains(msg, `Closest OCR matches`) {
+		t.Fatalf("expected closest OCR matches in failure message: %s", msg)
+	}
+	if !strings.Contains(msg, `scroll_until_text`) {
+		t.Fatalf("expected scroll_until_text guidance in failure message: %s", msg)
+	}
+}
+
 // TestAbs tests the abs helper function
 func TestAbs(t *testing.T) {
 	tests := []struct {

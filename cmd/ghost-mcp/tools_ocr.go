@@ -57,8 +57,9 @@ COLORED BUTTONS (white text on blue/green/red/cyan): handled automatically by th
 
 IF TEXT NOT FOUND:
 - DO NOT guess coordinates — guessing will miss
-- Call find_elements (no args) to see what OCR actually detected on screen
-- Or take_screenshot to visually confirm the button is visible
+- Read the returned closest OCR matches first — they often reveal the exact visible label
+- If the target may be off-screen, use scroll_until_text instead of manual scroll loops
+- Call find_elements only if you need raw OCR diagnostics after those hints
 
 RESPONSE: {success, found, box: {x,y,width,height}, requested_x/y, actual_x/y, button, occurrence}
 - box is the OCR text bounding box (tight around characters, not the full button background)
@@ -218,6 +219,7 @@ This is the primary tool for filling out forms and interacting with text inputs.
 SPEED TIP: Use region constraints (x, y, width, height) to scan only the relevant form area.
 MULTI-WORD LABELS: Works with OCR text split across adjacent words, e.g. "Type here or use".
 OFF-SCREEN FIELDS: If the input may be below the fold, set scroll_direction to let the tool scroll and keep searching in one call.
+ON FAILURE: the error now includes closest OCR matches plus the searched region so you can refine the text before falling back to diagnostics.
 
 EXAMPLE: Clicking an input field to the right of a "Name:" label:
 {

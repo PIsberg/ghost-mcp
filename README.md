@@ -300,6 +300,7 @@ Once connected, AI clients can use the tools like this:
   "arguments": {"text": "Save"}
 }
 // Response: {"success": true, "found": "Save", "x": 960, "y": 540, "button": "left", "occurrence": 1}
+// If not found, the error includes closest OCR matches and the searched region.
 
 // Move and click in one call
 {
