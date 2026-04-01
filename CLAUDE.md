@@ -23,7 +23,7 @@ GOOS=linux   GOARCH=amd64 go build -o ghost-mcp     -ldflags="-s -w" ./cmd/ghost
 
 ```bash
 # Unit tests only (no display required)
-go test -v -short ./cmd/ghost-mcp/...
+go test -v -short ./cmd/ghost-mcp/... ./internal/...
 
 # Integration tests (requires display and GCC)
 INTEGRATION=1 go test -v -run Integration ./cmd/ghost-mcp/...   # Linux/macOS
@@ -56,13 +56,25 @@ gofmt -l .   # List unformatted files
 AI Client (Claude) ←→[stdio JSON-RPC]←→ Ghost MCP Server ←→[CGo]←→ RobotGo ←→ OS
 ```
 
-The server exposes six tools: `get_screen_size`, `move_mouse`, `click`, `type_text`, `press_key`, `take_screenshot`. Source lives in `cmd/ghost-mcp/`.
+The server exposes twelve tools across two files:
+- `cmd/ghost-mcp/main.go`: `get_screen_size`, `move_mouse`, `click`, `click_at`, `type_text`, `press_key`, `take_screenshot`
+- `cmd/ghost-mcp/tools_ocr.go`: `find_and_click`, `find_and_click_all`, `find_elements`, `find_click_and_type`, `wait_for_text`
+
+### Internal Packages
+
+- `internal/logging` — stderr logging helpers (`logging.Info/Error/Debug()`). **Never use `fmt.Println`; stdout is the MCP JSON-RPC wire.**
+- `internal/validate` — input validation before any robotgo call: `validate.Coords()`, `validate.ScreenRegion()`, `validate.Text()`, `validate.Key()`
+- `internal/audit` — tamper-evident audit logging. Each JSONL entry carries a SHA-256 hash chain. Configured via `GHOST_MCP_AUDIT_LOG` (directory); defaults to `<UserConfigDir>/ghost-mcp/audit/`. Files rotate daily.
+- `internal/transport` — transport mode selection: stdio (default) or HTTP/SSE (`GHOST_MCP_TRANSPORT=http`). HTTP mode requires Bearer token auth and uses `GHOST_MCP_HTTP_ADDR` / `GHOST_MCP_HTTP_BASE_URL`.
+- `internal/ocr` — Tesseract OCR via `gosseract`. Requires Tesseract libraries installed (vcpkg on Windows). Supports grayscale, inverted, and color preprocessing passes.
+- `internal/visual`, `internal/cursor` — visual click feedback animations (mouse-circle effects).
 
 ### Critical Design Constraints
 
-- **stdout is reserved for the MCP JSON-RPC protocol.** All logging must go to stderr. Use `logInfo()`, `logError()`, `logDebug()` — never `fmt.Println`.
+- **stdout is reserved for the MCP JSON-RPC protocol.** All logging must go to stderr. Use `logging.Info()`, `logging.Error()`, `logging.Debug()` from `internal/logging` — never `fmt.Println`.
 - **Failsafe mechanism**: moving the mouse to (0,0) triggers an emergency shutdown. `checkFailsafe()` is called after every mouse movement. Do not bypass this.
-- **Parameter extraction**: JSON numbers arrive as `float64`. Use `getIntParam()` and `getStringParam()` helpers rather than direct type assertions.
+- **Parameter validation**: use `internal/validate` functions after parameter extraction, before any OS call.
+- **Authentication**: set `GHOST_MCP_TOKEN` to require a token. In stdio mode the token is checked via an MCP hook; in HTTP mode it's a Bearer header.
 - **Debug logging**: controlled by the `GHOST_MCP_DEBUG=1` environment variable.
 
 ### Testing Architecture
@@ -70,6 +82,7 @@ The server exposes six tools: `get_screen_size`, `move_mouse`, `click`, `type_te
 - `cmd/ghost-mcp/main_test.go` — unit tests for parameter extraction, handlers, logging, and failsafe
 - `cmd/ghost-mcp/integration_test.go` — full MCP server tests using the helper client in `mcpclient/`
 - `cmd/ghost-mcp/test_fixture/` — a Go HTTP server + HTML/JS page that renders interactive UI elements for integration tests to automate against
+- `internal/*/..._test.go` — unit and fuzz tests for each internal package (run with `go test ./internal/...`)
 
 Integration tests are gated behind the `INTEGRATION=1` env var because they require a real display (or Xvfb on Linux) and a GCC toolchain for CGo.
 

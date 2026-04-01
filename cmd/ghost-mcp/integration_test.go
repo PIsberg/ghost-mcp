@@ -524,14 +524,15 @@ func TestIntegration_ToolDiscovery(t *testing.T) {
 		"click_at",
 		"double_click",
 		"scroll",
+		"scroll_until_text",
 		"type_text",
 		"press_key",
 		"take_screenshot",
-		"read_screen_text",
 		"find_and_click",
 		"find_and_click_all",
 		"wait_for_text",
 		"find_elements",
+		"find_click_and_type",
 	}
 
 	for _, tool := range expectedTools {
@@ -549,8 +550,8 @@ func TestIntegration_ToolDiscovery(t *testing.T) {
 	}
 }
 
-// TestIntegration_ReadScreenTextResultFormat verifies read_screen_text response shape.
-func TestIntegration_ReadScreenTextResultFormat(t *testing.T) {
+// TestIntegration_FindElementsResultFormat verifies find_elements response shape.
+func TestIntegration_FindElementsResultFormat(t *testing.T) {
 	if os.Getenv("INTEGRATION") != "1" {
 		t.Skip("Integration tests not enabled")
 	}
@@ -568,23 +569,16 @@ func TestIntegration_ReadScreenTextResultFormat(t *testing.T) {
 
 	ctx := context.Background()
 
-	result, err := client.CallToolString(ctx, "read_screen_text", nil)
+	result, err := client.CallToolString(ctx, "find_elements", nil)
 	if err != nil {
-		t.Fatalf("read_screen_text failed: %v", err)
+		t.Fatalf("find_elements failed: %v", err)
 	}
 
 	var data struct {
-		Success bool   `json:"success"`
-		Text    string `json:"text"`
-		Words   []struct {
-			Text       string  `json:"text"`
-			X          int     `json:"x"`
-			Y          int     `json:"y"`
-			Width      int     `json:"width"`
-			Height     int     `json:"height"`
-			Confidence float64 `json:"confidence"`
-		} `json:"words"`
-		Region struct {
+		Success      bool                     `json:"success"`
+		ElementCount int                      `json:"element_count"`
+		Elements     []map[string]interface{} `json:"elements"`
+		Region       struct {
 			X      int `json:"x"`
 			Y      int `json:"y"`
 			Width  int `json:"width"`
@@ -596,22 +590,22 @@ func TestIntegration_ReadScreenTextResultFormat(t *testing.T) {
 	}
 
 	if !data.Success {
-		t.Error("read_screen_text did not report success")
+		t.Error("find_elements did not report success")
 	}
 	if data.Region.Width <= 0 || data.Region.Height <= 0 {
 		t.Errorf("Region dimensions invalid: %dx%d", data.Region.Width, data.Region.Height)
 	}
-	// words slice must be present (may be empty if Tesseract not installed)
-	if data.Words == nil {
-		t.Error("words field must not be null")
+	// elements slice must be present (may be empty if Tesseract not installed)
+	if data.Elements == nil {
+		t.Error("elements field must be null")
 	}
 
-	t.Logf("✓ read_screen_text: %d words extracted, region %dx%d",
-		len(data.Words), data.Region.Width, data.Region.Height)
+	t.Logf("✓ find_elements: %d elements extracted, region %dx%d",
+		data.ElementCount, data.Region.Width, data.Region.Height)
 }
 
-// TestIntegration_ReadScreenTextRegion verifies the x/y/width/height parameters.
-func TestIntegration_ReadScreenTextRegion(t *testing.T) {
+// TestIntegration_FindElementsRegion verifies the x/y/width/height parameters.
+func TestIntegration_FindElementsRegion(t *testing.T) {
 	if os.Getenv("INTEGRATION") != "1" {
 		t.Skip("Integration tests not enabled")
 	}
@@ -629,14 +623,14 @@ func TestIntegration_ReadScreenTextRegion(t *testing.T) {
 
 	ctx := context.Background()
 
-	result, err := client.CallToolString(ctx, "read_screen_text", map[string]interface{}{
+	result, err := client.CallToolString(ctx, "find_elements", map[string]interface{}{
 		"x":      0,
 		"y":      0,
 		"width":  400,
 		"height": 200,
 	})
 	if err != nil {
-		t.Fatalf("read_screen_text (region) failed: %v", err)
+		t.Fatalf("find_elements (region) failed: %v", err)
 	}
 
 	var data struct {
@@ -651,17 +645,17 @@ func TestIntegration_ReadScreenTextRegion(t *testing.T) {
 	}
 
 	if !data.Success {
-		t.Error("read_screen_text did not report success for region call")
+		t.Error("find_elements did not report success for region call")
 	}
 	if data.Region.Width != 400 || data.Region.Height != 200 {
 		t.Errorf("Expected region 400x200, got %dx%d", data.Region.Width, data.Region.Height)
 	}
 
-	t.Logf("✓ Region read_screen_text returned correct dimensions")
+	t.Logf("✓ Region find_elements returned correct dimensions")
 }
 
-// TestIntegration_ReadScreenTextFixture reads the test fixture page and looks for known text.
-func TestIntegration_ReadScreenTextFixture(t *testing.T) {
+// TestIntegration_FindElementsFixture reads the test fixture page and extracts text elements.
+func TestIntegration_FindElementsFixture(t *testing.T) {
 	if os.Getenv("INTEGRATION") != "1" {
 		t.Skip("Integration tests not enabled")
 	}
@@ -686,32 +680,31 @@ func TestIntegration_ReadScreenTextFixture(t *testing.T) {
 	// Give the browser time to render the fixture page.
 	time.Sleep(settleTime)
 
-	text, words, err := client.ReadScreenText(ctx, nil)
+	elements, err := client.FindElements(ctx, nil)
 	if err != nil {
-		t.Fatalf("ReadScreenText failed: %v", err)
+		t.Fatalf("FindElements failed: %v", err)
 	}
 
-	t.Logf("Extracted %d words from fixture page", len(words))
-	t.Logf("First 200 chars of text: %.200s", text)
+	t.Logf("Extracted %d elements from fixture page", len(elements))
 
-	// If Tesseract found anything, each word must have valid coordinates.
-	for i, w := range words {
-		txt, _ := w["text"].(string)
-		x, _ := w["x"].(float64)
-		y, _ := w["y"].(float64)
-		width, _ := w["width"].(float64)
-		height, _ := w["height"].(float64)
+	// Each element must have valid coordinates.
+	for i, e := range elements {
+		txt, _ := e["text"].(string)
+		x, _ := e["x"].(float64)
+		y, _ := e["y"].(float64)
+		width, _ := e["width"].(float64)
+		height, _ := e["height"].(float64)
 		if width <= 0 || height <= 0 {
-			t.Errorf("Word %d (%q) has invalid size: %.0fx%.0f", i, txt, width, height)
+			t.Errorf("Element %d (%q) has invalid size: %.0fx%.0f", i, txt, width, height)
 		}
 		if x < 0 || y < 0 {
-			t.Errorf("Word %d (%q) has negative coords: (%.0f, %.0f)", i, txt, x, y)
+			t.Errorf("Element %d (%q) has negative coords: (%.0f, %.0f)", i, txt, x, y)
 		}
 	}
 }
 
-// TestIntegration_ReadScreenTextInvalidRegion verifies error on out-of-bounds region.
-func TestIntegration_ReadScreenTextInvalidRegion(t *testing.T) {
+// TestIntegration_FindElementsInvalidRegion verifies error on out-of-bounds region.
+func TestIntegration_FindElementsInvalidRegion(t *testing.T) {
 	if os.Getenv("INTEGRATION") != "1" {
 		t.Skip("Integration tests not enabled")
 	}
@@ -729,7 +722,7 @@ func TestIntegration_ReadScreenTextInvalidRegion(t *testing.T) {
 
 	ctx := context.Background()
 
-	result, err := client.CallTool(ctx, "read_screen_text", map[string]interface{}{
+	result, err := client.CallTool(ctx, "find_elements", map[string]interface{}{
 		"x":      -100,
 		"y":      0,
 		"width":  400,
@@ -1444,9 +1437,9 @@ func TestIntegration_CompleteToolSuite(t *testing.T) {
 		}
 	})
 
-	t.Run("read_screen_text", func(t *testing.T) {
-		_, _, err := client.ReadScreenText(ctx, nil)
-		results["read_screen_text"] = err == nil
+	t.Run("find_elements", func(t *testing.T) {
+		_, err := client.FindElements(ctx, nil)
+		results["find_elements"] = err == nil
 		if err != nil {
 			t.Errorf("Failed: %v", err)
 		}

@@ -5,6 +5,7 @@ package ocr
 import (
 	"bytes"
 	"fmt"
+	"hash/fnv"
 	"image"
 	"image/color"
 	"image/png"
@@ -66,6 +67,50 @@ type Options struct {
 // MinConfidence is the minimum word confidence (0–100) to include in results.
 // Words below this are OCR noise and should be discarded.
 const MinConfidence = 30.0
+
+var (
+	cacheMu     sync.RWMutex
+	cacheHash   uint64
+	cacheResult *Result
+)
+
+// HashImageFast computes a fast hash over the pixel data of an image.
+// Extensively optimized for *image.RGBA which is what robotgo returns.
+func HashImageFast(img image.Image) uint64 {
+	h := fnv.New64a()
+	if rgba, ok := img.(*image.RGBA); ok {
+		_, _ = h.Write(rgba.Pix)
+	} else if gray, ok := img.(*image.Gray); ok {
+		_, _ = h.Write(gray.Pix)
+	} else {
+		b := img.Bounds()
+		for y := b.Min.Y; y < b.Max.Y; y++ {
+			for x := b.Min.X; x < b.Max.X; x++ {
+				r, g, bl, a := img.At(x, y).RGBA()
+				_, _ = h.Write([]byte{byte(r), byte(g), byte(bl), byte(a)})
+			}
+		}
+	}
+	return h.Sum64()
+}
+
+// GetCachedResult returns the cached OCR result for the given image hash, if any.
+func GetCachedResult(hash uint64) *Result {
+	cacheMu.RLock()
+	defer cacheMu.RUnlock()
+	if cacheHash == hash && cacheResult != nil {
+		return cacheResult
+	}
+	return nil
+}
+
+// SetCachedResult stores the OCR result for the given image hash.
+func SetCachedResult(hash uint64, res *Result) {
+	cacheMu.Lock()
+	defer cacheMu.Unlock()
+	cacheHash = hash
+	cacheResult = res
+}
 
 const pooledClientWarmCount = 4
 
@@ -195,11 +240,21 @@ func ReadFile(imagePath string, opts Options) (*Result, error) {
 // (e.g. from a screen capture) and does not want to pay the cost of writing a
 // temp file just to read it back.
 func ReadImage(img image.Image, opts Options) (*Result, error) {
+	h := HashImageFast(img)
+	if cached := GetCachedResult(h); cached != nil {
+		return cached, nil
+	}
+
 	prepared, err := PrepareImageSet(img, opts)
 	if err != nil {
 		return nil, err
 	}
-	return ReadPreparedBytes(prepared.Normal, ScaleFactor)
+
+	res, err := ReadPreparedBytes(prepared.Normal, ScaleFactor)
+	if err == nil {
+		SetCachedResult(h, res)
+	}
+	return res, err
 }
 
 // PreparedImageSet stores preprocessed OCR-ready bytes so multiple passes can
@@ -221,31 +276,58 @@ func PrepareImageSet(img image.Image, opts Options) (*PreparedImageSet, error) {
 }
 
 func PrepareParallelImageSet(img image.Image, grayscale bool) (*PreparedImageSet, error) {
-	set := &PreparedImageSet{}
-
-	if grayscale {
-		var err error
-		if set.Normal, err = encodeForOCR(img, ScaleFactor, Options{}); err != nil {
-			return nil, fmt.Errorf("preprocess normal image: %w", err)
-		}
-		if set.Inverted, err = encodeForOCR(img, ScaleFactor, Options{Inverted: true}); err != nil {
-			return nil, fmt.Errorf("preprocess inverted image: %w", err)
-		}
-		if set.BrightText, err = encodeForOCR(img, ScaleFactor, Options{BrightText: true}); err != nil {
-			return nil, fmt.Errorf("preprocess bright-text image: %w", err)
-		}
-		if set.Color, err = encodeForOCR(img, ScaleFactor, Options{Color: true}); err != nil {
+	if !grayscale {
+		colorBytes, err := encodeForOCR(img, ScaleFactor, Options{Color: true})
+		if err != nil {
 			return nil, fmt.Errorf("preprocess color image: %w", err)
 		}
-		return set, nil
+		return &PreparedImageSet{Normal: colorBytes, Color: colorBytes}, nil
 	}
 
-	colorBytes, err := encodeForOCR(img, ScaleFactor, Options{Color: true})
-	if err != nil {
-		return nil, fmt.Errorf("preprocess color image: %w", err)
+	// Run all 4 preprocessing passes concurrently. Each pass reads img (no writes)
+	// and writes to its own independent output buffer, so no synchronisation is needed
+	// beyond waiting for all goroutines to finish.
+	type encodeResult struct {
+		name string
+		data []byte
+		err  error
 	}
-	set.Normal = colorBytes
-	set.Color = colorBytes
+	ch := make(chan encodeResult, 4)
+
+	passes := [4]struct {
+		name string
+		opts Options
+	}{
+		{"normal", Options{}},
+		{"inverted", Options{Inverted: true}},
+		{"bright-text", Options{BrightText: true}},
+		{"color", Options{Color: true}},
+	}
+	for _, p := range passes {
+		p := p
+		go func() {
+			data, err := encodeForOCR(img, ScaleFactor, p.opts)
+			ch <- encodeResult{p.name, data, err}
+		}()
+	}
+
+	set := &PreparedImageSet{}
+	for range passes {
+		r := <-ch
+		if r.err != nil {
+			return nil, fmt.Errorf("preprocess %s image: %w", r.name, r.err)
+		}
+		switch r.name {
+		case "normal":
+			set.Normal = r.data
+		case "inverted":
+			set.Inverted = r.data
+		case "bright-text":
+			set.BrightText = r.data
+		case "color":
+			set.Color = r.data
+		}
+	}
 	return set, nil
 }
 

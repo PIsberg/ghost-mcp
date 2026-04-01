@@ -12,6 +12,7 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
+	"image"
 	"image/jpeg"
 	"image/png"
 	"math"
@@ -59,9 +60,43 @@ type serverState struct {
 	isShuttingDown bool
 }
 
+type scrollSearchConfig struct {
+	SearchText string
+	Direction  string
+	Amount     int
+	MaxScrolls int
+	Nth        int
+	ScrollX    int
+	ScrollY    int
+	RegionX    int
+	RegionY    int
+	RegionW    int
+	RegionH    int
+	Grayscale  bool
+}
+
+type scrollSearchResult struct {
+	MinX, MinY, MaxX, MaxY int
+	Found                  bool
+	PassName               string
+	VisibleText            string
+	ScrollCount            int
+	RepeatedViewport       bool
+}
+
 var state = &serverState{
 	shutdownChan: make(chan struct{}),
 }
+
+var (
+	uiGetScreenSize = robotgo.GetScreenSize
+	uiMoveMouse     = func(x, y int) { robotgo.Move(x, y) }
+	uiScrollDir     = func(amount int, direction string) { robotgo.ScrollDir(amount, direction) }
+	uiCaptureImage  = func(x, y, width, height int) (image.Image, error) { return robotgo.CaptureImg(x, y, width, height) }
+	uiReadImage     = ocr.ReadImage
+	uiCheckFailsafe = checkFailsafe
+	uiFindText      = parallelFindText
+)
 
 // =============================================================================
 // FAILSAFE
@@ -208,6 +243,12 @@ func handleClickAt(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallT
 		return mcp.NewToolResultError(fmt.Sprintf("invalid coordinates: %v", err)), nil
 	}
 
+	// Check for repeated clicks at same location
+	clickWarning := tracker.recordClick(x, y, button, true)
+	if clickWarning.ShouldStop {
+		logging.Error("REPEATED CLICK WARNING: %s", clickWarning.Reason)
+	}
+
 	logging.Info("ACTION: Moving mouse to (%d, %d) for %s click", x, y, button)
 	robotgo.Move(x, y)
 
@@ -228,10 +269,18 @@ func handleClickAt(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallT
 	}
 	logging.Info("ACTION COMPLETE: %s click at (%d, %d)", button, finalX, finalY)
 
-	return mcp.NewToolResultText(fmt.Sprintf(
+	response := fmt.Sprintf(
 		`{"success": true, "button": "%s", "requested_x": %d, "requested_y": %d, "actual_x": %d, "actual_y": %d}`,
 		button, x, y, finalX, finalY,
-	)), nil
+	)
+
+	// Add warning if clicking same spot too many times
+	if clickWarning.ShouldStop {
+		response = fmt.Sprintf(`%s,"warning":{"should_stop":true,"reason":%q,"click_count":%d,"message":"You've clicked this spot %d times in 30 seconds. Verify this is correct."}`,
+			response[:len(response)-1], clickWarning.Reason, clickWarning.ClickCount, clickWarning.ClickCount)
+	}
+
+	return mcp.NewToolResultText(response + "}"), nil
 }
 
 func handleDoubleClick(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -283,7 +332,7 @@ func handleDoubleClick(ctx context.Context, request mcp.CallToolRequest) (*mcp.C
 func handleScroll(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	logging.Debug("Handling scroll request")
 
-	screenW, screenH := robotgo.GetScreenSize()
+	screenW, screenH := uiGetScreenSize()
 
 	// x and y are optional — default to screen centre so callers can omit them
 	// for standard page scrolling.
@@ -309,7 +358,9 @@ func handleScroll(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallTo
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	amount := 3
+	// Default amount=15 for faster page coverage (was 3)
+	// On most systems: amount=10 ≈ half page, amount=15 ≈ 2/3 page, amount=30 ≈ full page
+	amount := 15
 	if a, err := getIntParam(request, "amount"); err == nil {
 		if a <= 0 {
 			return mcp.NewToolResultError("amount must be positive"), nil
@@ -323,22 +374,22 @@ func handleScroll(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallTo
 	}
 
 	logging.Info("ACTION: Moving mouse to (%d, %d) then scrolling %s by %d", x, y, direction, amount)
-	robotgo.Move(x, y)
+	uiMoveMouse(x, y)
 
-	if err := checkFailsafe(); err != nil {
+	if err := uiCheckFailsafe(); err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	robotgo.ScrollDir(amount, direction)
+	uiScrollDir(amount, direction)
 	logging.Info("ACTION COMPLETE: Scrolled %s by %d at (%d, %d)", direction, amount, x, y)
 
 	// Run a quick OCR pass on the centre half of the screen so the AI knows
-	// what is now visible without needing a separate screenshot + read_screen_text call.
+	// what is now visible without needing a separate screenshot + find_elements call.
 	visibleText := ""
 	stripY := screenH / 4
 	stripH := screenH / 2
-	if img, captureErr := robotgo.CaptureImg(0, stripY, screenW, stripH); captureErr == nil {
-		if ocrResult, ocrErr := ocr.ReadImage(img, ocr.Options{}); ocrErr == nil {
+	if img, captureErr := uiCaptureImage(0, stripY, screenW, stripH); captureErr == nil {
+		if ocrResult, ocrErr := uiReadImage(img, ocr.Options{}); ocrErr == nil {
 			visibleText = ocrResult.Text
 		} else {
 			logging.Debug("scroll OCR failed (non-fatal): %v", ocrErr)
@@ -348,8 +399,195 @@ func handleScroll(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallTo
 	}
 
 	return mcp.NewToolResultText(fmt.Sprintf(
-		`{"success": true, "x": %d, "y": %d, "direction": "%s", "amount": %d, "visible_text": %q}`,
+		`{"success": true, "x": %d, "y": %d, "direction": "%s", "amount": %d, "visible_text": %q, "note": "Use visible_text to check content BEFORE calling more tools. Only call find_elements if you need to interact with something not in visible_text."}`,
 		x, y, direction, amount, visibleText,
+	)), nil
+}
+
+func scrollSearchForText(ctx context.Context, cfg scrollSearchConfig) (*scrollSearchResult, error) {
+	var lastHash uint64
+	var lastVisibleText string
+
+	for attempt := 0; attempt <= cfg.MaxScrolls; attempt++ {
+		img, captureErr := uiCaptureImage(cfg.RegionX, cfg.RegionY, cfg.RegionW, cfg.RegionH)
+		if captureErr != nil {
+			return nil, fmt.Errorf("failed to capture screen: %w", captureErr)
+		}
+
+		currentHash := ocr.HashImageFast(img)
+
+		// Abort immediately before doing expensive OCR if the viewport hasn't changed
+		if attempt > 0 && currentHash == lastHash {
+			return &scrollSearchResult{
+				VisibleText:      lastVisibleText,
+				ScrollCount:      attempt,
+				RepeatedViewport: true,
+			}, nil
+		}
+		lastHash = currentHash
+
+		visibleText := ""
+		if ocrResult, ocrErr := uiReadImage(img, ocr.Options{Color: !cfg.Grayscale}); ocrErr == nil {
+			visibleText = ocrResult.Text
+		} else {
+			logging.Debug("scrollSearchForText visible-text OCR failed (non-fatal): %v", ocrErr)
+		}
+		lastVisibleText = visibleText
+
+		minX, minY, maxX, maxY, found, passName := uiFindText(ctx, img, cfg.SearchText, cfg.Nth, cfg.Grayscale)
+		if found {
+			return &scrollSearchResult{
+				MinX:        minX,
+				MinY:        minY,
+				MaxX:        maxX,
+				MaxY:        maxY,
+				Found:       true,
+				PassName:    passName,
+				VisibleText: visibleText,
+				ScrollCount: attempt,
+			}, nil
+		}
+
+		if attempt == cfg.MaxScrolls {
+			return &scrollSearchResult{
+				VisibleText: visibleText,
+				ScrollCount: attempt,
+			}, nil
+		}
+
+		uiMoveMouse(cfg.ScrollX, cfg.ScrollY)
+		if err := uiCheckFailsafe(); err != nil {
+			return nil, err
+		}
+		uiScrollDir(cfg.Amount, cfg.Direction)
+	}
+
+	return nil, fmt.Errorf("unreachable scrollSearchForText state")
+}
+
+func handleScrollUntilText(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	logging.Debug("Handling scroll_until_text request")
+
+	searchText, err := getStringParam(request, "text")
+	if err != nil {
+		logging.Error("Invalid text parameter: %v", err)
+		return mcp.NewToolResultError(fmt.Sprintf("invalid text parameter: %v", err)), nil
+	}
+
+	direction, err := getStringParam(request, "direction")
+	if err != nil {
+		logging.Error("Invalid direction parameter: %v", err)
+		return mcp.NewToolResultError(fmt.Sprintf("invalid direction parameter: %v", err)), nil
+	}
+
+	validDirections := map[string]bool{"up": true, "down": true, "left": true, "right": true}
+	if !validDirections[direction] {
+		err := fmt.Errorf("invalid direction '%s', must be 'up', 'down', 'left', or 'right'", direction)
+		logging.Error("%v", err)
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	// Default amount=15 for faster page coverage (was 5)
+	amount := 15
+	if a, err := getIntParam(request, "amount"); err == nil {
+		if a <= 0 {
+			return mcp.NewToolResultError("amount must be positive"), nil
+		}
+		amount = a
+	}
+
+	maxScrolls := 8
+	if n, err := getIntParam(request, "max_scrolls"); err == nil {
+		if n <= 0 {
+			return mcp.NewToolResultError("max_scrolls must be positive"), nil
+		}
+		maxScrolls = n
+	}
+
+	nth := 1
+	if n, err := getIntParam(request, "nth"); err == nil {
+		if n <= 0 {
+			return mcp.NewToolResultError("nth must be >= 1"), nil
+		}
+		nth = n
+	}
+
+	grayscale := getBoolParam(request, "grayscale", true)
+
+	screenW, screenH := uiGetScreenSize()
+
+	scrollX := screenW / 2
+	scrollY := screenH / 2
+	if v, err := getIntParam(request, "scroll_x"); err == nil {
+		scrollX = v
+	}
+	if v, err := getIntParam(request, "scroll_y"); err == nil {
+		scrollY = v
+	}
+	if err := validate.Coords(scrollX, scrollY, screenW, screenH); err != nil {
+		logging.Error("Scroll coordinate validation failed: %v", err)
+		return mcp.NewToolResultError(fmt.Sprintf("invalid scroll coordinates: %v", err)), nil
+	}
+
+	regionX, regionY := 0, 0
+	regionW, regionH := screenW, screenH
+	if v, err := getIntParam(request, "x"); err == nil {
+		regionX = v
+	}
+	if v, err := getIntParam(request, "y"); err == nil {
+		regionY = v
+	}
+	if v, err := getIntParam(request, "width"); err == nil {
+		regionW = v
+	}
+	if v, err := getIntParam(request, "height"); err == nil {
+		regionH = v
+	}
+	if err := validate.ScreenRegion(regionX, regionY, regionW, regionH, screenW, screenH); err != nil {
+		logging.Error("Screen region validation failed: %v", err)
+		return mcp.NewToolResultError(fmt.Sprintf("invalid screen region: %v", err)), nil
+	}
+
+	result, searchErr := scrollSearchForText(ctx, scrollSearchConfig{
+		SearchText: searchText,
+		Direction:  direction,
+		Amount:     amount,
+		MaxScrolls: maxScrolls,
+		Nth:        nth,
+		ScrollX:    scrollX,
+		ScrollY:    scrollY,
+		RegionX:    regionX,
+		RegionY:    regionY,
+		RegionW:    regionW,
+		RegionH:    regionH,
+		Grayscale:  grayscale,
+	})
+	if searchErr != nil {
+		logging.Error("scroll_until_text failed: %v", searchErr)
+		return mcp.NewToolResultError(searchErr.Error()), nil
+	}
+
+	if result.Found {
+		cx := regionX + (result.MinX+result.MaxX)/2
+		cy := regionY + (result.MinY+result.MaxY)/2
+		logging.Info("scroll_until_text: found %q after %d scrolls via %s pass", searchText, result.ScrollCount, result.PassName)
+		return mcp.NewToolResultText(fmt.Sprintf(
+			`{"success":true,"found":%q,"box":{"x":%d,"y":%d,"width":%d,"height":%d},"center_x":%d,"center_y":%d,"scroll_count":%d,"direction":%q,"amount":%d,"pass":%q,"visible_text":%q}`,
+			searchText, regionX+result.MinX, regionY+result.MinY, result.MaxX-result.MinX, result.MaxY-result.MinY, cx, cy, result.ScrollCount, direction, amount, result.PassName, result.VisibleText,
+		)), nil
+	}
+	if result.RepeatedViewport {
+		logging.Info("scroll_until_text: viewport repeated after %d scrolls while searching for %q", result.ScrollCount, searchText)
+		return mcp.NewToolResultError(fmt.Sprintf(
+			`text %q not found after %d scrolls; viewport stopped changing, likely reached the end. Last visible_text: %q`,
+			searchText, result.ScrollCount, result.VisibleText,
+		)), nil
+	}
+
+	logging.Info("scroll_until_text: text %q not found after max_scrolls=%d", searchText, maxScrolls)
+	return mcp.NewToolResultError(fmt.Sprintf(
+		`text %q not found after %d scrolls (%s by %d). Last visible_text: %q`,
+		searchText, maxScrolls, direction, amount, result.VisibleText,
 	)), nil
 }
 
@@ -746,21 +984,60 @@ Use coordinates from find_elements (center_x/center_y) or a known fixed position
 
 Scroll 'down' to reveal content below, 'up' to go back up. For horizontal content use 'left' or 'right'.
 
-The response includes visible_text — the OCR text of the centre half of the screen after scrolling. Use this to know what is now on screen WITHOUT needing a separate read_screen_text or take_screenshot call.
+The response includes visible_text — the OCR text of the centre half of the screen after scrolling. Use this to know what is now on screen WITHOUT needing a separate find_elements or take_screenshot call.
+
+🚫 AFTER SCROLL, DO NOT call find_elements or take_screenshot unless you specifically need to interact with a region not covered by visible_text. visible_text already tells you what appeared!
 
 AMOUNT GUIDANCE — use small increments to avoid overshooting:
-- amount=3 (default): ~1/4 screen — use for fine positioning
-- amount=5: ~1/2 screen — use to reveal the next section
-- amount=10: ~full screen — jumps far, easy to overshoot; only use for large pages
+- amount=15 (default): ~2/3 screen — best for general page navigation
+- amount=5: ~1/4 screen — use for fine control or small sections
+- amount=30: ~full screen — use for very long pages
 
-SEARCH WORKFLOW: scroll down by 5, check visible_text for your target; repeat if not found. Scroll up by 5 to backtrack if you overshoot.
+SEARCH WORKFLOW: scroll down by 15, check visible_text for your target; repeat if not found. Only 3-4 scrolls needed to cover a full page!
 
 x and y are optional and default to the screen centre, which is correct for most page scrolling. Only specify them when scrolling a specific widget (e.g. a side panel or dropdown list).`),
 		mcp.WithNumber("x", mcp.Description("X coordinate to scroll at (pixels from left edge). Defaults to screen centre.")),
 		mcp.WithNumber("y", mcp.Description("Y coordinate to scroll at (pixels from top edge). Defaults to screen centre.")),
 		mcp.WithString("direction", mcp.Description("Scroll direction: 'up', 'down', 'left', or 'right'."), mcp.Required()),
-		mcp.WithNumber("amount", mcp.Description("Number of scroll steps (default: 3 ≈ 1/4 screen). amount=5 ≈ half screen. amount=10 jumps far — avoid for precise navigation.")),
+		mcp.WithNumber("amount", mcp.Description("Number of scroll steps (default: 15 ≈ 2/3 screen). amount=5 for fine control. amount=30 for very long pages.")),
 	), handleScroll)
+
+	mcpServer.AddTool(mcp.NewTool("scroll_until_text",
+		mcp.WithDescription(`BOUNDED SEARCH TOOL: scrolls and OCR-searches for text in one call. Use this instead of manually chaining scroll + find_elements + screenshots.
+
+🎯 WHEN TO USE:
+- You need to find text that is likely off-screen in a scrollable page, list, or panel
+- You want a bounded search with fewer tool calls and no manual scroll loop
+- You want to stop automatically when the viewport stops changing
+
+HOW IT WORKS:
+1. OCR-searches the current viewport first
+2. If not found, scrolls in the requested direction
+3. Repeats search up to max_scrolls times
+4. Stops early if the viewport text stops changing (likely end reached)
+5. Returns the found text box and center coordinates
+
+SPEED TIPS:
+- Use x/y/width/height to search only the relevant panel or form area
+- amount=5 is the default because it moves faster than fine scrolling without overshooting as badly as 10
+- Prefer this over repeated scroll calls when hunting for a label or input field on a long page
+
+RETURNS:
+- On success: {success, found, box, center_x, center_y, scroll_count, direction, amount, pass, visible_text}
+- On failure: error with the last visible_text to explain what was on screen`),
+		mcp.WithString("text", mcp.Description("Text to search for while scrolling (case-insensitive substring match)."), mcp.Required()),
+		mcp.WithString("direction", mcp.Description("Scroll direction: 'up', 'down', 'left', or 'right'."), mcp.Required()),
+		mcp.WithNumber("amount", mcp.Description("Scroll steps per attempt (default: 5). amount=3 is finer, amount=10 jumps farther but may overshoot.")),
+		mcp.WithNumber("max_scrolls", mcp.Description("Maximum number of scroll attempts after the initial viewport check (default: 8).")),
+		mcp.WithNumber("nth", mcp.Description("Which occurrence to match if the text appears multiple times (default: 1).")),
+		mcp.WithNumber("scroll_x", mcp.Description("X coordinate to scroll at (default: screen center). Useful for scrolling a specific panel.")),
+		mcp.WithNumber("scroll_y", mcp.Description("Y coordinate to scroll at (default: screen center). Useful for scrolling a specific panel.")),
+		mcp.WithNumber("x", mcp.Description("X coordinate of the OCR search region (default: 0 = full screen).")),
+		mcp.WithNumber("y", mcp.Description("Y coordinate of the OCR search region (default: 0 = full screen).")),
+		mcp.WithNumber("width", mcp.Description("Width of the OCR search region (default: full screen). Smaller regions are faster.")),
+		mcp.WithNumber("height", mcp.Description("Height of the OCR search region (default: full screen). Smaller regions are faster.")),
+		mcp.WithBoolean("grayscale", mcp.Description("Use grayscale OCR (default: true). Set false when colour context matters.")),
+	), handleScrollUntilText)
 
 	mcpServer.AddTool(mcp.NewTool("type_text",
 		mcp.WithDescription(`Type text as keyboard input into the currently focused element. Click the target input field first to ensure it has focus before typing.
@@ -775,7 +1052,7 @@ IF THE FIELD HAS NO DETECTABLE TEXT (e.g. dark/empty placeholder):
 - The input field is to the LEFT: click_at {"x": box.x - 200, "y": box.y + box.height/2}
 - Then type_text
 
-For special characters or control sequences (Enter, Tab, Ctrl+C), use press_key instead. To verify the text was entered, use wait_for_text or read_screen_text on the input region — not a full screenshot.`),
+For special characters or control sequences (Enter, Tab, Ctrl+C), use press_key instead. To verify the text was entered, use wait_for_text or find_elements on the input region — not a full screenshot.`),
 		mcp.WithString("text", mcp.Description("The exact text string to type. Supports Unicode. Do not include control characters — use press_key for Enter, Tab, Backspace etc."), mcp.Required()),
 		mcp.WithBoolean("press_enter", mcp.Description("If true, automatically presses the Enter key immediately after the text is typed (default: false).")),
 	), handleTypeText)
@@ -783,7 +1060,7 @@ For special characters or control sequences (Enter, Tab, Ctrl+C), use press_key 
 	mcpServer.AddTool(mcp.NewTool("click_and_type",
 		mcp.WithDescription(`Move the mouse to (x, y), click to focus, and then type text. This is a single atomic operation that replaces separate click_at and type_text calls.
 
-Use this tool when you already have the absolute pixel coordinates (e.g. from read_screen_text or find_elements) and need to interact with an input field. Do not guess coordinates.`),
+Use this tool when you already have the absolute pixel coordinates (e.g. from find_elements) and need to interact with an input field. Do not guess coordinates.`),
 		mcp.WithNumber("x", mcp.Description("X coordinate in pixels from the left edge of the screen."), mcp.Required()),
 		mcp.WithNumber("y", mcp.Description("Y coordinate in pixels from the top edge of the screen."), mcp.Required()),
 		mcp.WithString("text", mcp.Description("The exact text string to type. Supports Unicode."), mcp.Required()),
@@ -804,6 +1081,7 @@ Common uses: 'enter' to confirm/submit, 'tab' to move between fields, 'esc' to c
 🚫 DO NOT take a screenshot before clicking — use find_and_click instead.
 🚫 DO NOT take a screenshot after every click to verify — use wait_for_text instead.
 🚫 DO NOT take a screenshot to find a button's coordinates — use find_and_click or find_elements instead.
+🚫 FOR TEXT FIELDS, NEVER call take_screenshot before trying find_click_and_type, find_elements, or scroll_until_text.
 
 WHEN TO USE take_screenshot:
 - The task explicitly requires seeing the visual layout (e.g. "describe the screen", "what color is the button").

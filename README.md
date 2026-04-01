@@ -16,7 +16,7 @@ Ghost MCP allows AI assistants like Claude to control your computer's mouse, key
 - 🖱️ **Mouse Control**: Move cursor, click, double-click, scroll
 - ⌨️ **Keyboard Control**: Type text, press individual keys
 - 📸 **Screen Capture**: Take screenshots with optional region selection
-- 🔍 **OCR**: Read text and word positions from the screen with Tesseract (always built in)
+- 🔍 **OCR**: Find screen text and UI elements with Tesseract (always built in)
 - 🔐 **Token Authentication**: Requires a secret token before the server will start
 - 📋 **Audit Logging**: Tamper-evident JSON Lines log of every tool call, auth failure, and lifecycle event
 - 🛡️ **Failsafe**: Emergency shutdown by moving mouse to top-left corner (0,0)
@@ -35,6 +35,7 @@ Ghost MCP allows AI assistants like Claude to control your computer's mouse, key
 | `click_at` | Move mouse to coordinates and click in one operation. Preferred over separate move+click. | `x`, `y`, `button` (optional, default left) |
 | `double_click` | Move mouse to coordinates and double-click. Use for opening files or activating items. | `x`, `y` |
 | `scroll` | Move mouse to coordinates and scroll the wheel. | `x`, `y`, `direction` (up/down/left/right), `amount` (optional, default 3) |
+| `scroll_until_text` | Scroll and OCR-search in one bounded call. Stops when found, after `max_scrolls`, or when the viewport stops changing. | `text`, `direction`, `amount`, `max_scrolls`, `scroll_x`, `scroll_y`, `x`, `y`, `width`, `height`, `nth`, `grayscale` |
 | `type_text` | Type text via keyboard. Use for input fields. | `text`, `press_enter` (optional, hit enter after typing) |
 | `click_and_type` | Move mouse, click, wait slightly, and type text. Fast unified atomic operation. | `x`, `y`, `type_text`, `button`, `delay_ms`, `press_enter` |
 | `press_key` | Press a single key. Use for Enter, Tab, shortcuts, etc. | `key` |
@@ -44,12 +45,14 @@ Ghost MCP allows AI assistants like Claude to control your computer's mouse, key
 
 | Tool | Description | Parameters |
 |------|-------------|------------|
-| `read_screen_text` | Read text from screen using OCR. Returns text and word positions. | `x`, `y`, `width`, `height`, `grayscale` |
-| `find_and_click` | Find text on screen with OCR and click its center. | `text`, `button`, `nth`, `x`, `y`, `width`, `height` |
-| `find_click_and_type` | Find text, click nearest bounds, and type string immediately. | `text`, `type_text`, `x_offset`, `y_offset`, `press_enter`, `delay_ms` |
+| `find_elements` ⭐ | Discover all clickable text elements with coordinates. Fast alternative to screenshots. | `x`, `y`, `width`, `height` |
+| `find_and_click` ⚡🎯🛡️ | Find text on screen with OCR and click its center. **Smart matching** prefers standalone buttons. **Auto-caches regions** for 10-25x faster clicks. **Built-in loop protection** (max 25 calls/session). | `text`, `button`, `nth`, `x`, `y`, `width`, `height`, `scroll_direction`, `max_scrolls`, `next_page_keys`, `max_pages`, `select_best` |
+| `find_click_and_type` | Find a label/placeholder, click the inferred input target, and type immediately. Can optionally scroll while searching. | `text`, `type_text`, `x_offset`, `y_offset`, `press_enter`, `delay_ms`, `scroll_direction`, `scroll_amount`, `max_scrolls`, `scroll_x`, `scroll_y` |
 | `find_and_click_all` ⭐ | Click multiple buttons in ONE atomic operation. | `texts` (array), `button`, `delay_ms` |
 | `wait_for_text` ⭐ | Wait for text to appear or disappear. Verify UI changes. | `text`, `visible`, `timeout_ms`, `x`, `y`, `width`, `height` |
-| `find_elements` ⭐ | Discover all clickable text elements with coordinates. Fast alternative to screenshots. | `x`, `y`, `width`, `height` |
+| `click_until_text_appears` 🆕🛡️ | Click coordinates and wait for text to appear. Auto-retries if text doesn't appear. **Prevents infinite click loops.** | `x`, `y`, `wait_for_text`, `button`, `timeout_ms`, `max_clicks` |
+| `get_region_cache_stats` | Get cache statistics (hits, misses, hit rate). Monitor optimization effectiveness. | None |
+| `clear_region_cache` | Clear all cached regions. Use after screen resolution changes or UI layout updates. | None |
 
 > **Note:** OCR tools require Tesseract to be installed and `TESSDATA_PREFIX` to be set. The installation scripts handle this automatically. See [Prerequisites](#prerequisites).
 
@@ -58,6 +61,130 @@ Ghost MCP allows AI assistants like Claude to control your computer's mouse, key
 - **`find_and_click_all`** - Click 3 buttons with ONE call instead of 3+ verification loops (75% faster)
 - **`wait_for_text`** - Properly verify UI state changes instead of guessing with screenshots
 - **`find_elements`** - Discover all clickable elements 10x faster than taking screenshots
+- **`scroll_until_text`** - Search long pages with one bounded tool call instead of repeated scroll + OCR loops
+- **`click_until_text_appears`** 🆕 - Click and wait for confirmation text. Auto-retries up to 3 times. Prevents infinite loops.
+
+### 🛡️ Safety Features & Loop Protection
+
+Ghost MCP includes **built-in safeguards** to prevent infinite retry loops and runaway automation:
+
+#### Global Call Limit (25 calls/session)
+```
+WARNING: Only 5 tool calls remaining before forced stop.
+MAXIMUM TOOL CALLS REACHED (25). Stop and try a completely different approach.
+```
+
+#### Consecutive Failure Detection (3 strikes)
+```
+GIVE UP RECOMMENDATION: Failed 3 times with "Submit". STOP trying this text.
+Try: (1) find_elements to see actual text, (2) shorter search term, 
+(3) scroll_direction if off-screen, or (4) completely different approach.
+```
+
+#### Repeated Click Detection (5 clicks at same spot)
+```json
+{
+  "success": true,
+  "warning": {
+    "should_stop": true,
+    "reason": "Clicked same coordinates (403,767) 5 times in 30 seconds",
+    "click_count": 5,
+    "message": "You've clicked this spot 5 times. Verify this is correct before continuing."
+  }
+}
+```
+
+#### Enhanced Error Responses
+Every error now includes:
+- `consecutive_failures`: How many times this search failed
+- `remaining_calls`: Calls left before forced stop
+- `suggestion`: Actionable next step (`scroll_may_help`, `no_matches_found`, etc.)
+- `candidates`: All OCR-detected text with confidence scores
+
+#### Response Example on Failure
+```json
+{
+  "error": "text \"Submit\" not found...",
+  "candidates": [
+    {"text": "Submit", "score": 100, "x": 50, "y": 50}
+  ],
+  "suggestion": "scroll_may_help",
+  "consecutive_failures": 2,
+  "remaining_calls": 18
+}
+```
+
+### 🎯 Smart OCR Matching
+
+Ghost MCP uses an **intelligent scoring system** to find the best match for your text:
+
+**How it works:**
+Instead of simple substring matching, every OCR-detected word is scored:
+
+| Score | Match Type | Example |
+|-------|------------|---------|
+| 1000 | Exact match | Searching "Click Me!" finds "Click Me!" |
+| 500 | Prefix match | Searching "Click" finds "Click Me!" |
+| 400 | Suffix match | Searching "Click" finds "Button Click" |
+| 300 | Standalone word | Searching "Click" finds "Button Click" (separate word) |
+| 200 | Multi-word (all found) | Searching "Save Changes" finds both words |
+| 100 | Substring with boundaries | Weaker match |
+| 50 | Inside another word | Lowest priority (avoided) |
+
+**Why it matters:**
+```
+❌ OLD BEHAVIOR: Search "Click" → clicks "Button Click Tests" header
+✅ NEW BEHAVIOR: Search "Click" → clicks standalone "Click Me!" button
+```
+
+The system:
+1. Scores all matches using the table above
+2. Sorts by score (best first), then by area (smaller = more precise)
+3. Returns the best match for your click
+
+**Production-ready:** Handles real-world UI with headers, labels, and buttons that share common text.
+
+### ⚡ Performance Optimization: Region Cache
+
+Ghost MCP automatically optimizes repeated UI interactions using **region caching**:
+
+**How it works:**
+1. When `find_and_click` successfully finds a button, it caches the screen region
+2. Subsequent calls with the same text scan only the cached region (not the full screen)
+3. Cache entries include screen resolution — automatically invalidated if resolution changes
+4. LRU eviction keeps the 100 most recently used entries
+
+**Performance impact:**
+- **First call:** Full screen OCR scan (~1920×1080)
+- **Cached calls:** Small region scan (~100×50) — **10-25x faster**
+
+**Monitoring cache:**
+```json
+// Check cache statistics
+{
+  "tool": "get_region_cache_stats"
+}
+// Response: {"entries":5,"hits":12,"misses":3,"hit_rate":80.0,"evictions":0}
+```
+
+**When to clear cache:**
+- Screen resolution changed
+- UI layout was significantly rearranged
+- Cache returning stale results
+
+```json
+// Clear all cached regions
+{
+  "tool": "clear_region_cache"
+}
+// Response: {"success":true,"message":"Region cache cleared"}
+```
+
+**Cache behavior:**
+- Case-insensitive: "Save", "SAVE", "save" use the same entry
+- Auto-invalidates on screen resolution change
+- 24-hour expiration for stale entries
+- Thread-safe with RWMutex protection
 
 ## Prerequisites
 
@@ -67,7 +194,7 @@ If building manually, you'll need:
 
 - **Go 1.24+** - [Download Go](https://go.dev/dl/)
 - **C Compiler** - For RobotGo (GUI automation library)
-- **Tesseract OCR + Leptonica** - Required for OCR tools (`read_screen_text`, `find_and_click`); always built in
+- **Tesseract OCR + Leptonica** - Required for OCR tools (`find_elements`, `find_and_click`); always built in
 
 ### Platform-Specific Dependencies
 
@@ -174,7 +301,7 @@ The installer will:
 
 #### OCR Support
 
-OCR (`read_screen_text`) is always built in. The installer sets up Tesseract automatically, including downloading the English language data file and setting `TESSDATA_PREFIX`.
+OCR (`find_elements`, `find_and_click`) is always built in. The installer sets up Tesseract automatically, including downloading the English language data file and setting `TESSDATA_PREFIX`.
 
 ### Manual Build
 
@@ -298,6 +425,7 @@ Once connected, AI clients can use the tools like this:
   "arguments": {"text": "Save"}
 }
 // Response: {"success": true, "found": "Save", "x": 960, "y": 540, "button": "left", "occurrence": 1}
+// If not found, the error includes closest OCR matches and the searched region.
 
 // Move and click in one call
 {
@@ -341,11 +469,11 @@ Once connected, AI clients can use the tools like this:
 // Response: {"success": true, "filepath": "/tmp/ghost-mcp-screenshot-....png", "width": 1920, "height": 1080}
 // (image data returned as a separate image/png content block)
 
-// Read all text from screen with word positions
+// Find all text elements on screen
 {
-  "tool": "read_screen_text"
+  "tool": "find_elements"
 }
-// Response: {"success": true, "text": "...", "words": [{"text": "Save", "x": 940, "y": 530, "width": 40, "height": 20, "confidence": 98.5}, ...]}
+// Response: {"success": true, "elements": [{"text": "Save", "x": 940, "y": 530, "width": 40, "height": 20, "center_x": 960, "center_y": 540, "confidence": 98.5}, ...]}
 ```
 
 ## Security
@@ -533,7 +661,7 @@ All application logs are written to **stderr**, never to stdout. This ensures:
 - Ensure sufficient disk space in temp directory
 - Verify write permissions to system temp folder
 
-#### OCR Fails / `read_screen_text` Returns Error
+#### OCR Fails / `find_elements` Returns Error
 - `TESSDATA_PREFIX` must point to the directory that **directly contains** `eng.traineddata` (not its parent)
 - On Windows with vcpkg: `TESSDATA_PREFIX` = `%USERPROFILE%\vcpkg\installed\x64-mingw-dynamic\share\tessdata`
 - On Linux: `TESSDATA_PREFIX` = `/usr/share/tesseract-ocr/5/tessdata` (verify with `find /usr/share -name eng.traineddata`)

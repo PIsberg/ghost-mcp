@@ -526,6 +526,71 @@ func TestPrepareParallelImageSet_ColorOnlyReusesBytes(t *testing.T) {
 	}
 }
 
+// TestPrepareParallelImageSet_GrayscaleVariantsAreIndependent verifies that each
+// preprocessing variant produces its own independent byte slice.  Sharing memory
+// between variants would mean a mutation in one (e.g. inversion) corrupts another.
+func TestPrepareParallelImageSet_GrayscaleVariantsAreIndependent(t *testing.T) {
+	img := image.NewRGBA(image.Rect(0, 0, 20, 10))
+	// Non-uniform content so Normal ≠ Inverted after processing.
+	for y := 0; y < 10; y++ {
+		for x := 0; x < 20; x++ {
+			img.SetRGBA(x, y, color.RGBA{R: uint8(x * 10), G: uint8(y * 20), B: 128, A: 255})
+		}
+	}
+
+	set, err := PrepareParallelImageSet(img, true)
+	if err != nil {
+		t.Fatalf("PrepareParallelImageSet: %v", err)
+	}
+
+	// Each variant must be a distinct allocation — they encode the image differently.
+	if len(set.Normal) == 0 || len(set.Inverted) == 0 || len(set.BrightText) == 0 || len(set.Color) == 0 {
+		t.Fatal("expected all four variants to be non-empty")
+	}
+	if &set.Normal[0] == &set.Inverted[0] || &set.Normal[0] == &set.BrightText[0] || &set.Normal[0] == &set.Color[0] {
+		t.Fatal("grayscale variants must not share memory — parallel writes to the same buffer would race")
+	}
+}
+
+// TestPrepareParallelImageSet_ConcurrentCallsAreSafe verifies that multiple
+// goroutines can call PrepareParallelImageSet simultaneously on the same image
+// without data races (requires -race in go test).
+func TestPrepareParallelImageSet_ConcurrentCallsAreSafe(t *testing.T) {
+	img := whiteImage(200, 100)
+	const workers = 8
+	errs := make(chan error, workers)
+	for i := 0; i < workers; i++ {
+		go func() {
+			_, err := PrepareParallelImageSet(img, true)
+			errs <- err
+		}()
+	}
+	for i := 0; i < workers; i++ {
+		if err := <-errs; err != nil {
+			t.Errorf("concurrent PrepareParallelImageSet: %v", err)
+		}
+	}
+}
+
+// BenchmarkPrepareParallelImageSet_Grayscale measures the wall-clock time of the
+// parallel preprocessing pass on a full-HD image.  Run with -benchtime=5s to
+// get stable numbers; compare against a sequential baseline by reverting the
+// goroutine dispatch to measure the actual speedup.
+func BenchmarkPrepareParallelImageSet_Grayscale(b *testing.B) {
+	img := image.NewRGBA(image.Rect(0, 0, 1920, 1080))
+	for y := 0; y < 1080; y++ {
+		for x := 0; x < 1920; x++ {
+			img.SetRGBA(x, y, color.RGBA{R: uint8(x), G: uint8(y), B: uint8(x + y), A: 255})
+		}
+	}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if _, err := PrepareParallelImageSet(img, true); err != nil {
+			b.Fatalf("PrepareParallelImageSet: %v", err)
+		}
+	}
+}
+
 // BenchmarkToGrayscaleContrast_RGBA benchmarks the fast path (input is
 // *image.RGBA, the type returned by robotgo screen captures).
 func BenchmarkToGrayscaleContrast_RGBA(b *testing.B) {
@@ -650,5 +715,72 @@ func TestReadFile_WordFields(t *testing.T) {
 	}
 	if w.Confidence != 98.5 {
 		t.Errorf("Unexpected confidence: %f", w.Confidence)
+	}
+}
+
+// =============================================================================
+// Caching tests
+// =============================================================================
+
+func TestHashImageFast_SameImageSameHash(t *testing.T) {
+	img1 := whiteImage(100, 100)
+	img2 := whiteImage(100, 100)
+
+	h1 := HashImageFast(img1)
+	h2 := HashImageFast(img2)
+
+	if h1 != h2 {
+		t.Errorf("Expected same hash for identical images, got %d and %d", h1, h2)
+	}
+
+	// Modify a pixel
+	if rgba, ok := img1.(*image.RGBA); ok {
+		rgba.Set(50, 50, color.Black)
+	}
+	h3 := HashImageFast(img1)
+	if h1 == h3 {
+		t.Errorf("Expected different hash after modifying image, got %d", h3)
+	}
+}
+
+func TestCache_SetAndGet(t *testing.T) {
+	hash := uint64(123456789)
+	res := &Result{Text: "cached result"}
+
+	SetCachedResult(hash, res)
+
+	got := GetCachedResult(hash)
+	if got != res {
+		t.Errorf("Expected to retrieve cached result, got %v", got)
+	}
+
+	gotOther := GetCachedResult(uint64(987654321))
+	if gotOther != nil {
+		t.Errorf("Expected nil for uncached hash, got %v", gotOther)
+	}
+}
+
+func TestReadImage_UsesCachedResultWhenHashMatches(t *testing.T) {
+	cacheMu.Lock()
+	cacheHash = 0
+	cacheResult = nil
+	cacheMu.Unlock()
+	t.Cleanup(func() {
+		cacheMu.Lock()
+		cacheHash = 0
+		cacheResult = nil
+		cacheMu.Unlock()
+	})
+
+	img := whiteImage(64, 32)
+	want := &Result{Text: "from cache"}
+	SetCachedResult(HashImageFast(img), want)
+
+	got, err := ReadImage(img, Options{})
+	if err != nil {
+		t.Fatalf("ReadImage returned error: %v", err)
+	}
+	if got != want {
+		t.Fatalf("ReadImage returned %p, want cached %p", got, want)
 	}
 }
