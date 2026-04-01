@@ -163,6 +163,15 @@
             display: flex;
             gap: 10px;
             margin-bottom: 15px;
+            align-items: center;
+        }
+
+        .input-label {
+            color: #fff;
+            font-weight: 600;
+            font-size: 14px;
+            white-space: nowrap;
+            min-width: 80px;
         }
 
         .test-input {
@@ -469,10 +478,14 @@
         <div class="panel">
             <h2>⌨️ Input Tests</h2>
             <div class="input-group">
+                <label class="input-label" for="textInput">Text Input:</label>
                 <input type="text" class="test-input" id="textInput" placeholder="Type here or use MCP type_text..." oninput="handleInput('text', this.value)">
                 <button class="test-btn info" onclick="clearInput()">Clear</button>
             </div>
-            <textarea class="test-textarea" id="textArea" placeholder="Multi-line text area..." oninput="handleInput('textarea', this.value)"></textarea>
+            <div class="input-group">
+                <label class="input-label" for="textArea">Text Area:</label>
+                <textarea class="test-textarea" id="textArea" placeholder="Multi-line text area..." oninput="handleInput('textarea', this.value)"></textarea>
+            </div>
         </div>
 
         <!-- Checkbox & Radio Panel -->
