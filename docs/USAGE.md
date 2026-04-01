@@ -652,6 +652,19 @@ Use `find_and_click` to locate and click elements by their visible text label â€
 
 > The `scroll` response includes OCR text of the visible area after scrolling â€” no follow-up `read_screen_text` or screenshot needed.
 
+### Bounded search while scrolling
+
+Use `scroll_until_text` when the target is probably off-screen and you want one bounded search call instead of a manual loop:
+
+```json
+[
+  { "tool": "scroll_until_text", "arguments": { "text": "Type here", "direction": "down", "amount": 5, "max_scrolls": 8 } },
+  { "tool": "click_at",          "arguments": { "x": 640, "y": 412 } }
+]
+```
+
+> `scroll_until_text` searches the current viewport first, then scrolls and retries. It stops early if the viewport stops changing, which prevents endless up/down search thrash.
+
 ### Form navigation with keyboard
 
 ```json
@@ -734,6 +747,24 @@ Use `find_and_click` to locate and click elements by their visible text label â€
 - `amount` (number, optional): Scroll steps, default `3`
 
 **Returns:** `{ "success": true, "x": 400, "y": 300, "direction": "down", "amount": 3 }`
+
+---
+
+### Tool: scroll_until_text
+
+**Arguments:**
+- `text` (string, required): Text to search for while scrolling
+- `direction` (string, required): `"up"`, `"down"`, `"left"`, or `"right"`
+- `amount` (number, optional): Scroll steps per attempt, default `5`
+- `max_scrolls` (number, optional): Maximum scroll attempts after the initial viewport check, default `8`
+- `nth` (number, optional): Match the Nth occurrence, default `1`
+- `scroll_x` / `scroll_y` (number, optional): Scroll anchor point, default screen center
+- `x`, `y`, `width`, `height` (number, optional): OCR search region, default full screen
+- `grayscale` (boolean, optional): Use grayscale OCR, default `true`
+
+**Returns on success:** `{"success": true, "found": "Type here", "box": {...}, "center_x": 640, "center_y": 412, "scroll_count": 2, "direction": "down", "amount": 5, "pass": "normal", "visible_text": "..." }`
+
+**Returns on failure:** an error that includes the last `visible_text`, or an early-stop error when the viewport stops changing.
 
 ---
 

@@ -35,6 +35,7 @@ Ghost MCP allows AI assistants like Claude to control your computer's mouse, key
 | `click_at` | Move mouse to coordinates and click in one operation. Preferred over separate move+click. | `x`, `y`, `button` (optional, default left) |
 | `double_click` | Move mouse to coordinates and double-click. Use for opening files or activating items. | `x`, `y` |
 | `scroll` | Move mouse to coordinates and scroll the wheel. | `x`, `y`, `direction` (up/down/left/right), `amount` (optional, default 3) |
+| `scroll_until_text` | Scroll and OCR-search in one bounded call. Stops when found, after `max_scrolls`, or when the viewport stops changing. | `text`, `direction`, `amount`, `max_scrolls`, `scroll_x`, `scroll_y`, `x`, `y`, `width`, `height`, `nth`, `grayscale` |
 | `type_text` | Type text via keyboard. Use for input fields. | `text`, `press_enter` (optional, hit enter after typing) |
 | `click_and_type` | Move mouse, click, wait slightly, and type text. Fast unified atomic operation. | `x`, `y`, `type_text`, `button`, `delay_ms`, `press_enter` |
 | `press_key` | Press a single key. Use for Enter, Tab, shortcuts, etc. | `key` |
@@ -58,6 +59,7 @@ Ghost MCP allows AI assistants like Claude to control your computer's mouse, key
 - **`find_and_click_all`** - Click 3 buttons with ONE call instead of 3+ verification loops (75% faster)
 - **`wait_for_text`** - Properly verify UI state changes instead of guessing with screenshots
 - **`find_elements`** - Discover all clickable elements 10x faster than taking screenshots
+- **`scroll_until_text`** - Search long pages with one bounded tool call instead of repeated scroll + OCR loops
 
 ## Prerequisites
 

@@ -12,6 +12,7 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
+	"image"
 	"image/jpeg"
 	"image/png"
 	"math"
@@ -62,6 +63,16 @@ type serverState struct {
 var state = &serverState{
 	shutdownChan: make(chan struct{}),
 }
+
+var (
+	uiGetScreenSize = robotgo.GetScreenSize
+	uiMoveMouse     = func(x, y int) { robotgo.Move(x, y) }
+	uiScrollDir     = func(amount int, direction string) { robotgo.ScrollDir(amount, direction) }
+	uiCaptureImage  = func(x, y, width, height int) (image.Image, error) { return robotgo.CaptureImg(x, y, width, height) }
+	uiReadImage     = ocr.ReadImage
+	uiCheckFailsafe = checkFailsafe
+	uiFindText      = parallelFindText
+)
 
 // =============================================================================
 // FAILSAFE
@@ -283,7 +294,7 @@ func handleDoubleClick(ctx context.Context, request mcp.CallToolRequest) (*mcp.C
 func handleScroll(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	logging.Debug("Handling scroll request")
 
-	screenW, screenH := robotgo.GetScreenSize()
+	screenW, screenH := uiGetScreenSize()
 
 	// x and y are optional — default to screen centre so callers can omit them
 	// for standard page scrolling.
@@ -323,13 +334,13 @@ func handleScroll(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallTo
 	}
 
 	logging.Info("ACTION: Moving mouse to (%d, %d) then scrolling %s by %d", x, y, direction, amount)
-	robotgo.Move(x, y)
+	uiMoveMouse(x, y)
 
-	if err := checkFailsafe(); err != nil {
+	if err := uiCheckFailsafe(); err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	robotgo.ScrollDir(amount, direction)
+	uiScrollDir(amount, direction)
 	logging.Info("ACTION COMPLETE: Scrolled %s by %d at (%d, %d)", direction, amount, x, y)
 
 	// Run a quick OCR pass on the centre half of the screen so the AI knows
@@ -337,8 +348,8 @@ func handleScroll(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallTo
 	visibleText := ""
 	stripY := screenH / 4
 	stripH := screenH / 2
-	if img, captureErr := robotgo.CaptureImg(0, stripY, screenW, stripH); captureErr == nil {
-		if ocrResult, ocrErr := ocr.ReadImage(img, ocr.Options{}); ocrErr == nil {
+	if img, captureErr := uiCaptureImage(0, stripY, screenW, stripH); captureErr == nil {
+		if ocrResult, ocrErr := uiReadImage(img, ocr.Options{}); ocrErr == nil {
 			visibleText = ocrResult.Text
 		} else {
 			logging.Debug("scroll OCR failed (non-fatal): %v", ocrErr)
@@ -351,6 +362,142 @@ func handleScroll(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallTo
 		`{"success": true, "x": %d, "y": %d, "direction": "%s", "amount": %d, "visible_text": %q}`,
 		x, y, direction, amount, visibleText,
 	)), nil
+}
+
+func handleScrollUntilText(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	logging.Debug("Handling scroll_until_text request")
+
+	searchText, err := getStringParam(request, "text")
+	if err != nil {
+		logging.Error("Invalid text parameter: %v", err)
+		return mcp.NewToolResultError(fmt.Sprintf("invalid text parameter: %v", err)), nil
+	}
+
+	direction, err := getStringParam(request, "direction")
+	if err != nil {
+		logging.Error("Invalid direction parameter: %v", err)
+		return mcp.NewToolResultError(fmt.Sprintf("invalid direction parameter: %v", err)), nil
+	}
+
+	validDirections := map[string]bool{"up": true, "down": true, "left": true, "right": true}
+	if !validDirections[direction] {
+		err := fmt.Errorf("invalid direction '%s', must be 'up', 'down', 'left', or 'right'", direction)
+		logging.Error("%v", err)
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	amount := 5
+	if a, err := getIntParam(request, "amount"); err == nil {
+		if a <= 0 {
+			return mcp.NewToolResultError("amount must be positive"), nil
+		}
+		amount = a
+	}
+
+	maxScrolls := 8
+	if n, err := getIntParam(request, "max_scrolls"); err == nil {
+		if n <= 0 {
+			return mcp.NewToolResultError("max_scrolls must be positive"), nil
+		}
+		maxScrolls = n
+	}
+
+	nth := 1
+	if n, err := getIntParam(request, "nth"); err == nil {
+		if n <= 0 {
+			return mcp.NewToolResultError("nth must be >= 1"), nil
+		}
+		nth = n
+	}
+
+	grayscale := getBoolParam(request, "grayscale", true)
+
+	screenW, screenH := uiGetScreenSize()
+
+	scrollX := screenW / 2
+	scrollY := screenH / 2
+	if v, err := getIntParam(request, "scroll_x"); err == nil {
+		scrollX = v
+	}
+	if v, err := getIntParam(request, "scroll_y"); err == nil {
+		scrollY = v
+	}
+	if err := validate.Coords(scrollX, scrollY, screenW, screenH); err != nil {
+		logging.Error("Scroll coordinate validation failed: %v", err)
+		return mcp.NewToolResultError(fmt.Sprintf("invalid scroll coordinates: %v", err)), nil
+	}
+
+	regionX, regionY := 0, 0
+	regionW, regionH := screenW, screenH
+	if v, err := getIntParam(request, "x"); err == nil {
+		regionX = v
+	}
+	if v, err := getIntParam(request, "y"); err == nil {
+		regionY = v
+	}
+	if v, err := getIntParam(request, "width"); err == nil {
+		regionW = v
+	}
+	if v, err := getIntParam(request, "height"); err == nil {
+		regionH = v
+	}
+	if err := validate.ScreenRegion(regionX, regionY, regionW, regionH, screenW, screenH); err != nil {
+		logging.Error("Screen region validation failed: %v", err)
+		return mcp.NewToolResultError(fmt.Sprintf("invalid screen region: %v", err)), nil
+	}
+
+	lastVisibleText := ""
+	for attempt := 0; attempt <= maxScrolls; attempt++ {
+		img, captureErr := uiCaptureImage(regionX, regionY, regionW, regionH)
+		if captureErr != nil {
+			logging.Error("Failed to capture screen: %v", captureErr)
+			return mcp.NewToolResultError(fmt.Sprintf("failed to capture screen: %v", captureErr)), nil
+		}
+
+		visibleText := ""
+		if ocrResult, ocrErr := uiReadImage(img, ocr.Options{Color: !grayscale}); ocrErr == nil {
+			visibleText = ocrResult.Text
+		} else {
+			logging.Debug("scroll_until_text visible-text OCR failed (non-fatal): %v", ocrErr)
+		}
+
+		minX, minY, maxX, maxY, found, passName := uiFindText(ctx, img, searchText, nth, grayscale)
+		if found {
+			cx := regionX + (minX+maxX)/2
+			cy := regionY + (minY+maxY)/2
+			logging.Info("scroll_until_text: found %q after %d scrolls via %s pass", searchText, attempt, passName)
+			return mcp.NewToolResultText(fmt.Sprintf(
+				`{"success":true,"found":%q,"box":{"x":%d,"y":%d,"width":%d,"height":%d},"center_x":%d,"center_y":%d,"scroll_count":%d,"direction":%q,"amount":%d,"pass":%q,"visible_text":%q}`,
+				searchText, regionX+minX, regionY+minY, maxX-minX, maxY-minY, cx, cy, attempt, direction, amount, passName, visibleText,
+			)), nil
+		}
+
+		if attempt == maxScrolls {
+			logging.Info("scroll_until_text: text %q not found after max_scrolls=%d", searchText, maxScrolls)
+			return mcp.NewToolResultError(fmt.Sprintf(
+				`text %q not found after %d scrolls (%s by %d). Last visible_text: %q`,
+				searchText, maxScrolls, direction, amount, visibleText,
+			)), nil
+		}
+
+		if attempt > 0 && visibleText != "" && visibleText == lastVisibleText {
+			logging.Info("scroll_until_text: viewport repeated after %d scrolls while searching for %q", attempt, searchText)
+			return mcp.NewToolResultError(fmt.Sprintf(
+				`text %q not found after %d scrolls; viewport stopped changing, likely reached the end. Last visible_text: %q`,
+				searchText, attempt, visibleText,
+			)), nil
+		}
+		lastVisibleText = visibleText
+
+		logging.Info("scroll_until_text: attempt %d/%d did not find %q, scrolling %s by %d", attempt+1, maxScrolls, searchText, direction, amount)
+		uiMoveMouse(scrollX, scrollY)
+		if err := uiCheckFailsafe(); err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		uiScrollDir(amount, direction)
+	}
+
+	return mcp.NewToolResultError("unreachable scroll_until_text state"), nil
 }
 
 func handleTypeText(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -761,6 +908,43 @@ x and y are optional and default to the screen centre, which is correct for most
 		mcp.WithString("direction", mcp.Description("Scroll direction: 'up', 'down', 'left', or 'right'."), mcp.Required()),
 		mcp.WithNumber("amount", mcp.Description("Number of scroll steps (default: 3 ≈ 1/4 screen). amount=5 ≈ half screen. amount=10 jumps far — avoid for precise navigation.")),
 	), handleScroll)
+
+	mcpServer.AddTool(mcp.NewTool("scroll_until_text",
+		mcp.WithDescription(`BOUNDED SEARCH TOOL: scrolls and OCR-searches for text in one call. Use this instead of manually chaining scroll + read_screen_text + screenshots.
+
+🎯 WHEN TO USE:
+- You need to find text that is likely off-screen in a scrollable page, list, or panel
+- You want a bounded search with fewer tool calls and no manual scroll loop
+- You want to stop automatically when the viewport stops changing
+
+HOW IT WORKS:
+1. OCR-searches the current viewport first
+2. If not found, scrolls in the requested direction
+3. Repeats search up to max_scrolls times
+4. Stops early if the viewport text stops changing (likely end reached)
+5. Returns the found text box and center coordinates
+
+SPEED TIPS:
+- Use x/y/width/height to search only the relevant panel or form area
+- amount=5 is the default because it moves faster than fine scrolling without overshooting as badly as 10
+- Prefer this over repeated scroll calls when hunting for a label or input field on a long page
+
+RETURNS:
+- On success: {success, found, box, center_x, center_y, scroll_count, direction, amount, pass, visible_text}
+- On failure: error with the last visible_text to explain what was on screen`),
+		mcp.WithString("text", mcp.Description("Text to search for while scrolling (case-insensitive substring match)."), mcp.Required()),
+		mcp.WithString("direction", mcp.Description("Scroll direction: 'up', 'down', 'left', or 'right'."), mcp.Required()),
+		mcp.WithNumber("amount", mcp.Description("Scroll steps per attempt (default: 5). amount=3 is finer, amount=10 jumps farther but may overshoot.")),
+		mcp.WithNumber("max_scrolls", mcp.Description("Maximum number of scroll attempts after the initial viewport check (default: 8).")),
+		mcp.WithNumber("nth", mcp.Description("Which occurrence to match if the text appears multiple times (default: 1).")),
+		mcp.WithNumber("scroll_x", mcp.Description("X coordinate to scroll at (default: screen center). Useful for scrolling a specific panel.")),
+		mcp.WithNumber("scroll_y", mcp.Description("Y coordinate to scroll at (default: screen center). Useful for scrolling a specific panel.")),
+		mcp.WithNumber("x", mcp.Description("X coordinate of the OCR search region (default: 0 = full screen).")),
+		mcp.WithNumber("y", mcp.Description("Y coordinate of the OCR search region (default: 0 = full screen).")),
+		mcp.WithNumber("width", mcp.Description("Width of the OCR search region (default: full screen). Smaller regions are faster.")),
+		mcp.WithNumber("height", mcp.Description("Height of the OCR search region (default: full screen). Smaller regions are faster.")),
+		mcp.WithBoolean("grayscale", mcp.Description("Use grayscale OCR (default: true). Set false when colour context matters.")),
+	), handleScrollUntilText)
 
 	mcpServer.AddTool(mcp.NewTool("type_text",
 		mcp.WithDescription(`Type text as keyboard input into the currently focused element. Click the target input field first to ensure it has focus before typing.

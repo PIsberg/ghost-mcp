@@ -340,6 +340,16 @@ The server handles requests sequentially via ServeStdio(), which is appropriate 
 | **RobotGo Calls** | `robotgo.Move(x, y)`, `robotgo.ScrollDir(amount, direction)` |
 | **Failsafe** | ✓ Checked after move |
 
+### scroll_until_text
+
+| Aspect | Details |
+|--------|---------|
+| **Purpose** | Search the current viewport for text, then scroll and retry in one bounded tool call |
+| **Parameters** | `text` (string, required), `direction` ("up"/"down"/"left"/"right"), `amount` (int, default 5), `max_scrolls` (int, default 8), `nth` (int, default 1), `scroll_x`/`scroll_y` (optional), OCR region `x`/`y`/`width`/`height` (optional), `grayscale` (bool, default true) |
+| **Returns** | `{"success": bool, "found": string, "box": {...}, "center_x": int, "center_y": int, "scroll_count": int, "direction": string, "amount": int, "pass": string, "visible_text": string}` |
+| **RobotGo Calls** | `robotgo.CaptureImg(...)`, `robotgo.Move(scroll_x, scroll_y)`, `robotgo.ScrollDir(amount, direction)` repeated up to `max_scrolls` |
+| **Failsafe** | ✓ Checked before each scroll |
+
 ### type_text
 
 | Aspect | Details |

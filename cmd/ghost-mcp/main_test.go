@@ -8,12 +8,14 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"image"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/ghost-mcp/internal/audit"
 	"github.com/ghost-mcp/internal/logging"
+	"github.com/ghost-mcp/internal/ocr"
 	"github.com/ghost-mcp/internal/validate"
 	"github.com/mark3labs/mcp-go/mcp"
 )
@@ -1174,6 +1176,217 @@ func TestHandleScroll_NegativeCoords(t *testing.T) {
 	}
 	if !result.IsError {
 		t.Error("Expected tool error for negative x coordinate")
+	}
+}
+
+func TestHandleScrollUntilText_FindsTextAfterScrolling(t *testing.T) {
+	originalGetScreenSize := uiGetScreenSize
+	originalCaptureImage := uiCaptureImage
+	originalReadImage := uiReadImage
+	originalFindText := uiFindText
+	originalMoveMouse := uiMoveMouse
+	originalScrollDir := uiScrollDir
+	originalCheckFailsafe := uiCheckFailsafe
+	t.Cleanup(func() {
+		uiGetScreenSize = originalGetScreenSize
+		uiCaptureImage = originalCaptureImage
+		uiReadImage = originalReadImage
+		uiFindText = originalFindText
+		uiMoveMouse = originalMoveMouse
+		uiScrollDir = originalScrollDir
+		uiCheckFailsafe = originalCheckFailsafe
+	})
+
+	uiGetScreenSize = func() (int, int) { return 1280, 720 }
+	uiCheckFailsafe = func() error { return nil }
+	uiCaptureImage = func(x, y, width, height int) (image.Image, error) {
+		return image.NewRGBA(image.Rect(0, 0, width, height)), nil
+	}
+
+	visibleTexts := []string{"Header only", "More content", "Target field here"}
+	var readCalls int
+	uiReadImage = func(image.Image, ocr.Options) (*ocr.Result, error) {
+		text := visibleTexts[readCalls]
+		readCalls++
+		return &ocr.Result{Text: text}, nil
+	}
+
+	var findCalls int
+	uiFindText = func(ctx context.Context, img image.Image, searchText string, nth int, grayscale bool) (int, int, int, int, bool, string) {
+		findCalls++
+		if findCalls == 3 {
+			return 10, 20, 110, 60, true, "color"
+		}
+		return 0, 0, 0, 0, false, ""
+	}
+
+	var scrolled []string
+	uiMoveMouse = func(x, y int) {}
+	uiScrollDir = func(amount int, direction string) {
+		scrolled = append(scrolled, direction)
+	}
+
+	req := mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: map[string]interface{}{
+		"text":        "Target field",
+		"direction":   "down",
+		"amount":      float64(5),
+		"max_scrolls": float64(4),
+	}}}
+
+	result, err := handleScrollUntilText(context.Background(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("expected success, got error: %v", result.Content)
+	}
+
+	var payload struct {
+		Success     bool   `json:"success"`
+		Found       string `json:"found"`
+		ScrollCount int    `json:"scroll_count"`
+		Direction   string `json:"direction"`
+		Amount      int    `json:"amount"`
+		Pass        string `json:"pass"`
+		CenterX     int    `json:"center_x"`
+		CenterY     int    `json:"center_y"`
+	}
+	if err := json.Unmarshal([]byte(result.Content[0].(mcp.TextContent).Text), &payload); err != nil {
+		t.Fatalf("unmarshal result: %v", err)
+	}
+	if !payload.Success || payload.Found != "Target field" {
+		t.Fatalf("unexpected payload: %+v", payload)
+	}
+	if payload.ScrollCount != 2 {
+		t.Fatalf("ScrollCount = %d, want 2", payload.ScrollCount)
+	}
+	if payload.Direction != "down" || payload.Amount != 5 || payload.Pass != "color" {
+		t.Fatalf("unexpected search metadata: %+v", payload)
+	}
+	if len(scrolled) != 2 {
+		t.Fatalf("scroll calls = %d, want 2", len(scrolled))
+	}
+}
+
+func TestHandleScrollUntilText_StopsWhenViewportRepeats(t *testing.T) {
+	originalGetScreenSize := uiGetScreenSize
+	originalCaptureImage := uiCaptureImage
+	originalReadImage := uiReadImage
+	originalFindText := uiFindText
+	originalMoveMouse := uiMoveMouse
+	originalScrollDir := uiScrollDir
+	originalCheckFailsafe := uiCheckFailsafe
+	t.Cleanup(func() {
+		uiGetScreenSize = originalGetScreenSize
+		uiCaptureImage = originalCaptureImage
+		uiReadImage = originalReadImage
+		uiFindText = originalFindText
+		uiMoveMouse = originalMoveMouse
+		uiScrollDir = originalScrollDir
+		uiCheckFailsafe = originalCheckFailsafe
+	})
+
+	uiGetScreenSize = func() (int, int) { return 1280, 720 }
+	uiCheckFailsafe = func() error { return nil }
+	uiCaptureImage = func(x, y, width, height int) (image.Image, error) {
+		return image.NewRGBA(image.Rect(0, 0, width, height)), nil
+	}
+	visibleTexts := []string{"same viewport", "same viewport"}
+	var readCalls int
+	uiReadImage = func(image.Image, ocr.Options) (*ocr.Result, error) {
+		text := visibleTexts[readCalls]
+		readCalls++
+		return &ocr.Result{Text: text}, nil
+	}
+	uiFindText = func(context.Context, image.Image, string, int, bool) (int, int, int, int, bool, string) {
+		return 0, 0, 0, 0, false, ""
+	}
+	var scrollCalls int
+	uiMoveMouse = func(x, y int) {}
+	uiScrollDir = func(amount int, direction string) {
+		scrollCalls++
+	}
+
+	req := mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: map[string]interface{}{
+		"text":        "Missing",
+		"direction":   "down",
+		"max_scrolls": float64(4),
+	}}}
+
+	result, err := handleScrollUntilText(context.Background(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !result.IsError {
+		t.Fatal("expected error result")
+	}
+	text := result.Content[0].(mcp.TextContent).Text
+	if !strings.Contains(text, "viewport stopped changing") {
+		t.Fatalf("unexpected error text: %s", text)
+	}
+	if scrollCalls != 1 {
+		t.Fatalf("scroll calls = %d, want 1", scrollCalls)
+	}
+}
+
+func TestHandleScrollUntilText_ReturnsMaxScrollsError(t *testing.T) {
+	originalGetScreenSize := uiGetScreenSize
+	originalCaptureImage := uiCaptureImage
+	originalReadImage := uiReadImage
+	originalFindText := uiFindText
+	originalMoveMouse := uiMoveMouse
+	originalScrollDir := uiScrollDir
+	originalCheckFailsafe := uiCheckFailsafe
+	t.Cleanup(func() {
+		uiGetScreenSize = originalGetScreenSize
+		uiCaptureImage = originalCaptureImage
+		uiReadImage = originalReadImage
+		uiFindText = originalFindText
+		uiMoveMouse = originalMoveMouse
+		uiScrollDir = originalScrollDir
+		uiCheckFailsafe = originalCheckFailsafe
+	})
+
+	uiGetScreenSize = func() (int, int) { return 1280, 720 }
+	uiCheckFailsafe = func() error { return nil }
+	uiCaptureImage = func(x, y, width, height int) (image.Image, error) {
+		return image.NewRGBA(image.Rect(0, 0, width, height)), nil
+	}
+	visibleTexts := []string{"one", "two", "three"}
+	var readCalls int
+	uiReadImage = func(image.Image, ocr.Options) (*ocr.Result, error) {
+		text := visibleTexts[readCalls]
+		readCalls++
+		return &ocr.Result{Text: text}, nil
+	}
+	uiFindText = func(context.Context, image.Image, string, int, bool) (int, int, int, int, bool, string) {
+		return 0, 0, 0, 0, false, ""
+	}
+	var scrollCalls int
+	uiMoveMouse = func(x, y int) {}
+	uiScrollDir = func(amount int, direction string) {
+		scrollCalls++
+	}
+
+	req := mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: map[string]interface{}{
+		"text":        "Missing",
+		"direction":   "down",
+		"max_scrolls": float64(2),
+	}}}
+
+	result, err := handleScrollUntilText(context.Background(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !result.IsError {
+		t.Fatal("expected error result")
+	}
+	text := result.Content[0].(mcp.TextContent).Text
+	if !strings.Contains(text, "not found after 2 scrolls") {
+		t.Fatalf("unexpected error text: %s", text)
+	}
+	if scrollCalls != 2 {
+		t.Fatalf("scroll calls = %d, want 2", scrollCalls)
 	}
 }
 
