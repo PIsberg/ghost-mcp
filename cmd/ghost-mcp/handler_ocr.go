@@ -32,6 +32,164 @@ const (
 	waitForTextPollInterval = 100 * time.Millisecond
 )
 
+// =============================================================================
+// REGION CACHE FOR OPTIMIZATION
+// =============================================================================
+
+// RegionCacheEntry stores a cached region for a text label
+type RegionCacheEntry struct {
+	X         int       `json:"x"`
+	Y         int       `json:"y"`
+	Width     int       `json:"width"`
+	Height    int       `json:"height"`
+	LastUsed  time.Time `json:"last_used"`
+	HitCount  int       `json:"hit_count"`
+	ScreenW   int       `json:"screen_w"` // Screen width when cached
+	ScreenH   int       `json:"screen_h"` // Screen height when cached
+}
+
+// RegionCache stores frequently used UI element regions
+type RegionCache struct {
+	mu        sync.RWMutex
+	entries   map[string]*RegionCacheEntry
+	maxSize   int           // Maximum number of entries
+	maxAge    time.Duration // Maximum age before eviction
+	stats     CacheStats
+}
+
+// CacheStats tracks cache performance
+type CacheStats struct {
+	Hits      int64 `json:"hits"`
+	Misses    int64 `json:"misses"`
+	Evictions int64 `json:"evictions"`
+	Updates   int64 `json:"updates"`
+}
+
+// Global region cache instance
+var regionCache = &RegionCache{
+	entries: make(map[string]*RegionCacheEntry),
+	maxSize: 100,
+	maxAge:  24 * time.Hour,
+}
+
+// Get retrieves a cached region for the given text label
+// Returns the entry and a bool indicating if it was found and is still valid
+func (rc *RegionCache) Get(text string, screenW, screenH int) (*RegionCacheEntry, bool) {
+	rc.mu.RLock()
+	defer rc.mu.RUnlock()
+
+	entry, exists := rc.entries[text]
+	if !exists {
+		return nil, false
+	}
+
+	// Check if entry is still valid (screen resolution hasn't changed)
+	if entry.ScreenW != screenW || entry.ScreenH != screenH {
+		return nil, false
+	}
+
+	// Check if entry has expired
+	if time.Since(entry.LastUsed) > rc.maxAge {
+		return nil, false
+	}
+
+	return entry, true
+}
+
+// Put stores or updates a region cache entry
+func (rc *RegionCache) Put(text string, x, y, width, height, screenW, screenH int) {
+	rc.mu.Lock()
+	defer rc.mu.Unlock()
+
+	// Check if we need to evict entries
+	if len(rc.entries) >= rc.maxSize {
+		rc.evictOldest()
+	}
+
+	entry, exists := rc.entries[text]
+	if exists {
+		// Update existing entry
+		entry.X = x
+		entry.Y = y
+		entry.Width = width
+		entry.Height = height
+		entry.LastUsed = time.Now()
+		entry.HitCount++
+		entry.ScreenW = screenW
+		entry.ScreenH = screenH
+		rc.stats.Updates++
+	} else {
+		// Create new entry
+		rc.entries[text] = &RegionCacheEntry{
+			X:        x,
+			Y:        y,
+			Width:    width,
+			Height:   height,
+			LastUsed: time.Now(),
+			HitCount: 0,
+			ScreenW:  screenW,
+			ScreenH:  screenH,
+		}
+	}
+}
+
+// evictOldest removes the least recently used entry
+// Must be called with rc.mu.Lock() held
+func (rc *RegionCache) evictOldest() {
+	if len(rc.entries) == 0 {
+		return
+	}
+
+	var oldestKey string
+	var oldestTime time.Time = time.Now()
+
+	for key, entry := range rc.entries {
+		if entry.LastUsed.Before(oldestTime) {
+			oldestTime = entry.LastUsed
+			oldestKey = key
+		}
+	}
+
+	if oldestKey != "" {
+		delete(rc.entries, oldestKey)
+		rc.stats.Evictions++
+	}
+}
+
+// RecordHit records a cache hit
+func (rc *RegionCache) RecordHit() {
+	rc.mu.Lock()
+	defer rc.mu.Unlock()
+	rc.stats.Hits++
+}
+
+// RecordMiss records a cache miss
+func (rc *RegionCache) RecordMiss() {
+	rc.mu.Lock()
+	defer rc.mu.Unlock()
+	rc.stats.Misses++
+}
+
+// GetStats returns current cache statistics
+func (rc *RegionCache) GetStats() CacheStats {
+	rc.mu.RLock()
+	defer rc.mu.RUnlock()
+	return rc.stats
+}
+
+// Clear clears all cache entries
+func (rc *RegionCache) Clear() {
+	rc.mu.Lock()
+	defer rc.mu.Unlock()
+	rc.entries = make(map[string]*RegionCacheEntry)
+}
+
+// normalizeText normalizes text for cache key lookup
+// Converts to lowercase and trims whitespace for consistent matching
+func normalizeText(text string) string {
+	return strings.ToLower(strings.TrimSpace(text))
+}
+
 
 
 func handleFindAndClick(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -65,22 +223,48 @@ func handleFindAndClick(ctx context.Context, request mcp.CallToolRequest) (*mcp.
 
 	screenW, screenH := robotgo.GetScreenSize()
 
-	// Optional region — defaults to full screen.
+	// Check region cache first (only if user didn't specify custom region)
+	userSpecifiedRegion := false
 	regionX := 0
 	regionY := 0
 	regionW := screenW
 	regionH := screenH
+
 	if v, err := getIntParam(request, "x"); err == nil {
 		regionX = v
+		userSpecifiedRegion = true
 	}
 	if v, err := getIntParam(request, "y"); err == nil {
 		regionY = v
+		userSpecifiedRegion = true
 	}
 	if v, err := getIntParam(request, "width"); err == nil {
 		regionW = v
+		userSpecifiedRegion = true
 	}
 	if v, err := getIntParam(request, "height"); err == nil {
 		regionH = v
+		userSpecifiedRegion = true
+	}
+
+	// Try cache lookup only if no custom region specified
+	cachedRegion := ""
+	if !userSpecifiedRegion {
+		normalizedText := normalizeText(searchText)
+		if entry, found := regionCache.Get(normalizedText, screenW, screenH); found {
+			// Use cached region with small padding
+			padding := 20
+			regionX = max(0, entry.X-padding)
+			regionY = max(0, entry.Y-padding)
+			regionW = min(screenW-entry.X, entry.Width+2*padding)
+			regionH = min(screenH-entry.Y, entry.Height+2*padding)
+			cachedRegion = fmt.Sprintf("cached (%d,%d) %dx%d", entry.X, entry.Y, entry.Width, entry.Height)
+			regionCache.RecordHit()
+			logging.Info("REGION CACHE HIT: %q -> %s (hits=%d)", normalizedText, cachedRegion, regionCache.GetStats().Hits)
+		} else {
+			regionCache.RecordMiss()
+			logging.Info("REGION CACHE MISS: %q (misses=%d)", normalizedText, regionCache.GetStats().Misses)
+		}
 	}
 
 	if err := validate.ScreenRegion(regionX, regionY, regionW, regionH, screenW, screenH); err != nil {
@@ -88,7 +272,11 @@ func handleFindAndClick(ctx context.Context, request mcp.CallToolRequest) (*mcp.
 		return mcp.NewToolResultError(fmt.Sprintf("invalid screen region: %v", err)), nil
 	}
 
-	logging.Info("find_and_click: OCR region (%d,%d) %dx%d for text %q", regionX, regionY, regionW, regionH, searchText)
+	if cachedRegion != "" {
+		logging.Info("find_and_click: using %s, scanning region (%d,%d) %dx%d for text %q", cachedRegion, regionX, regionY, regionW, regionH, searchText)
+	} else {
+		logging.Info("find_and_click: OCR region (%d,%d) %dx%d for text %q", regionX, regionY, regionW, regionH, searchText)
+	}
 
 	// Capture region for OCR.
 	img, captureErr := robotgo.CaptureImg(regionX, regionY, regionW, regionH)
@@ -113,6 +301,13 @@ func handleFindAndClick(ctx context.Context, request mcp.CallToolRequest) (*mcp.
 
 	if err := validate.Coords(cx, cy, screenW, screenH); err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("found text but center out of bounds: %v", err)), nil
+	}
+
+	// Update cache with found region (only if not from cache and not user-specified)
+	if cachedRegion == "" && !userSpecifiedRegion {
+		normalizedText := normalizeText(searchText)
+		regionCache.Put(normalizedText, regionX+minX, regionY+minY, maxX-minX, maxY-minY, screenW, screenH)
+		logging.Info("REGION CACHE UPDATE: %q -> (%d,%d) %dx%d", normalizedText, regionX+minX, regionY+minY, maxX-minX, maxY-minY)
 	}
 
 	logging.Info("ACTION: Found %q (occurrence %d) via %s pass at box (%d,%d)-(%d,%d), clicking center (%d,%d) with %s",
@@ -1078,4 +1273,42 @@ func parallelFindPreparedText(ctx context.Context, prepared *ocr.PreparedImageSe
 		return m.minX, m.minY, m.maxX, m.maxY, true, m.pass
 	}
 	return 0, 0, 0, 0, false, ""
+}
+
+// =============================================================================
+// REGION CACHE MANAGEMENT TOOLS
+// =============================================================================
+
+func handleGetRegionCacheStats(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	logging.Debug("Handling get_region_cache_stats request")
+
+	stats := regionCache.GetStats()
+	regionCache.mu.RLock()
+	entryCount := len(regionCache.entries)
+	regionCache.mu.RUnlock()
+
+	hitRate := float64(0)
+	total := stats.Hits + stats.Misses
+	if total > 0 {
+		hitRate = float64(stats.Hits) / float64(total) * 100
+	}
+
+	return mcp.NewToolResultText(fmt.Sprintf(
+		`{"entries":%d,"hits":%d,"misses":%d,"hit_rate":%.1f,"evictions":%d,"updates":%d}`,
+		entryCount, stats.Hits, stats.Misses, hitRate, stats.Evictions, stats.Updates,
+	)), nil
+}
+
+func handleClearRegionCache(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	logging.Debug("Handling clear_region_cache request")
+
+	stats := regionCache.GetStats()
+	regionCache.mu.RLock()
+	entryCount := len(regionCache.entries)
+	regionCache.mu.RUnlock()
+	regionCache.Clear()
+
+	logging.Info("REGION CACHE CLEARED: Had %d entries, %d hits, %d misses", entryCount, stats.Hits, stats.Misses)
+
+	return mcp.NewToolResultText(`{"success":true,"message":"Region cache cleared"}`), nil
 }

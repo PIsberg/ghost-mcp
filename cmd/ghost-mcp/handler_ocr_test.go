@@ -512,3 +512,287 @@ func TestParallelFindText_PreprocessFailureReturnsNotFound(t *testing.T) {
 		t.Fatalf("pass = %q, want empty", pass)
 	}
 }
+
+// =============================================================================
+// REGION CACHE TESTS
+// =============================================================================
+
+// TestRegionCache_BasicPutGet tests basic cache put and get operations
+func TestRegionCache_BasicPutGet(t *testing.T) {
+	cache := &RegionCache{
+		entries: make(map[string]*RegionCacheEntry),
+		maxSize: 100,
+		maxAge:  24 * time.Hour,
+	}
+
+	// Put an entry
+	cache.Put("save", 100, 200, 80, 40, 1920, 1080)
+
+	// Get the entry
+	entry, found := cache.Get("save", 1920, 1080)
+	if !found {
+		t.Fatal("Expected to find cached entry")
+	}
+	if entry.X != 100 || entry.Y != 200 || entry.Width != 80 || entry.Height != 40 {
+		t.Errorf("Expected (100,200) 80x40, got (%d,%d) %dx%d", entry.X, entry.Y, entry.Width, entry.Height)
+	}
+	if entry.ScreenW != 1920 || entry.ScreenH != 1080 {
+		t.Errorf("Expected screen size 1920x1080, got %dx%d", entry.ScreenW, entry.ScreenH)
+	}
+}
+
+// TestRegionCache_CaseInsensitive tests that cache lookups are case-insensitive
+func TestRegionCache_CaseInsensitive(t *testing.T) {
+	cache := &RegionCache{
+		entries: make(map[string]*RegionCacheEntry),
+		maxSize: 100,
+		maxAge:  24 * time.Hour,
+	}
+
+	// Put with lowercase
+	cache.Put("save", 100, 200, 80, 40, 1920, 1080)
+
+	// Get with different cases
+	cases := []string{"SAVE", "Save", "save", "  SAVE  ", "SaVe"}
+	for _, c := range cases {
+		_, found := cache.Get(c, 1920, 1080)
+		if !found {
+			t.Errorf("Expected to find entry with key %q", c)
+		}
+	}
+}
+
+// TestRegionCache_ScreenResolutionMismatch tests that cache misses on screen resolution change
+func TestRegionCache_ScreenResolutionMismatch(t *testing.T) {
+	cache := &RegionCache{
+		entries: make(map[string]*RegionCacheEntry),
+		maxSize: 100,
+		maxAge:  24 * time.Hour,
+	}
+
+	cache.Put("save", 100, 200, 80, 40, 1920, 1080)
+
+	// Try to get with different screen resolution
+	_, found := cache.Get("save", 2560, 1440)
+	if found {
+		t.Error("Expected cache miss due to screen resolution mismatch")
+	}
+}
+
+// TestRegionCache_Eviction tests LRU eviction when cache is full
+func TestRegionCache_Eviction(t *testing.T) {
+	cache := &RegionCache{
+		entries: make(map[string]*RegionCacheEntry),
+		maxSize: 3,
+		maxAge:  24 * time.Hour,
+	}
+
+	// Add 3 entries
+	cache.Put("first", 10, 10, 50, 50, 1920, 1080)
+	time.Sleep(10 * time.Millisecond)
+	cache.Put("second", 20, 20, 50, 50, 1920, 1080)
+	time.Sleep(10 * time.Millisecond)
+	cache.Put("third", 30, 30, 50, 50, 1920, 1080)
+
+	// Add 4th entry, should evict "first"
+	cache.Put("fourth", 40, 40, 50, 50, 1920, 1080)
+
+	if len(cache.entries) != 3 {
+		t.Errorf("Expected 3 entries, got %d", len(cache.entries))
+	}
+
+	_, foundFirst := cache.entries["first"]
+	_, foundFourth := cache.entries["fourth"]
+
+	if foundFirst {
+		t.Error("Expected 'first' to be evicted")
+	}
+	if !foundFourth {
+		t.Error("Expected 'fourth' to exist")
+	}
+	if cache.stats.Evictions != 1 {
+		t.Errorf("Expected 1 eviction, got %d", cache.stats.Evictions)
+	}
+}
+
+// TestRegionCache_StatsTracking tests that cache statistics are properly tracked
+func TestRegionCache_StatsTracking(t *testing.T) {
+	cache := &RegionCache{
+		entries: make(map[string]*RegionCacheEntry),
+		maxSize: 100,
+		maxAge:  24 * time.Hour,
+	}
+
+	// Initial stats
+	stats := cache.GetStats()
+	if stats.Hits != 0 || stats.Misses != 0 {
+		t.Errorf("Expected initial stats to be 0, got hits=%d, misses=%d", stats.Hits, stats.Misses)
+	}
+
+	// Record hits and misses
+	cache.RecordHit()
+	cache.RecordHit()
+	cache.RecordMiss()
+
+	stats = cache.GetStats()
+	if stats.Hits != 2 {
+		t.Errorf("Expected 2 hits, got %d", stats.Hits)
+	}
+	if stats.Misses != 1 {
+		t.Errorf("Expected 1 miss, got %d", stats.Misses)
+	}
+}
+
+// TestRegionCache_UpdateExisting tests updating an existing entry
+func TestRegionCache_UpdateExisting(t *testing.T) {
+	cache := &RegionCache{
+		entries: make(map[string]*RegionCacheEntry),
+		maxSize: 100,
+		maxAge:  24 * time.Hour,
+	}
+
+	// Initial put
+	cache.Put("save", 100, 200, 80, 40, 1920, 1080)
+	time.Sleep(10 * time.Millisecond)
+
+	// Update
+	cache.Put("save", 150, 250, 90, 45, 1920, 1080)
+
+	entry, found := cache.Get("save", 1920, 1080)
+	if !found {
+		t.Fatal("Expected to find updated entry")
+	}
+	if entry.X != 150 || entry.Y != 250 || entry.Width != 90 || entry.Height != 45 {
+		t.Errorf("Expected updated values, got (%d,%d) %dx%d", entry.X, entry.Y, entry.Width, entry.Height)
+	}
+	if entry.HitCount != 1 {
+		t.Errorf("Expected HitCount=1 after update, got %d", entry.HitCount)
+	}
+}
+
+// TestRegionCache_Clear tests clearing all cache entries
+func TestRegionCache_Clear(t *testing.T) {
+	cache := &RegionCache{
+		entries: make(map[string]*RegionCacheEntry),
+		maxSize: 100,
+		maxAge:  24 * time.Hour,
+	}
+
+	cache.Put("save", 100, 200, 80, 40, 1920, 1080)
+	cache.Put("cancel", 200, 200, 80, 40, 1920, 1080)
+
+	if len(cache.entries) != 2 {
+		t.Errorf("Expected 2 entries, got %d", len(cache.entries))
+	}
+
+	cache.Clear()
+
+	if len(cache.entries) != 0 {
+		t.Errorf("Expected 0 entries after clear, got %d", len(cache.entries))
+	}
+}
+
+// TestNormalizeText tests the normalizeText function
+func TestNormalizeText(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"Save", "save"},
+		{"SAVE", "save"},
+		{"  Save  ", "save"},
+		{"Save Changes", "save changes"},
+		{"", ""},
+	}
+
+	for _, tt := range tests {
+		result := normalizeText(tt.input)
+		if result != tt.expected {
+			t.Errorf("normalizeText(%q) = %q, want %q", tt.input, result, tt.expected)
+		}
+	}
+}
+
+// TestHandleGetRegionCacheStats tests the get_region_cache_stats handler
+func TestHandleGetRegionCacheStats(t *testing.T) {
+	// Reset cache for test
+	originalCache := regionCache
+	regionCache = &RegionCache{
+		entries: make(map[string]*RegionCacheEntry),
+		maxSize: 100,
+		maxAge:  24 * time.Hour,
+	}
+	t.Cleanup(func() {
+		regionCache = originalCache
+	})
+
+	// Add some data
+	regionCache.Put("test", 100, 100, 50, 50, 1920, 1080)
+	regionCache.RecordHit()
+	regionCache.RecordMiss()
+
+	// Call handler
+	result, err := handleGetRegionCacheStats(context.Background(), mcp.CallToolRequest{})
+	if err != nil {
+		t.Fatalf("Handler returned error: %v", err)
+	}
+
+	// Parse result
+	if len(result.Content) != 1 {
+		t.Fatalf("Expected 1 content item, got %d", len(result.Content))
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Fatal("Expected TextContent")
+	}
+
+	// Verify it's valid JSON with expected fields
+	if !strings.Contains(textContent.Text, "entries") {
+		t.Error("Result should contain 'entries' field")
+	}
+	if !strings.Contains(textContent.Text, "hits") {
+		t.Error("Result should contain 'hits' field")
+	}
+	if !strings.Contains(textContent.Text, "hit_rate") {
+		t.Error("Result should contain 'hit_rate' field")
+	}
+}
+
+// TestHandleClearRegionCache tests the clear_region_cache handler
+func TestHandleClearRegionCache(t *testing.T) {
+	// Reset cache for test
+	originalCache := regionCache
+	regionCache = &RegionCache{
+		entries: make(map[string]*RegionCacheEntry),
+		maxSize: 100,
+		maxAge:  24 * time.Hour,
+	}
+	t.Cleanup(func() {
+		regionCache = originalCache
+	})
+
+	// Add some data
+	regionCache.Put("test", 100, 100, 50, 50, 1920, 1080)
+
+	// Call handler
+	result, err := handleClearRegionCache(context.Background(), mcp.CallToolRequest{})
+	if err != nil {
+		t.Fatalf("Handler returned error: %v", err)
+	}
+
+	// Verify cache is cleared
+	if len(regionCache.entries) != 0 {
+		t.Errorf("Expected cache to be cleared, got %d entries", len(regionCache.entries))
+	}
+
+	// Parse result
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Fatal("Expected TextContent")
+	}
+
+	if !strings.Contains(textContent.Text, `"success":true`) {
+		t.Error("Result should indicate success")
+	}
+}

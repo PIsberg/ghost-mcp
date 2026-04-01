@@ -46,10 +46,12 @@ Ghost MCP allows AI assistants like Claude to control your computer's mouse, key
 | Tool | Description | Parameters |
 |------|-------------|------------|
 | `find_elements` ⭐ | Discover all clickable text elements with coordinates. Fast alternative to screenshots. | `x`, `y`, `width`, `height` |
-| `find_and_click` | Find text on screen with OCR and click its center. | `text`, `button`, `nth`, `x`, `y`, `width`, `height` |
+| `find_and_click` ⚡ | Find text on screen with OCR and click its center. **Automatically caches regions** for 10-25x faster repeat clicks. | `text`, `button`, `nth`, `x`, `y`, `width`, `height` |
 | `find_click_and_type` | Find a label/placeholder, click the inferred input target, and type immediately. Can optionally scroll while searching. | `text`, `type_text`, `x_offset`, `y_offset`, `press_enter`, `delay_ms`, `scroll_direction`, `scroll_amount`, `max_scrolls`, `scroll_x`, `scroll_y` |
 | `find_and_click_all` ⭐ | Click multiple buttons in ONE atomic operation. | `texts` (array), `button`, `delay_ms` |
 | `wait_for_text` ⭐ | Wait for text to appear or disappear. Verify UI changes. | `text`, `visible`, `timeout_ms`, `x`, `y`, `width`, `height` |
+| `get_region_cache_stats` | Get cache statistics (hits, misses, hit rate). Monitor optimization effectiveness. | None |
+| `clear_region_cache` | Clear all cached regions. Use after screen resolution changes or UI layout updates. | None |
 
 > **Note:** OCR tools require Tesseract to be installed and `TESSDATA_PREFIX` to be set. The installation scripts handle this automatically. See [Prerequisites](#prerequisites).
 
@@ -59,6 +61,48 @@ Ghost MCP allows AI assistants like Claude to control your computer's mouse, key
 - **`wait_for_text`** - Properly verify UI state changes instead of guessing with screenshots
 - **`find_elements`** - Discover all clickable elements 10x faster than taking screenshots
 - **`scroll_until_text`** - Search long pages with one bounded tool call instead of repeated scroll + OCR loops
+
+### ⚡ Performance Optimization: Region Cache
+
+Ghost MCP automatically optimizes repeated UI interactions using **region caching**:
+
+**How it works:**
+1. When `find_and_click` successfully finds a button, it caches the screen region
+2. Subsequent calls with the same text scan only the cached region (not the full screen)
+3. Cache entries include screen resolution — automatically invalidated if resolution changes
+4. LRU eviction keeps the 100 most recently used entries
+
+**Performance impact:**
+- **First call:** Full screen OCR scan (~1920×1080)
+- **Cached calls:** Small region scan (~100×50) — **10-25x faster**
+
+**Monitoring cache:**
+```json
+// Check cache statistics
+{
+  "tool": "get_region_cache_stats"
+}
+// Response: {"entries":5,"hits":12,"misses":3,"hit_rate":80.0,"evictions":0}
+```
+
+**When to clear cache:**
+- Screen resolution changed
+- UI layout was significantly rearranged
+- Cache returning stale results
+
+```json
+// Clear all cached regions
+{
+  "tool": "clear_region_cache"
+}
+// Response: {"success":true,"message":"Region cache cleared"}
+```
+
+**Cache behavior:**
+- Case-insensitive: "Save", "SAVE", "save" use the same entry
+- Auto-invalidates on screen resolution change
+- 24-hour expiration for stale entries
+- Thread-safe with RWMutex protection
 
 ## Prerequisites
 

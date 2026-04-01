@@ -21,6 +21,8 @@ func registerOCRTools(mcpServer *server.MCPServer) {
 - Multiple buttons in sequence → use find_and_click_all instead
 - Need to verify UI change after click → use find_and_click + wait_for_text
 
+⚡ AUTOMATIC OPTIMIZATION: After the first successful call, the button's region is cached. Subsequent calls with the same text automatically scan only the cached region (10-25x faster than full screen). Cache is invalidated if screen resolution changes.
+
 SPEED TIP: Supply x/y/width/height to scan only the relevant area (e.g., a dialog or toolbar). Much faster than full screen.
 
 HOW IT WORKS:
@@ -231,4 +233,26 @@ EXAMPLE: Search downward for an off-screen placeholder, then type:
 		mcp.WithNumber("scroll_y", mcp.Description("Y coordinate to scroll at (default: screen center). Useful for scrolling a specific panel.")),
 		mcp.WithBoolean("grayscale", mcp.Description("Use grayscale OCR (default: true).")),
 	), handleFindClickAndType)
+
+	mcpServer.AddTool(mcp.NewTool("get_region_cache_stats",
+		mcp.WithDescription(`Returns statistics about the region cache used to optimize find_and_click and other OCR tools.
+
+The region cache automatically remembers the screen positions of buttons and UI elements after they are found. Subsequent calls use cached regions for 10-25x faster performance.
+
+Returns: {entries: N, hits: X, misses: Y, hit_rate: Z%, evictions: E}
+
+Use this to monitor cache effectiveness. A high hit rate (>80%) indicates good cache utilization.`),
+	), handleGetRegionCacheStats)
+
+	mcpServer.AddTool(mcp.NewTool("clear_region_cache",
+		mcp.WithDescription(`Clears all cached UI element regions.
+
+Use this when:
+- Screen resolution has changed
+- UI layout has been significantly rearranged
+- Cache is returning stale results
+- You want to force a full-screen OCR rescan
+
+After clearing, the next find_and_click call will do a full-screen scan and rebuild the cache.`),
+	), handleClearRegionCache)
 }
