@@ -59,7 +59,7 @@ The fixture will be available at: **http://localhost:8765**
 
 ## Using Ghost MCP Tools
 
-Ghost MCP provides tools for UI automation. OCR tools (`read_screen_text`, `find_and_click`, `find_elements`, `find_and_click_all`, `wait_for_text`) require Tesseract to be installed and `TESSDATA_PREFIX` to be set.
+Ghost MCP provides tools for UI automation. OCR tools (`find_elements`, `find_and_click`, `find_and_click_all`, `wait_for_text`, `find_click_and_type`, `scroll_until_text`) require Tesseract to be installed and `TESSDATA_PREFIX` to be set.
 
 ## AI Usage Guide: Optimal Flow
 
@@ -70,6 +70,7 @@ What do you need to do?
 │
 ├─ Discover or read visible text → find_elements (PRIMARY OCR TOOL)
 │   └─ Region scan: {x, y, width, height} for 10x speedup
+│   └─ Returns: elements[] with text, center_x, center_y, width, height, confidence
 │
 ├─ Click single button → find_and_click
 │   └─ Auto 3-pass OCR (normal→inverted→color)
@@ -83,19 +84,16 @@ What do you need to do?
 ├─ Search a long page/list for text → scroll_until_text
 │   └─ Stops early when the viewport repeats
 │
-├─ See visual layout → take_screenshot
-│   └─ Use quality=85 for 10x smaller images
-│
-└─ Need raw word-level OCR boxes → read_screen_text
-    └─ Use only for narrow diagnostics not covered by find_elements/visible_text
+└─ See visual layout → take_screenshot
+    └─ Use quality=85 for 10x smaller images
 ```
 
 ### Example: Click Multiple Buttons (Your Scenario)
 
 **BEFORE** (8+ clicks, confused by OCR failures):
 ```
-read_screen_text → scroll → screenshot → scroll → read_screen_text → 
-find_and_click "Primary" ×3 → find_and_click "Success" ×3 → 
+find_elements → scroll → screenshot → scroll → find_elements →
+find_and_click "Primary" ×3 → find_and_click "Success" ×3 →
 find_and_click "Warning" ×3
 ```
 
@@ -120,7 +118,7 @@ find_and_click "Warning" ×3
 
 - Consecutive OCR calls on the same unchanged viewport reuse the last OCR result instead of rerunning Tesseract.
 - `scroll_until_text` stops early when two consecutive viewports hash to the same fingerprint and returns an "end reached" style error with the last `visible_text`.
-- After a plain `scroll`, prefer the returned `visible_text` before calling `find_elements` or `read_screen_text` again.
+- After a plain `scroll`, prefer the returned `visible_text` before calling `find_elements` again.
 
 ### Performance Comparison
 
@@ -831,9 +829,9 @@ Set `GHOST_MCP_KEEP_SCREENSHOTS=1` to keep the file on disk.
 
 ---
 
-### Tool: read_screen_text
+### Tool: find_elements
 
-Reads text from a screen region using OCR. Requires Tesseract and `TESSDATA_PREFIX`.
+Scans a screen region using OCR and returns all visible text elements with their bounding boxes and center coordinates. Requires Tesseract and `TESSDATA_PREFIX`.
 
 **Arguments** (all optional):
 - `x` (number): X coordinate of region (default: 0)
@@ -845,20 +843,26 @@ Reads text from a screen region using OCR. Requires Tesseract and `TESSDATA_PREF
 ```json
 {
   "success": true,
-  "text": "Full extracted text with newlines",
-  "words": [
+  "element_count": 5,
+  "region": { "x": 0, "y": 0, "width": 1920, "height": 1080 },
+  "elements": [
     {
       "text": "Submit",
       "x": 450, "y": 320,
       "width": 60, "height": 20,
+      "center_x": 480, "center_y": 330,
       "confidence": 97.1
     }
-  ],
-  "region": { "x": 0, "y": 0, "width": 1920, "height": 1080 }
+  ]
 }
 ```
 
-Word coordinates are **relative to the region origin** — add the region's `x`/`y` to get absolute screen positions.
+Element coordinates are **absolute screen positions** — ready to use with `click_at` or `move_mouse`.
+
+**When to use:**
+- Discover what text is visible on screen
+- Get coordinates for clicking when there's no text label
+- Diagnose why `find_and_click` didn't find your text
 
 ---
 
@@ -906,22 +910,21 @@ Use `take_screenshot` only when the task explicitly requires seeing the visual l
 Don't move the mouse to (0, 0) — this triggers an emergency shutdown.
 
 ### 5. Use regions for faster OCR
-Narrow `read_screen_text` to the area of interest for quicker, more accurate results:
+Narrow `find_elements` to the area of interest for quicker, more accurate results:
 ```json
-{ "tool": "read_screen_text", "arguments": { "x": 0, "y": 0, "width": 800, "height": 100 } }
+{ "tool": "find_elements", "arguments": { "x": 0, "y": 0, "width": 800, "height": 100 } }
 ```
 
-### 6. Convert word coordinates from read_screen_text
-`read_screen_text` returns coordinates relative to the region. Add the region offset for absolute screen coords:
-```
-absolute_x = word.x + region.x
-absolute_y = word.y + region.y
+### 6. Use center coordinates from find_elements
+`find_elements` returns `center_x` and `center_y` — ready to use with `click_at`:
+```json
+{ "tool": "click_at", "arguments": { "x": 480, "y": 330 } }
 ```
 (`find_and_click` handles this automatically.)
 
 ### 7. ⚠️ OCR Limitations — Know What It Can't See
 
-**OCR tools (`find_elements`, `read_screen_text`) detect TEXT ONLY:**
+**OCR tools (`find_elements`, `find_and_click`) detect TEXT ONLY:**
 
 ✅ **CAN detect:**
 - Text with bounding boxes

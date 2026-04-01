@@ -16,7 +16,7 @@ Ghost MCP allows AI assistants like Claude to control your computer's mouse, key
 - 🖱️ **Mouse Control**: Move cursor, click, double-click, scroll
 - ⌨️ **Keyboard Control**: Type text, press individual keys
 - 📸 **Screen Capture**: Take screenshots with optional region selection
-- 🔍 **OCR**: Read text and word positions from the screen with Tesseract (always built in)
+- 🔍 **OCR**: Find screen text and UI elements with Tesseract (always built in)
 - 🔐 **Token Authentication**: Requires a secret token before the server will start
 - 📋 **Audit Logging**: Tamper-evident JSON Lines log of every tool call, auth failure, and lifecycle event
 - 🛡️ **Failsafe**: Emergency shutdown by moving mouse to top-left corner (0,0)
@@ -45,12 +45,11 @@ Ghost MCP allows AI assistants like Claude to control your computer's mouse, key
 
 | Tool | Description | Parameters |
 |------|-------------|------------|
-| `read_screen_text` | Read text from screen using OCR. Returns text and word positions. | `x`, `y`, `width`, `height`, `grayscale` |
+| `find_elements` ⭐ | Discover all clickable text elements with coordinates. Fast alternative to screenshots. | `x`, `y`, `width`, `height` |
 | `find_and_click` | Find text on screen with OCR and click its center. | `text`, `button`, `nth`, `x`, `y`, `width`, `height` |
 | `find_click_and_type` | Find a label/placeholder, click the inferred input target, and type immediately. Can optionally scroll while searching. | `text`, `type_text`, `x_offset`, `y_offset`, `press_enter`, `delay_ms`, `scroll_direction`, `scroll_amount`, `max_scrolls`, `scroll_x`, `scroll_y` |
 | `find_and_click_all` ⭐ | Click multiple buttons in ONE atomic operation. | `texts` (array), `button`, `delay_ms` |
 | `wait_for_text` ⭐ | Wait for text to appear or disappear. Verify UI changes. | `text`, `visible`, `timeout_ms`, `x`, `y`, `width`, `height` |
-| `find_elements` ⭐ | Discover all clickable text elements with coordinates. Fast alternative to screenshots. | `x`, `y`, `width`, `height` |
 
 > **Note:** OCR tools require Tesseract to be installed and `TESSDATA_PREFIX` to be set. The installation scripts handle this automatically. See [Prerequisites](#prerequisites).
 
@@ -69,7 +68,7 @@ If building manually, you'll need:
 
 - **Go 1.24+** - [Download Go](https://go.dev/dl/)
 - **C Compiler** - For RobotGo (GUI automation library)
-- **Tesseract OCR + Leptonica** - Required for OCR tools (`read_screen_text`, `find_and_click`); always built in
+- **Tesseract OCR + Leptonica** - Required for OCR tools (`find_elements`, `find_and_click`); always built in
 
 ### Platform-Specific Dependencies
 
@@ -176,7 +175,7 @@ The installer will:
 
 #### OCR Support
 
-OCR (`read_screen_text`) is always built in. The installer sets up Tesseract automatically, including downloading the English language data file and setting `TESSDATA_PREFIX`.
+OCR (`find_elements`, `find_and_click`) is always built in. The installer sets up Tesseract automatically, including downloading the English language data file and setting `TESSDATA_PREFIX`.
 
 ### Manual Build
 
@@ -344,11 +343,11 @@ Once connected, AI clients can use the tools like this:
 // Response: {"success": true, "filepath": "/tmp/ghost-mcp-screenshot-....png", "width": 1920, "height": 1080}
 // (image data returned as a separate image/png content block)
 
-// Read all text from screen with word positions
+// Find all text elements on screen
 {
-  "tool": "read_screen_text"
+  "tool": "find_elements"
 }
-// Response: {"success": true, "text": "...", "words": [{"text": "Save", "x": 940, "y": 530, "width": 40, "height": 20, "confidence": 98.5}, ...]}
+// Response: {"success": true, "elements": [{"text": "Save", "x": 940, "y": 530, "width": 40, "height": 20, "center_x": 960, "center_y": 540, "confidence": 98.5}, ...]}
 ```
 
 ## Security
@@ -536,7 +535,7 @@ All application logs are written to **stderr**, never to stdout. This ensures:
 - Ensure sufficient disk space in temp directory
 - Verify write permissions to system temp folder
 
-#### OCR Fails / `read_screen_text` Returns Error
+#### OCR Fails / `find_elements` Returns Error
 - `TESSDATA_PREFIX` must point to the directory that **directly contains** `eng.traineddata` (not its parent)
 - On Windows with vcpkg: `TESSDATA_PREFIX` = `%USERPROFILE%\vcpkg\installed\x64-mingw-dynamic\share\tessdata`
 - On Linux: `TESSDATA_PREFIX` = `/usr/share/tesseract-ocr/5/tessdata` (verify with `find /usr/share -name eng.traineddata`)

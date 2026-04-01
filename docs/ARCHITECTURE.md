@@ -59,9 +59,8 @@ registerTools()                          (main.go)
   ├─► AddTool("press_key",        handlePressKey)
   ├─► AddTool("take_screenshot",  handleTakeScreenshot)
   └─► registerOCRTools()               (tools_ocr.go)
-        ├─► AddTool("read_screen_text", handleReadScreenText)
-        ├─► AddTool("find_and_click",   handleFindAndClick)
         ├─► AddTool("find_elements",    handleFindElements)
+        ├─► AddTool("find_and_click",   handleFindAndClick)
         ├─► AddTool("find_click_and_type", handleFindClickAndType)
         ├─► AddTool("find_and_click_all",  handleFindAndClickAll)
         └─► AddTool("wait_for_text",    handleWaitForText)
@@ -359,7 +358,7 @@ The server handles requests sequentially via ServeStdio(), which is appropriate 
 
 ### OCR Caching
 
-The OCR layer keeps a lightweight single-entry cache keyed by a fast hash of the captured image. When consecutive calls inspect the same unchanged viewport, `ReadImage()` returns the cached OCR result immediately instead of rerunning Tesseract. This specifically reduces redundant work in flows like `find_elements` → `read_screen_text` → `find_and_click` on the same screen.
+The OCR layer keeps a lightweight single-entry cache keyed by a fast hash of the captured image. When consecutive calls inspect the same unchanged viewport, `ReadImage()` returns the cached OCR result immediately instead of rerunning Tesseract. This specifically reduces redundant work in flows like `find_elements` → `find_and_click` on the same screen.
 
 ### type_text
 
@@ -389,15 +388,15 @@ The OCR layer keeps a lightweight single-entry cache keyed by a fast hash of the
 | **RobotGo Calls** | `robotgo.CaptureImg()`, `robotgo.SavePng()` |
 | **Cleanup** | Temp file deleted after read unless `GHOST_MCP_KEEP_SCREENSHOTS=1` |
 
-### read_screen_text
+### find_elements
 
 | Aspect | Details |
 |--------|---------|
-| **Purpose** | Capture screen region, run Tesseract OCR, return text with word bounding boxes |
+| **Purpose** | Capture screen region, run Tesseract OCR, return all text elements with bounding boxes and center coordinates |
 | **Parameters** | `x`, `y`, `width`, `height` (all optional — defaults to full screen) |
-| **Returns** | `{"success": bool, "text": string, "words": [{text, x, y, width, height, confidence}], "region": {...}}` |
+| **Returns** | `{"success": bool, "element_count": int, "region": {...}, "elements": [{text, x, y, width, height, center_x, center_y, confidence}]}` |
 | **Dependencies** | Tesseract OCR (`gosseract`), `TESSDATA_PREFIX` must be set |
-| **Coordinates** | Word positions are relative to the region origin; add region `x`/`y` to get screen coords |
+| **Coordinates** | Element positions are absolute screen coordinates, ready to use with `click_at` |
 
 ### find_and_click
 
