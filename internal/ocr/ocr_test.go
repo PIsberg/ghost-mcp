@@ -526,6 +526,71 @@ func TestPrepareParallelImageSet_ColorOnlyReusesBytes(t *testing.T) {
 	}
 }
 
+// TestPrepareParallelImageSet_GrayscaleVariantsAreIndependent verifies that each
+// preprocessing variant produces its own independent byte slice.  Sharing memory
+// between variants would mean a mutation in one (e.g. inversion) corrupts another.
+func TestPrepareParallelImageSet_GrayscaleVariantsAreIndependent(t *testing.T) {
+	img := image.NewRGBA(image.Rect(0, 0, 20, 10))
+	// Non-uniform content so Normal ≠ Inverted after processing.
+	for y := 0; y < 10; y++ {
+		for x := 0; x < 20; x++ {
+			img.SetRGBA(x, y, color.RGBA{R: uint8(x * 10), G: uint8(y * 20), B: 128, A: 255})
+		}
+	}
+
+	set, err := PrepareParallelImageSet(img, true)
+	if err != nil {
+		t.Fatalf("PrepareParallelImageSet: %v", err)
+	}
+
+	// Each variant must be a distinct allocation — they encode the image differently.
+	if len(set.Normal) == 0 || len(set.Inverted) == 0 || len(set.BrightText) == 0 || len(set.Color) == 0 {
+		t.Fatal("expected all four variants to be non-empty")
+	}
+	if &set.Normal[0] == &set.Inverted[0] || &set.Normal[0] == &set.BrightText[0] || &set.Normal[0] == &set.Color[0] {
+		t.Fatal("grayscale variants must not share memory — parallel writes to the same buffer would race")
+	}
+}
+
+// TestPrepareParallelImageSet_ConcurrentCallsAreSafe verifies that multiple
+// goroutines can call PrepareParallelImageSet simultaneously on the same image
+// without data races (requires -race in go test).
+func TestPrepareParallelImageSet_ConcurrentCallsAreSafe(t *testing.T) {
+	img := whiteImage(200, 100)
+	const workers = 8
+	errs := make(chan error, workers)
+	for i := 0; i < workers; i++ {
+		go func() {
+			_, err := PrepareParallelImageSet(img, true)
+			errs <- err
+		}()
+	}
+	for i := 0; i < workers; i++ {
+		if err := <-errs; err != nil {
+			t.Errorf("concurrent PrepareParallelImageSet: %v", err)
+		}
+	}
+}
+
+// BenchmarkPrepareParallelImageSet_Grayscale measures the wall-clock time of the
+// parallel preprocessing pass on a full-HD image.  Run with -benchtime=5s to
+// get stable numbers; compare against a sequential baseline by reverting the
+// goroutine dispatch to measure the actual speedup.
+func BenchmarkPrepareParallelImageSet_Grayscale(b *testing.B) {
+	img := image.NewRGBA(image.Rect(0, 0, 1920, 1080))
+	for y := 0; y < 1080; y++ {
+		for x := 0; x < 1920; x++ {
+			img.SetRGBA(x, y, color.RGBA{R: uint8(x), G: uint8(y), B: uint8(x + y), A: 255})
+		}
+	}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if _, err := PrepareParallelImageSet(img, true); err != nil {
+			b.Fatalf("PrepareParallelImageSet: %v", err)
+		}
+	}
+}
+
 // BenchmarkToGrayscaleContrast_RGBA benchmarks the fast path (input is
 // *image.RGBA, the type returned by robotgo screen captures).
 func BenchmarkToGrayscaleContrast_RGBA(b *testing.B) {

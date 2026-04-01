@@ -221,31 +221,58 @@ func PrepareImageSet(img image.Image, opts Options) (*PreparedImageSet, error) {
 }
 
 func PrepareParallelImageSet(img image.Image, grayscale bool) (*PreparedImageSet, error) {
-	set := &PreparedImageSet{}
-
-	if grayscale {
-		var err error
-		if set.Normal, err = encodeForOCR(img, ScaleFactor, Options{}); err != nil {
-			return nil, fmt.Errorf("preprocess normal image: %w", err)
-		}
-		if set.Inverted, err = encodeForOCR(img, ScaleFactor, Options{Inverted: true}); err != nil {
-			return nil, fmt.Errorf("preprocess inverted image: %w", err)
-		}
-		if set.BrightText, err = encodeForOCR(img, ScaleFactor, Options{BrightText: true}); err != nil {
-			return nil, fmt.Errorf("preprocess bright-text image: %w", err)
-		}
-		if set.Color, err = encodeForOCR(img, ScaleFactor, Options{Color: true}); err != nil {
+	if !grayscale {
+		colorBytes, err := encodeForOCR(img, ScaleFactor, Options{Color: true})
+		if err != nil {
 			return nil, fmt.Errorf("preprocess color image: %w", err)
 		}
-		return set, nil
+		return &PreparedImageSet{Normal: colorBytes, Color: colorBytes}, nil
 	}
 
-	colorBytes, err := encodeForOCR(img, ScaleFactor, Options{Color: true})
-	if err != nil {
-		return nil, fmt.Errorf("preprocess color image: %w", err)
+	// Run all 4 preprocessing passes concurrently. Each pass reads img (no writes)
+	// and writes to its own independent output buffer, so no synchronisation is needed
+	// beyond waiting for all goroutines to finish.
+	type encodeResult struct {
+		name string
+		data []byte
+		err  error
 	}
-	set.Normal = colorBytes
-	set.Color = colorBytes
+	ch := make(chan encodeResult, 4)
+
+	passes := [4]struct {
+		name string
+		opts Options
+	}{
+		{"normal", Options{}},
+		{"inverted", Options{Inverted: true}},
+		{"bright-text", Options{BrightText: true}},
+		{"color", Options{Color: true}},
+	}
+	for _, p := range passes {
+		p := p
+		go func() {
+			data, err := encodeForOCR(img, ScaleFactor, p.opts)
+			ch <- encodeResult{p.name, data, err}
+		}()
+	}
+
+	set := &PreparedImageSet{}
+	for range passes {
+		r := <-ch
+		if r.err != nil {
+			return nil, fmt.Errorf("preprocess %s image: %w", r.name, r.err)
+		}
+		switch r.name {
+		case "normal":
+			set.Normal = r.data
+		case "inverted":
+			set.Inverted = r.data
+		case "bright-text":
+			set.BrightText = r.data
+		case "color":
+			set.Color = r.data
+		}
+	}
 	return set, nil
 }
 

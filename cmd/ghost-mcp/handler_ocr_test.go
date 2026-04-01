@@ -295,10 +295,20 @@ func TestParallelFindText_PreparesVariantsOnceAndUsesPreparedBytes(t *testing.T)
 		t.Fatalf("prepareCalls = %d, want 1", prepareCalls)
 	}
 
-	close(seen)
+	// parallelFindText returns as soon as the first match is found, but goroutines
+	// that passed the ctx.Done() check before cancellation may still be executing
+	// their readPreparedOCRImage call. Give them time to finish before draining
+	// the buffered channel — closing it while they are still writing would panic.
+	time.Sleep(10 * time.Millisecond)
 	got := make(map[string]bool)
-	for name := range seen {
-		got[name] = true
+loop:
+	for {
+		select {
+		case name := <-seen:
+			got[name] = true
+		default:
+			break loop
+		}
 	}
 	if !got["normal"] || !got["inverted"] || !got["bright"] || !got["color"] {
 		t.Fatalf("prepared bytes used = %v", got)
@@ -311,20 +321,36 @@ func TestWaitForTextPollInterval_Is100ms(t *testing.T) {
 	}
 }
 
+func TestWaitForTextInitialDelay_Is200ms(t *testing.T) {
+	if waitForTextInitialDelay != 200*time.Millisecond {
+		t.Fatalf("waitForTextInitialDelay = %v, want 200ms", waitForTextInitialDelay)
+	}
+}
+
 func TestHandleWaitForText_UsesConfiguredPollInterval(t *testing.T) {
 	originalCapture := waitForTextCaptureImage
-	originalRead := waitForTextReadImage
+	originalPrepare := prepareParallelOCRImageSet
+	originalReadPrepared := readPreparedOCRImage
 	originalSleep := waitForTextSleep
 	t.Cleanup(func() {
 		waitForTextCaptureImage = originalCapture
-		waitForTextReadImage = originalRead
+		prepareParallelOCRImageSet = originalPrepare
+		readPreparedOCRImage = originalReadPrepared
 		waitForTextSleep = originalSleep
 	})
 
 	waitForTextCaptureImage = func(x, y, width, height int) (image.Image, error) {
 		return image.NewRGBA(image.Rect(0, 0, 2, 2)), nil
 	}
-	waitForTextReadImage = func(img image.Image, opts ocr.Options) (*ocr.Result, error) {
+	prepareParallelOCRImageSet = func(image.Image, bool) (*ocr.PreparedImageSet, error) {
+		return &ocr.PreparedImageSet{
+			Normal:     []byte("normal"),
+			Inverted:   []byte("inverted"),
+			BrightText: []byte("bright"),
+			Color:      []byte("color"),
+		}, nil
+	}
+	readPreparedOCRImage = func([]byte, int) (*ocr.Result, error) {
 		return &ocr.Result{}, nil
 	}
 
@@ -353,14 +379,66 @@ func TestHandleWaitForText_UsesConfiguredPollInterval(t *testing.T) {
 	if len(slept) == 0 {
 		t.Fatal("expected at least one sleep")
 	}
-	for _, d := range slept {
+	if slept[0] != waitForTextInitialDelay {
+		t.Fatalf("first sleep duration = %v, want %v", slept[0], waitForTextInitialDelay)
+	}
+	for _, d := range slept[1:] {
 		if d != waitForTextPollInterval {
-			t.Fatalf("sleep duration = %v, want %v", d, waitForTextPollInterval)
+			t.Fatalf("poll sleep duration = %v, want %v", d, waitForTextPollInterval)
 		}
 	}
 	text := result.Content[0].(mcp.TextContent).Text
 	if !strings.Contains(text, "timeout waiting for text") {
 		t.Fatalf("unexpected result text: %s", text)
+	}
+}
+
+func TestParallelFindPreparedText_UsesPreparedBytes(t *testing.T) {
+	originalRead := readPreparedOCRImage
+	t.Cleanup(func() {
+		readPreparedOCRImage = originalRead
+	})
+
+	prepared := &ocr.PreparedImageSet{
+		Normal:     []byte("normal"),
+		Inverted:   []byte("inverted"),
+		BrightText: []byte("bright"),
+		Color:      []byte("color"),
+	}
+
+	seen := make(chan string, 4)
+	readPreparedOCRImage = func(imgBytes []byte, scaleFactor int) (*ocr.Result, error) {
+		seen <- string(imgBytes)
+		if scaleFactor != ocr.ScaleFactor {
+			t.Fatalf("scaleFactor = %d, want %d", scaleFactor, ocr.ScaleFactor)
+		}
+		if string(imgBytes) == "bright" {
+			return &ocr.Result{Words: []ocr.Word{{Text: "Submit", X: 10, Y: 10, Width: 40, Height: 20, Confidence: 99}}}, nil
+		}
+		return &ocr.Result{}, nil
+	}
+
+	_, _, _, _, found, pass := parallelFindPreparedText(context.Background(), prepared, "Submit", 1, true)
+	if !found {
+		t.Fatal("expected text to be found")
+	}
+	if pass != "bright-text" {
+		t.Fatalf("pass = %q, want bright-text", pass)
+	}
+
+	time.Sleep(10 * time.Millisecond)
+	got := make(map[string]bool)
+loop:
+	for {
+		select {
+		case name := <-seen:
+			got[name] = true
+		default:
+			break loop
+		}
+	}
+	if !got["normal"] || !got["inverted"] || !got["bright"] || !got["color"] {
+		t.Fatalf("prepared bytes used = %v", got)
 	}
 }
 

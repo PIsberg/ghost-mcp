@@ -22,11 +22,13 @@ var (
 	prepareParallelOCRImageSet = ocr.PrepareParallelImageSet
 	readPreparedOCRImage       = ocr.ReadPreparedBytes
 	waitForTextCaptureImage    = func(x, y, width, height int) (image.Image, error) { return robotgo.CaptureImg(x, y, width, height) }
-	waitForTextReadImage       = ocr.ReadImage
 	waitForTextSleep           = time.Sleep
 )
 
-const waitForTextPollInterval = 100 * time.Millisecond
+const (
+	waitForTextInitialDelay = 200 * time.Millisecond
+	waitForTextPollInterval = 100 * time.Millisecond
+)
 
 func handleReadScreenText(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	logging.Debug("Handling read_screen_text request")
@@ -384,34 +386,17 @@ func handleFindAndClickAll(ctx context.Context, request mcp.CallToolRequest) (*m
 
 	saveScreenshotIfKept(img, "ghost-mcp-findclickall")
 
-	// Run OCR once
-	ocrResult, ocrErr := ocr.ReadImage(img, ocr.Options{Color: true})
-	if ocrErr != nil {
-		logging.Error("OCR failed: %v", ocrErr)
-		return mcp.NewToolResultError(fmt.Sprintf("OCR failed: %v", ocrErr)), nil
+	grayscale := getBoolParam(request, "grayscale", true)
+	prepared, prepareErr := prepareParallelOCRImageSet(img, grayscale)
+	if prepareErr != nil {
+		logging.Error("find_and_click_all preprocessing failed: %v", prepareErr)
+		return mcp.NewToolResultError(fmt.Sprintf("OCR preprocessing failed: %v", prepareErr)), nil
 	}
 
 	// Click each text in sequence
 	clicks := make([]map[string]interface{}, 0, len(texts))
 	for _, text := range texts {
-		minX, minY, maxX, maxY, found := findButtonBounds(ocrResult, text, 1)
-		if !found {
-			// Try inverted OCR for this text
-			invertedResult, invertedErr := ocr.ReadImage(img, ocr.Options{Inverted: true})
-			if invertedErr == nil {
-				minX, minY, maxX, maxY, found = findButtonBounds(invertedResult, text, 1)
-			}
-		}
-
-		if !found {
-			// Try bright-text extraction: pixels with all RGB ≥ 240 → black.
-			// Captures pure-white button labels on dark/gradient pages.
-			brightResult, brightErr := ocr.ReadImage(img, ocr.Options{BrightText: true})
-			if brightErr == nil {
-				minX, minY, maxX, maxY, found = findButtonBounds(brightResult, text, 1)
-			}
-		}
-
+		minX, minY, maxX, maxY, found, passName := parallelFindPreparedText(ctx, prepared, text, 1, grayscale)
 		if !found {
 			logging.Info("find_and_click_all: text %q not found, stopping", text)
 			return mcp.NewToolResultError(fmt.Sprintf("text %q not found on screen", text)), nil
@@ -420,7 +405,7 @@ func handleFindAndClickAll(ctx context.Context, request mcp.CallToolRequest) (*m
 		cx := (minX + maxX) / 2
 		cy := (minY + maxY) / 2
 
-		logging.Info("ACTION: Clicking %q at (%d, %d)", text, cx, cy)
+		logging.Info("ACTION: Clicking %q via %s pass at (%d, %d)", text, passName, cx, cy)
 		robotgo.Move(cx, cy)
 		time.Sleep(10 * time.Millisecond) // Small delay for mouse movement
 		robotgo.Click(button, false)
@@ -502,26 +487,33 @@ func handleWaitForText(ctx context.Context, request mcp.CallToolRequest) (*mcp.C
 	}
 
 	startTime := time.Now()
+	timeout := time.Duration(timeoutMS) * time.Millisecond
+	if waitForTextInitialDelay > 0 {
+		initialDelay := waitForTextInitialDelay
+		if initialDelay > timeout {
+			initialDelay = timeout
+		}
+		waitForTextSleep(initialDelay)
+	}
+
 	for time.Since(startTime) < time.Duration(timeoutMS)*time.Millisecond {
 		img, captureErr := waitForTextCaptureImage(regionX, regionY, regionW, regionH)
 		if captureErr == nil {
-			ocrResult, ocrErr := waitForTextReadImage(img, ocr.Options{})
-			if ocrErr == nil {
-				_, _, _, _, found := findButtonBounds(ocrResult, text, 1)
-				if visible && found {
-					logging.Info("wait_for_text: text %q appeared after %v", text, time.Since(startTime))
-					return mcp.NewToolResultText(fmt.Sprintf(
-						`{"success":true,"text":%q,"visible":true,"waited_ms":%d}`,
-						text, time.Since(startTime).Milliseconds(),
-					)), nil
-				}
-				if !visible && !found {
-					logging.Info("wait_for_text: text %q disappeared after %v", text, time.Since(startTime))
-					return mcp.NewToolResultText(fmt.Sprintf(
-						`{"success":true,"text":%q,"visible":false,"waited_ms":%d}`,
-						text, time.Since(startTime).Milliseconds(),
-					)), nil
-				}
+			grayscale := getBoolParam(request, "grayscale", true)
+			_, _, _, _, found, passName := parallelFindText(ctx, img, text, 1, grayscale)
+			if visible && found {
+				logging.Info("wait_for_text: text %q appeared via %s pass after %v", text, passName, time.Since(startTime))
+				return mcp.NewToolResultText(fmt.Sprintf(
+					`{"success":true,"text":%q,"visible":true,"waited_ms":%d}`,
+					text, time.Since(startTime).Milliseconds(),
+				)), nil
+			}
+			if !visible && !found {
+				logging.Info("wait_for_text: text %q disappeared after %v", text, time.Since(startTime))
+				return mcp.NewToolResultText(fmt.Sprintf(
+					`{"success":true,"text":%q,"visible":false,"waited_ms":%d}`,
+					text, time.Since(startTime).Milliseconds(),
+				)), nil
 			}
 		}
 
@@ -733,6 +725,13 @@ func parallelFindText(ctx context.Context, img image.Image, searchText string, n
 		logging.Error("parallelFindText preprocessing failed: %v", err)
 		return 0, 0, 0, 0, false, ""
 	}
+
+	return parallelFindPreparedText(ctx, prepared, searchText, nth, grayscale)
+}
+
+func parallelFindPreparedText(ctx context.Context, prepared *ocr.PreparedImageSet, searchText string, nth int, grayscale bool) (int, int, int, int, bool, string) {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 
 	type match struct {
 		minX, minY, maxX, maxY int
