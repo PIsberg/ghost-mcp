@@ -554,11 +554,12 @@ func getMatchCandidates(searchText string, img image.Image, grayscale bool) stri
 	needleWords := strings.Fields(needle)
 
 	type candidate struct {
-		text   string
-		score  int
-		x, y   int
-		width  int
-		height int
+		text        string
+		score       int     // Our match quality score (1000=exact, 500=prefix, etc.)
+		confidence  float64 // Tesseract OCR confidence (0-100)
+		x, y        int
+		width       int
+		height      int
 	}
 	var candidates []candidate
 
@@ -567,12 +568,13 @@ func getMatchCandidates(searchText string, img image.Image, grayscale bool) stri
 		score := scoreMatch(phrase, needle, needleWords)
 		if score > 0 {
 			candidates = append(candidates, candidate{
-				text:   w.Text,
-				score:  score,
-				x:      w.X,
-				y:      w.Y,
-				width:  w.Width,
-				height: w.Height,
+				text:       w.Text,
+				score:      score,
+				confidence: w.Confidence,
+				x:          w.X,
+				y:          w.Y,
+				width:      w.Width,
+				height:     w.Height,
 			})
 		}
 	}
@@ -593,8 +595,8 @@ func getMatchCandidates(searchText string, img image.Image, grayscale bool) stri
 		if i > 0 {
 			json += ","
 		}
-		json += fmt.Sprintf(`{"text":%q,"score":%d,"x":%d,"y":%d,"width":%d,"height":%d}`,
-			c.text, c.score, c.x, c.y, c.width, c.height)
+		json += fmt.Sprintf(`{"text":%q,"score":%d,"confidence":%.1f,"x":%d,"y":%d,"width":%d,"height":%d}`,
+			c.text, c.score, c.confidence, c.x, c.y, c.width, c.height)
 	}
 	json += "]"
 
