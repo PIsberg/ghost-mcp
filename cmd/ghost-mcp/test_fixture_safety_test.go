@@ -75,9 +75,9 @@ func TestCallLimitTracking_ConsecutiveFailures(t *testing.T) {
 
 		// Parse the error response
 		var response struct {
-			Error                string `json:"error"`
-			ConsecutiveFailures  int    `json:"consecutive_failures"`
-			RemainingCalls       int    `json:"remaining_calls"`
+			Error               string `json:"error"`
+			ConsecutiveFailures int    `json:"consecutive_failures"`
+			RemainingCalls      int    `json:"remaining_calls"`
 		}
 
 		if len(result.Content) > 0 {
@@ -203,12 +203,12 @@ func TestClickUntilTextAppears_Success(t *testing.T) {
 
 	// Parse elements to find a clickable one
 	var elementsData struct {
-		Success    bool `json:"success"`
-		ElementCount int `json:"element_count"`
-		Elements   []struct {
-			Text      string `json:"text"`
-			CenterX   int    `json:"center_x"`
-			CenterY   int    `json:"center_y"`
+		Success      bool `json:"success"`
+		ElementCount int  `json:"element_count"`
+		Elements     []struct {
+			Text    string `json:"text"`
+			CenterX int    `json:"center_x"`
+			CenterY int    `json:"center_y"`
 		} `json:"elements"`
 	}
 	json.Unmarshal([]byte(elementsResult), &elementsData)
@@ -222,12 +222,12 @@ func TestClickUntilTextAppears_Success(t *testing.T) {
 
 	// Test: Click and wait for text that's already visible (should succeed immediately)
 	result, err := client.CallTool(ctx, "click_until_text_appears", map[string]interface{}{
-		"x":               elem.CenterX,
-		"y":               elem.CenterY,
-		"wait_for_text":   elem.Text,
-		"timeout_ms":      2000,
-		"max_clicks":      1,
-		"button":          "left",
+		"x":             elem.CenterX,
+		"y":             elem.CenterY,
+		"wait_for_text": elem.Text,
+		"timeout_ms":    2000,
+		"max_clicks":    1,
+		"button":        "left",
 	})
 
 	if err != nil {
@@ -265,12 +265,12 @@ func TestClickUntilTextAppears_Timeout(t *testing.T) {
 
 	// Use coordinates that won't have our test text
 	result, err := client.CallTool(ctx, "click_until_text_appears", map[string]interface{}{
-		"x":               100,
-		"y":               100,
-		"wait_for_text":   "NONEXISTENT_TEXT_XYZ789",
-		"timeout_ms":      1000, // Short timeout for test
-		"max_clicks":      2,    // Limited clicks
-		"button":          "left",
+		"x":             100,
+		"y":             100,
+		"wait_for_text": "NONEXISTENT_TEXT_XYZ789",
+		"timeout_ms":    1000, // Short timeout for test
+		"max_clicks":    2,    // Limited clicks
+		"button":        "left",
 	})
 
 	if err != nil {
@@ -317,10 +317,10 @@ func TestFindAndClick_WithScrollDirection(t *testing.T) {
 	// Try to find text that may require scrolling
 	// Use a common word that might be off-screen
 	result, err := client.CallTool(ctx, "find_and_click", map[string]interface{}{
-		"text":              "Click",
-		"scroll_direction":  "down",
-		"max_scrolls":       3,
-		"scroll_amount":     5,
+		"text":             "Click",
+		"scroll_direction": "down",
+		"max_scrolls":      3,
+		"scroll_amount":    5,
 	})
 
 	if err != nil {

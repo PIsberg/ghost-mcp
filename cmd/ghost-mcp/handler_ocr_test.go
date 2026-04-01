@@ -822,7 +822,7 @@ func TestScoreMatch_PrefixMatch(t *testing.T) {
 // TestScoreMatch_StandaloneWord tests standalone word scoring
 func TestScoreMatch_StandaloneWord(t *testing.T) {
 	needleWords := []string{"click"}
-	
+
 	// "Click" as standalone word in phrase
 	score := scoreMatch("button click", "click", needleWords)
 	if score != 300 {
@@ -833,7 +833,7 @@ func TestScoreMatch_StandaloneWord(t *testing.T) {
 // TestScoreMatch_SubstringInsideWord tests substring inside another word
 func TestScoreMatch_SubstringInsideWord(t *testing.T) {
 	needleWords := []string{"click"}
-	
+
 	// "Click" inside "Button Click Tests" - should get lower score
 	score := scoreMatch("button click tests", "click", needleWords)
 	if score != 100 {
@@ -855,7 +855,7 @@ func TestFindButtonBounds_PrefersStandaloneWord(t *testing.T) {
 	result := &ocr.Result{
 		Words: []ocr.Word{
 			{Text: "Button", X: 100, Y: 50, Width: 60, Height: 30, Confidence: 95},
-			{Text: "Click", X: 165, Y: 50, Width: 50, Height: 30, Confidence: 95},  // Part of "Button Click Tests"
+			{Text: "Click", X: 165, Y: 50, Width: 50, Height: 30, Confidence: 95}, // Part of "Button Click Tests"
 			{Text: "Tests", X: 220, Y: 50, Width: 50, Height: 30, Confidence: 95},
 			{Text: "Click", X: 100, Y: 200, Width: 60, Height: 40, Confidence: 95}, // Standalone "Click" button
 		},
@@ -865,7 +865,7 @@ func TestFindButtonBounds_PrefersStandaloneWord(t *testing.T) {
 	if !found {
 		t.Fatal("Expected to find 'Click' button")
 	}
-	
+
 	// Should find the standalone "Click" at (100, 200), not the one in "Button Click Tests"
 	if minY != 200 {
 		t.Errorf("Expected standalone 'Click' at Y=200, got Y=%d (found 'Button Click Tests' instead)", minY)

@@ -725,14 +725,14 @@ func TestReadFile_WordFields(t *testing.T) {
 func TestHashImageFast_SameImageSameHash(t *testing.T) {
 	img1 := whiteImage(100, 100)
 	img2 := whiteImage(100, 100)
-	
+
 	h1 := HashImageFast(img1)
 	h2 := HashImageFast(img2)
-	
+
 	if h1 != h2 {
 		t.Errorf("Expected same hash for identical images, got %d and %d", h1, h2)
 	}
-	
+
 	// Modify a pixel
 	if rgba, ok := img1.(*image.RGBA); ok {
 		rgba.Set(50, 50, color.Black)
@@ -746,14 +746,14 @@ func TestHashImageFast_SameImageSameHash(t *testing.T) {
 func TestCache_SetAndGet(t *testing.T) {
 	hash := uint64(123456789)
 	res := &Result{Text: "cached result"}
-	
+
 	SetCachedResult(hash, res)
-	
+
 	got := GetCachedResult(hash)
 	if got != res {
 		t.Errorf("Expected to retrieve cached result, got %v", got)
 	}
-	
+
 	gotOther := GetCachedResult(uint64(987654321))
 	if gotOther != nil {
 		t.Errorf("Expected nil for uncached hash, got %v", gotOther)

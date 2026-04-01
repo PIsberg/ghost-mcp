@@ -5,13 +5,13 @@ package ocr
 import (
 	"bytes"
 	"fmt"
+	"hash/fnv"
 	"image"
 	"image/color"
 	"image/png"
 	"os"
 	"strings"
 	"sync"
-	"hash/fnv"
 
 	"github.com/otiai10/gosseract/v2"
 	"golang.org/x/image/bmp"
@@ -249,7 +249,7 @@ func ReadImage(img image.Image, opts Options) (*Result, error) {
 	if err != nil {
 		return nil, err
 	}
-	
+
 	res, err := ReadPreparedBytes(prepared.Normal, ScaleFactor)
 	if err == nil {
 		SetCachedResult(h, res)
