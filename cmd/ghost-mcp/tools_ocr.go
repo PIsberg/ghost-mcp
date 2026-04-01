@@ -23,6 +23,8 @@ func registerOCRTools(mcpServer *server.MCPServer) {
 
 ⚡ AUTOMATIC OPTIMIZATION: After the first successful call, the button's region is cached. Subsequent calls with the same text automatically scan only the cached region (10-25x faster than full screen). Cache is invalidated if screen resolution changes.
 
+🎯 SMART MATCHING: Uses intelligent scoring to prefer standalone buttons over text inside other elements (e.g., prefers "Click" button over "Button Click Tests" header).
+
 SPEED TIP: Supply x/y/width/height to scan only the relevant area (e.g., a dialog or toolbar). Much faster than full screen.
 
 HOW IT WORKS:
@@ -32,12 +34,14 @@ HOW IT WORKS:
 4. Clicks the CENTER of the matched button (merges multi-word labels)
 5. Returns exact coordinates
 
+📜 SCROLL-AND-SEARCH: If text may be off-screen, add scroll_direction="down" to automatically scroll and search. The tool will scroll up to max_scrolls times until text is found.
+
 COLORED BUTTONS (white text on blue/green/red/cyan): handled automatically by the color pass. No special parameters needed — just call find_and_click with the button label.
 
 IF TEXT NOT FOUND:
 - DO NOT guess coordinates — guessing will miss
 - Read the returned closest OCR matches first — they often reveal the exact visible label
-- If the target may be off-screen, use scroll_until_text instead of manual scroll loops
+- If the target may be off-screen, add scroll_direction="down" or use scroll_until_text
 - Call find_elements only if you need raw OCR diagnostics after those hints
 
 RESPONSE: {success, found, box: {x,y,width,height}, requested_x/y, actual_x/y, button, occurrence}
@@ -54,6 +58,9 @@ RESPONSE: {success, found, box: {x,y,width,height}, requested_x/y, actual_x/y, b
 		mcp.WithNumber("height", mcp.Description("Height of region to scan (default: full screen). Smaller = faster.")),
 		mcp.WithNumber("delay_ms", mcp.Description("Milliseconds to wait after click (default: 100). Set to 0 to skip. Max: 10000.")),
 		mcp.WithBoolean("grayscale", mcp.Description("Use grayscale OCR (default: true). Set false for color-dependent text.")),
+		mcp.WithString("scroll_direction", mcp.Description("Optional: scroll direction to search off-screen ('up' or 'down'). If set, tool will scroll and search until text is found.")),
+		mcp.WithNumber("max_scrolls", mcp.Description("Maximum scroll attempts when scroll_direction is set (default: 8).")),
+		mcp.WithNumber("scroll_amount", mcp.Description("Scroll amount per step when scroll_direction is set (default: 5).")),
 	), handleFindAndClick)
 
 	mcpServer.AddTool(mcp.NewTool("find_and_click_all",

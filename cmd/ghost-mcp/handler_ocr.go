@@ -221,6 +221,17 @@ func handleFindAndClick(ctx context.Context, request mcp.CallToolRequest) (*mcp.
 		nth = n
 	}
 
+	// Auto-scroll feature: scroll down searching for text if not found on first screen
+	scrollDirection, _ := getStringParam(request, "scroll_direction")
+	maxScrolls := 8
+	if n, err := getIntParam(request, "max_scrolls"); err == nil && n > 0 {
+		maxScrolls = n
+	}
+	scrollAmount := 5
+	if n, err := getIntParam(request, "scroll_amount"); err == nil && n > 0 {
+		scrollAmount = n
+	}
+
 	screenW, screenH := robotgo.GetScreenSize()
 
 	// Check region cache first (only if user didn't specify custom region)
@@ -270,6 +281,12 @@ func handleFindAndClick(ctx context.Context, request mcp.CallToolRequest) (*mcp.
 	if err := validate.ScreenRegion(regionX, regionY, regionW, regionH, screenW, screenH); err != nil {
 		logging.Error("Screen region validation failed: %v", err)
 		return mcp.NewToolResultError(fmt.Sprintf("invalid screen region: %v", err)), nil
+	}
+
+	// Scroll-and-search mode
+	if scrollDirection != "" && (scrollDirection == "down" || scrollDirection == "up") {
+		logging.Info("find_and_click: scroll-and-search mode, direction=%s, max_scrolls=%d", scrollDirection, maxScrolls)
+		return findAndClickWithScroll(ctx, request, searchText, button, nth, scrollDirection, maxScrolls, scrollAmount, screenW, screenH)
 	}
 
 	if cachedRegion != "" {
@@ -331,6 +348,86 @@ func handleFindAndClick(ctx context.Context, request mcp.CallToolRequest) (*mcp.
 		`{"success":true,"found":%q,"box":{"x":%d,"y":%d,"width":%d,"height":%d},"requested_x":%d,"requested_y":%d,"actual_x":%d,"actual_y":%d,"button":%q,"occurrence":%d}`,
 		searchText, minX, minY, maxX-minX, maxY-minY, cx, cy, finalX, finalY, button, nth,
 	)), nil
+}
+
+// findAndClickWithScroll scrolls the screen searching for text, then clicks it.
+// Used when text may be off-screen and requires scrolling to find.
+func findAndClickWithScroll(
+	ctx context.Context,
+	request mcp.CallToolRequest,
+	searchText, button string,
+	nth int,
+	scrollDirection string,
+	maxScrolls, scrollAmount, screenW, screenH int,
+) (*mcp.CallToolResult, error) {
+
+	// Scroll and search loop
+	for scroll := 0; scroll <= maxScrolls; scroll++ {
+		// Capture current screen
+		img, captureErr := robotgo.CaptureImg(0, 0, screenW, screenH)
+		if captureErr != nil {
+			logging.Error("Failed to capture screen during scroll search: %v", captureErr)
+			return mcp.NewToolResultError(fmt.Sprintf("failed to capture screen: %v", captureErr)), nil
+		}
+
+		grayscale := getBoolParam(request, "grayscale", true)
+
+		// Search for text
+		minX, minY, maxX, maxY, found, passName := parallelFindText(ctx, img, searchText, nth, grayscale)
+		if found {
+			// Calculate click position
+			cx := minX + (maxX-minX)/2
+			cy := minY + (maxY-minY)/2
+
+			if err := validate.Coords(cx, cy, screenW, screenH); err != nil {
+				return mcp.NewToolResultError(fmt.Sprintf("found text but center out of bounds: %v", err)), nil
+			}
+
+			// Update cache
+			normalizedText := normalizeText(searchText)
+			regionCache.Put(normalizedText, minX, minY, maxX-minX, maxY-minY, screenW, screenH)
+			logging.Info("REGION CACHE UPDATE: %q -> (%d,%d) %dx%d (after %d scrolls)", normalizedText, minX, minY, maxX-minX, maxY-minY, scroll)
+
+			logging.Info("ACTION: Found %q (occurrence %d) via %s pass after %d scrolls at box (%d,%d)-(%d,%d), clicking center (%d,%d) with %s",
+				searchText, nth, passName, scroll, minX, minY, maxX, maxY, cx, cy, button)
+			robotgo.Move(cx, cy)
+
+			if err := checkFailsafe(); err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+
+			robotgo.Click(button, false)
+			applyClickDelay(request)
+
+			finalX, finalY := robotgo.GetMousePos()
+			if finalX != cx || finalY != cy {
+				logging.Info("WARNING: cursor moved after click: requested (%d,%d) actual (%d,%d)", cx, cy, finalX, finalY)
+			}
+			logging.Info("ACTION COMPLETE: find_and_click %q at (%d, %d) after %d scrolls", searchText, finalX, finalY, scroll)
+
+			return mcp.NewToolResultText(fmt.Sprintf(
+				`{"success":true,"found":%q,"box":{"x":%d,"y":%d,"width":%d,"height":%d},"requested_x":%d,"requested_y":%d,"actual_x":%d,"actual_y":%d,"button":%q,"occurrence":%d,"scrolls":%d}`,
+				searchText, minX, minY, maxX-minX, maxY-minY, cx, cy, finalX, finalY, button, nth, scroll,
+			)), nil
+		}
+
+		// Not found - scroll and continue searching
+		if scroll < maxScrolls {
+			logging.Info("Text %q not found on screen (scroll %d/%d), scrolling %s", searchText, scroll, maxScrolls, scrollDirection)
+			robotgo.Move(screenW/2, scrollAmount*20) // Move to scroll area
+			uiScrollDir(scrollAmount, scrollDirection)
+			time.Sleep(200 * time.Millisecond) // Wait for scroll animation
+
+			if err := checkFailsafe(); err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+		}
+	}
+
+	// Text not found after all scrolls
+	logging.Info("Text %q not found after %d scrolls", searchText, maxScrolls)
+	img, _ := robotgo.CaptureImg(0, 0, screenW, screenH)
+	return mcp.NewToolResultError(buildFindTextFailureMessage(img, searchText, nth, 0, 0, screenW, screenH, true)), nil
 }
 
 // findButtonBounds finds the full bounding box of a button by merging adjacent
