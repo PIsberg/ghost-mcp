@@ -1199,8 +1199,15 @@ func TestHandleScrollUntilText_FindsTextAfterScrolling(t *testing.T) {
 
 	uiGetScreenSize = func() (int, int) { return 1280, 720 }
 	uiCheckFailsafe = func() error { return nil }
+
+	// Make capture image return different images per call so viewport change detection works
+	var captureCalls int
 	uiCaptureImage = func(x, y, width, height int) (image.Image, error) {
-		return image.NewRGBA(image.Rect(0, 0, width, height)), nil
+		img := image.NewRGBA(image.Rect(0, 0, width, height))
+		// Set a pixel differently each call so image hash changes
+		img.Set(captureCalls%10, 0, color.RGBA{uint8(captureCalls * 20), 0, 0, 255})
+		captureCalls++
+		return img, nil
 	}
 
 	visibleTexts := []string{"Header only", "More content", "Target field here"}
@@ -1349,8 +1356,15 @@ func TestHandleScrollUntilText_ReturnsMaxScrollsError(t *testing.T) {
 
 	uiGetScreenSize = func() (int, int) { return 1280, 720 }
 	uiCheckFailsafe = func() error { return nil }
+
+	// Make capture image return different images per call so viewport change detection works
+	var captureCalls int
 	uiCaptureImage = func(x, y, width, height int) (image.Image, error) {
-		return image.NewRGBA(image.Rect(0, 0, width, height)), nil
+		img := image.NewRGBA(image.Rect(0, 0, width, height))
+		// Set a pixel differently each call so image hash changes
+		img.Set(captureCalls%10, 0, color.RGBA{uint8(captureCalls * 20), 0, 0, 255})
+		captureCalls++
+		return img, nil
 	}
 	visibleTexts := []string{"one", "two", "three"}
 	var readCalls int
