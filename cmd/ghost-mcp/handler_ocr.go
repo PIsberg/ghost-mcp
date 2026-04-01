@@ -404,8 +404,9 @@ func handleFindElements(ctx context.Context, request mcp.CallToolRequest) (*mcp.
 
 	saveScreenshotIfKept(img, "ghost-mcp-findelements")
 
-	// Run OCR with color mode for best element detection
-	ocrResult, ocrErr := ocr.ReadImage(img, ocr.Options{Color: true})
+	// Run OCR with grayscale mode for best text detection
+	// Grayscale + contrast stretch detects labels better than color mode
+	ocrResult, ocrErr := ocr.ReadImage(img, ocr.Options{Color: false})
 	if ocrErr != nil {
 		logging.Error("OCR failed: %v", ocrErr)
 		return mcp.NewToolResultError(fmt.Sprintf("OCR failed: %v", ocrErr)), nil
@@ -415,11 +416,11 @@ func handleFindElements(ctx context.Context, request mcp.CallToolRequest) (*mcp.
 	// Filter by confidence and minimum size to avoid noise
 	elements := make([]map[string]interface{}, 0)
 	for _, w := range ocrResult.Words {
-		if w.Confidence < 50 {
-			continue // Skip low-confidence detections
+		if w.Confidence < 40 {
+			continue // Skip low-confidence detections (lowered from 50 to catch labels)
 		}
-		if w.Width < 20 || w.Height < 10 {
-			continue // Skip tiny text (likely noise)
+		if w.Width < 15 || w.Height < 8 {
+			continue // Skip tiny text (likely noise) - lowered thresholds for labels
 		}
 
 		elements = append(elements, map[string]interface{}{
