@@ -16,6 +16,9 @@
 # Dependency directories
 vendor/
 
+# Go build cache
+.gocache/
+
 # IDE
 .idea/
 .vscode/
