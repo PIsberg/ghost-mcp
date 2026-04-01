@@ -43,10 +43,23 @@ HOW IT WORKS:
 COLORED BUTTONS (white text on blue/green/red/cyan): handled automatically by the color pass. No special parameters needed — just call find_and_click with the button label.
 
 IF TEXT NOT FOUND:
-- DO NOT guess coordinates — guessing will miss
-- Read the returned closest OCR matches first — they often reveal the exact visible label
-- If the target may be off-screen, add scroll_direction="down" or use scroll_until_text
-- Call find_elements only if you need raw OCR diagnostics after those hints
+The error response includes helpful guidance:
+
+{
+  "error": "text not found...",
+  "candidates": [
+    {"text": "Click", "score": 100, "x": 50, "y": 50}
+  ],
+  "suggestion": "scroll_may_help" | "text_continues_off_screen" | "try_different_search_term" | "no_matches_found"
+}
+
+Based on suggestion:
+- "scroll_may_help" → Add scroll_direction:"down" to search off-screen
+- "text_continues_off_screen" → Text is partially visible, scroll to see rest
+- "try_different_search_term" → Use find_elements to see what text exists
+- "no_matches_found" → Text not on current screen, may need multi-page search
+
+Use candidates array to see what OCR detected and their confidence scores.
 
 RESPONSE: {success, found, box: {x,y,width,height}, requested_x/y, actual_x/y, button, occurrence, candidates}
 - box is the OCR text bounding box (tight around characters, not the full button background)

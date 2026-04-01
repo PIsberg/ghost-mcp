@@ -322,7 +322,20 @@ func handleFindAndClick(ctx context.Context, request mcp.CallToolRequest) (*mcp.
 	minX, minY, maxX, maxY, found, passName := parallelFindText(ctx, img, searchText, nth, grayscale)
 	if !found {
 		logging.Info("Text %q (occurrence %d) not found on screen", searchText, nth)
-		return mcp.NewToolResultError(buildFindTextFailureMessage(img, searchText, nth, regionX, regionY, regionW, regionH, grayscale)), nil
+		
+		// Get candidates to show what WAS found (helps AI decide next action)
+		candidates := getMatchCandidates(searchText, img, grayscale)
+		
+		// Check if there are partial matches that might be off-screen
+		response := buildFindTextFailureMessage(img, searchText, nth, regionX, regionY, regionW, regionH, grayscale)
+		
+		// Add candidates and scroll suggestion
+		result := fmt.Sprintf(`{"error":%q,"candidates":%s,"suggestion":%s}`,
+			response,
+			candidates,
+			getScrollSuggestion(searchText, candidates),
+		)
+		return mcp.NewToolResultError(result), nil
 	}
 
 	// Calculate center of the merged button bounds
@@ -430,6 +443,66 @@ func getMatchCandidates(searchText string, img image.Image, grayscale bool) stri
 	json += "]"
 
 	return json
+}
+
+// getScrollSuggestion analyzes candidates and suggests the best next action.
+// Helps AI decide whether to scroll, use different search term, or try multi-page.
+func getScrollSuggestion(searchText string, candidates string) string {
+	if candidates == "[]" {
+		return `"no_matches_found"`
+	}
+
+	// Parse candidates
+	var parsed []struct {
+		Text  string `json:"text"`
+		Score int    `json:"score"`
+	}
+	json.Unmarshal([]byte(candidates), &parsed)
+
+	if len(parsed) == 0 {
+		return `"no_matches_found"`
+	}
+
+	needle := strings.ToLower(strings.TrimSpace(searchText))
+
+	// Check for partial matches that suggest text might be nearby/off-screen
+	for _, c := range parsed {
+		candidateLower := strings.ToLower(c.Text)
+		
+		// Exact word match but low score = might be truncated/off-screen
+		if candidateLower == needle && c.Score < 500 {
+			return `"scroll_may_help"`
+		}
+		
+		// Prefix match = text starts with search term
+		if strings.HasPrefix(candidateLower, needle) && len(candidateLower) > len(needle) {
+			return `"text_continues_off_screen"`
+		}
+		
+		// Suffix match = text ends with search term, might be cut off at start
+		if strings.HasSuffix(candidateLower, needle) && len(candidateLower) > len(needle) {
+			return `"text_continues_off_screen"`
+		}
+		
+		// Contains as substring
+		if strings.Contains(candidateLower, needle) && c.Score < 300 {
+			return `"scroll_may_help"`
+		}
+	}
+
+	// Found related text but not exact match
+	maxScore := 0
+	for _, c := range parsed {
+		if c.Score > maxScore {
+			maxScore = c.Score
+		}
+	}
+
+	if maxScore >= 100 {
+		return `"try_different_search_term"`
+	}
+
+	return `"text_not_visible_try_scroll_or_different_term"`
 }
 
 // findAndClickWithScroll scrolls the screen searching for text, then clicks it.
