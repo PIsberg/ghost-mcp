@@ -23,8 +23,11 @@ func TestCallLimitTracking_VerifyGlobalLimit(t *testing.T) {
 		t.Skip("Skipping long-running test in short mode")
 	}
 
-	client, cleanup := newFixtureClient(t)
-	defer cleanup()
+	client, err := mcpclient.NewClient(mcpclient.Config{Timeout: testTimeout})
+	if err != nil {
+		t.Fatalf("Failed to create MCP client: %v", err)
+	}
+	defer client.Close()
 
 	ctx := context.Background()
 
@@ -58,8 +61,11 @@ func TestCallLimitTracking_VerifyGlobalLimit(t *testing.T) {
 
 // TestCallLimitTracking_ConsecutiveFailures tests the 3-strike failure detection
 func TestCallLimitTracking_ConsecutiveFailures(t *testing.T) {
-	client, cleanup := newFixtureClient(t)
-	defer cleanup()
+	client, err := mcpclient.NewClient(mcpclient.Config{Timeout: testTimeout})
+	if err != nil {
+		t.Fatalf("Failed to create MCP client: %v", err)
+	}
+	defer client.Close()
 
 	ctx := context.Background()
 
@@ -118,8 +124,11 @@ func TestCallLimitTracking_ConsecutiveFailures(t *testing.T) {
 
 // TestRepeatedClickDetection_WarnsAfterFiveClicks tests click repetition warning
 func TestRepeatedClickDetection_WarnsAfterFiveClicks(t *testing.T) {
-	client, cleanup := newFixtureClient(t)
-	defer cleanup()
+	client, err := mcpclient.NewClient(mcpclient.Config{Timeout: testTimeout})
+	if err != nil {
+		t.Fatalf("Failed to create MCP client: %v", err)
+	}
+	defer client.Close()
 
 	ctx := context.Background()
 
@@ -190,8 +199,11 @@ func TestRepeatedClickDetection_WarnsAfterFiveClicks(t *testing.T) {
 
 // TestClickUntilTextAppears_Success tests successful text detection
 func TestClickUntilTextAppears_Success(t *testing.T) {
-	client, cleanup := newFixtureClient(t)
-	defer cleanup()
+	client, err := mcpclient.NewClient(mcpclient.Config{Timeout: testTimeout})
+	if err != nil {
+		t.Fatalf("Failed to create MCP client: %v", err)
+	}
+	defer client.Close()
 
 	ctx := context.Background()
 
@@ -258,8 +270,11 @@ func TestClickUntilTextAppears_Success(t *testing.T) {
 
 // TestClickUntilTextAppears_Timeout tests timeout when text never appears
 func TestClickUntilTextAppears_Timeout(t *testing.T) {
-	client, cleanup := newFixtureClient(t)
-	defer cleanup()
+	client, err := mcpclient.NewClient(mcpclient.Config{Timeout: testTimeout})
+	if err != nil {
+		t.Fatalf("Failed to create MCP client: %v", err)
+	}
+	defer client.Close()
 
 	ctx := context.Background()
 
@@ -309,8 +324,11 @@ func TestClickUntilTextAppears_Timeout(t *testing.T) {
 
 // TestFindAndClick_WithScrollDirection tests scroll-and-search mode
 func TestFindAndClick_WithScrollDirection(t *testing.T) {
-	client, cleanup := newFixtureClient(t)
-	defer cleanup()
+	client, err := mcpclient.NewClient(mcpclient.Config{Timeout: testTimeout})
+	if err != nil {
+		t.Fatalf("Failed to create MCP client: %v", err)
+	}
+	defer client.Close()
 
 	ctx := context.Background()
 
@@ -351,8 +369,11 @@ func TestFindAndClick_WithScrollDirection(t *testing.T) {
 
 // TestFindAndClick_MultiPageSearch tests select_best mode
 func TestFindAndClick_MultiPageSearch(t *testing.T) {
-	client, cleanup := newFixtureClient(t)
-	defer cleanup()
+	client, err := mcpclient.NewClient(mcpclient.Config{Timeout: testTimeout})
+	if err != nil {
+		t.Fatalf("Failed to create MCP client: %v", err)
+	}
+	defer client.Close()
 
 	ctx := context.Background()
 
@@ -393,8 +414,11 @@ func TestFindAndClick_MultiPageSearch(t *testing.T) {
 
 // TestViewportAwareness_ScrollSuggestion tests that scroll suggestions are provided
 func TestViewportAwareness_ScrollSuggestion(t *testing.T) {
-	client, cleanup := newFixtureClient(t)
-	defer cleanup()
+	client, err := mcpclient.NewClient(mcpclient.Config{Timeout: testTimeout})
+	if err != nil {
+		t.Fatalf("Failed to create MCP client: %v", err)
+	}
+	defer client.Close()
 
 	ctx := context.Background()
 
