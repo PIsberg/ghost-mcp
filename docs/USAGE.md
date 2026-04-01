@@ -68,7 +68,7 @@ Ghost MCP provides tools for UI automation. OCR tools (`read_screen_text`, `find
 ```
 What do you need to do?
 │
-├─ Discover what's clickable → find_elements (FAST!)
+├─ Discover or read visible text → find_elements (PRIMARY OCR TOOL)
 │   └─ Region scan: {x, y, width, height} for 10x speedup
 │
 ├─ Click single button → find_and_click
@@ -80,11 +80,14 @@ What do you need to do?
 ├─ Verify UI changed → wait_for_text ⭐
 │   └─ {text: "Success", timeout_ms: 5000}
 │
+├─ Search a long page/list for text → scroll_until_text
+│   └─ Stops early when the viewport repeats
+│
 ├─ See visual layout → take_screenshot
 │   └─ Use quality=85 for 10x smaller images
 │
-└─ Read/verify text content → read_screen_text
-    └─ Returns {x, y, width, height, confidence}
+└─ Need raw word-level OCR boxes → read_screen_text
+    └─ Use only for narrow diagnostics not covered by find_elements/visible_text
 ```
 
 ### Example: Click Multiple Buttons (Your Scenario)
@@ -112,6 +115,12 @@ find_and_click "Warning" ×3
 // Response: [{"text": "Primary", "center_x": 174, "center_y": 770}, ...]
 // Then use find_and_click_all with discovered text
 ```
+
+### OCR reuse and end-of-page detection
+
+- Consecutive OCR calls on the same unchanged viewport reuse the last OCR result instead of rerunning Tesseract.
+- `scroll_until_text` stops early when two consecutive viewports hash to the same fingerprint and returns an "end reached" style error with the last `visible_text`.
+- After a plain `scroll`, prefer the returned `visible_text` before calling `find_elements` or `read_screen_text` again.
 
 ### Performance Comparison
 

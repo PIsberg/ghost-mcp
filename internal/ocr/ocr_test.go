@@ -759,3 +759,28 @@ func TestCache_SetAndGet(t *testing.T) {
 		t.Errorf("Expected nil for uncached hash, got %v", gotOther)
 	}
 }
+
+func TestReadImage_UsesCachedResultWhenHashMatches(t *testing.T) {
+	cacheMu.Lock()
+	cacheHash = 0
+	cacheResult = nil
+	cacheMu.Unlock()
+	t.Cleanup(func() {
+		cacheMu.Lock()
+		cacheHash = 0
+		cacheResult = nil
+		cacheMu.Unlock()
+	})
+
+	img := whiteImage(64, 32)
+	want := &Result{Text: "from cache"}
+	SetCachedResult(HashImageFast(img), want)
+
+	got, err := ReadImage(img, Options{})
+	if err != nil {
+		t.Fatalf("ReadImage returned error: %v", err)
+	}
+	if got != want {
+		t.Fatalf("ReadImage returned %p, want cached %p", got, want)
+	}
+}

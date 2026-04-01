@@ -53,12 +53,18 @@ registerTools()                          (main.go)
   ├─► AddTool("click_at",         handleClickAt)
   ├─► AddTool("double_click",     handleDoubleClick)
   ├─► AddTool("scroll",           handleScroll)
+  ├─► AddTool("scroll_until_text", handleScrollUntilText)
   ├─► AddTool("type_text",        handleTypeText)
+  ├─► AddTool("click_and_type",   handleClickAndType)
   ├─► AddTool("press_key",        handlePressKey)
   ├─► AddTool("take_screenshot",  handleTakeScreenshot)
   └─► registerOCRTools()               (tools_ocr.go)
         ├─► AddTool("read_screen_text", handleReadScreenText)
-        └─► AddTool("find_and_click",   handleFindAndClick)
+        ├─► AddTool("find_and_click",   handleFindAndClick)
+        ├─► AddTool("find_elements",    handleFindElements)
+        ├─► AddTool("find_click_and_type", handleFindClickAndType)
+        ├─► AddTool("find_and_click_all",  handleFindAndClickAll)
+        └─► AddTool("wait_for_text",    handleWaitForText)
 ```
 
 Each tool definition includes:
@@ -349,6 +355,11 @@ The server handles requests sequentially via ServeStdio(), which is appropriate 
 | **Returns** | `{"success": bool, "found": string, "box": {...}, "center_x": int, "center_y": int, "scroll_count": int, "direction": string, "amount": int, "pass": string, "visible_text": string}` |
 | **RobotGo Calls** | `robotgo.CaptureImg(...)`, `robotgo.Move(scroll_x, scroll_y)`, `robotgo.ScrollDir(amount, direction)` repeated up to `max_scrolls` |
 | **Failsafe** | ✓ Checked before each scroll |
+| **Early Stop** | Stops when two consecutive viewport fingerprints match, which prevents endless scrolling after the end of a list/page |
+
+### OCR Caching
+
+The OCR layer keeps a lightweight single-entry cache keyed by a fast hash of the captured image. When consecutive calls inspect the same unchanged viewport, `ReadImage()` returns the cached OCR result immediately instead of rerunning Tesseract. This specifically reduces redundant work in flows like `find_elements` → `read_screen_text` → `find_and_click` on the same screen.
 
 ### type_text
 
