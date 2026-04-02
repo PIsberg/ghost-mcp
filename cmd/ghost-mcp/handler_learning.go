@@ -50,7 +50,7 @@ type learnCfg struct {
 // learnScreen performs a full GUI discovery scan and returns the combined view.
 //
 // Each scroll page produces three layers of understanding:
-//  1. Three OCR passes (normal, inverted, colour) merged and deduplicated.
+//  1. Four OCR passes (normal, inverted, bright-text, colour) merged and deduplicated.
 //  2. Element type inference on every word found.
 //  3. A JPEG screenshot stored in the view for visual retrieval later.
 //
