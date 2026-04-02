@@ -852,3 +852,63 @@
     </script>
 </body>
 </html>
+
+<!-- LEARNING MODE SCROLL SECTION (below the main content) -->
+<!-- This section is intentionally placed below the fold so learning mode tests
+     can verify that scroll-based discovery finds elements not visible on first load. -->
+<div id="learning-scroll-section" style="
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+    padding: 40px 20px;
+    min-height: 800px;
+">
+    <div style="max-width: 900px; margin: 0 auto;">
+        <h2 id="learning-section-header" style="color:#ff9800; margin-bottom: 20px;">
+            Learning Mode Test Section
+        </h2>
+        <p style="color:#aaa; margin-bottom:30px;">
+            This section is below the fold. Learning mode should discover these elements by scrolling.
+        </p>
+
+        <div style="background:rgba(255,255,255,0.05); border-radius:12px; padding:20px; margin-bottom:20px;">
+            <h3 style="color:#00d9ff; margin-bottom:15px;">Scroll-Discovered Buttons</h3>
+            <button id="btn-scroll-alpha"
+                    onclick="document.getElementById('scroll-click-result').textContent='Alpha clicked'"
+                    style="background:#4caf50;color:white;padding:10px 20px;border:none;border-radius:6px;cursor:pointer;margin:6px;font-size:14px;">
+                Scroll Alpha
+            </button>
+            <button id="btn-scroll-beta"
+                    onclick="document.getElementById('scroll-click-result').textContent='Beta clicked'"
+                    style="background:#2196f3;color:white;padding:10px 20px;border:none;border-radius:6px;cursor:pointer;margin:6px;font-size:14px;">
+                Scroll Beta
+            </button>
+            <button id="btn-scroll-gamma"
+                    onclick="document.getElementById('scroll-click-result').textContent='Gamma clicked'"
+                    style="background:#9c27b0;color:white;padding:10px 20px;border:none;border-radius:6px;cursor:pointer;margin:6px;font-size:14px;">
+                Scroll Gamma
+            </button>
+            <div id="scroll-click-result" style="color:#00ff88;margin-top:12px;min-height:20px;font-size:13px;"></div>
+        </div>
+
+        <div style="background:rgba(255,255,255,0.05); border-radius:12px; padding:20px; margin-bottom:20px;">
+            <h3 style="color:#00d9ff; margin-bottom:15px;">Scroll-Discovered Input Fields</h3>
+            <label for="scroll-email" style="color:#eee;display:block;margin-bottom:6px;">Scroll Email:</label>
+            <input id="scroll-email" type="email" placeholder="Enter scroll email"
+                   style="width:100%;padding:10px;border-radius:6px;border:1px solid #444;background:#2a2a4a;color:#eee;font-size:14px;margin-bottom:14px;box-sizing:border-box;">
+            <label for="scroll-notes" style="color:#eee;display:block;margin-bottom:6px;">Scroll Notes:</label>
+            <textarea id="scroll-notes" rows="3" placeholder="Enter scroll notes"
+                      style="width:100%;padding:10px;border-radius:6px;border:1px solid #444;background:#2a2a4a;color:#eee;font-size:14px;box-sizing:border-box;resize:vertical;"></textarea>
+        </div>
+
+        <div style="background:rgba(255,255,255,0.05); border-radius:12px; padding:20px;">
+            <h3 style="color:#00d9ff; margin-bottom:15px;">Unique Learning Marker</h3>
+            <p id="learning-unique-text" style="color:#ff9800;font-size:16px;font-weight:bold;">
+                GHOST_MCP_LEARNING_MARKER_42
+            </p>
+            <p style="color:#888;font-size:13px;">
+                This unique text is only visible after scrolling. Its presence in a learned view
+                confirms that the scroll-discovery algorithm works correctly.
+            </p>
+        </div>
+    </div>
+</div>
