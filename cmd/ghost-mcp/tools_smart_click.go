@@ -109,7 +109,7 @@ func hashImageFast(img image.Image) uint64 {
 			r, g, b, _ := img.At(x, y).RGBA()
 			// Use weighted sum to distinguish colors with same total brightness
 			// Red gets weight 1, green gets weight 2, blue gets weight 4
-			hash = ((hash << 5) + hash) + uint64(r + g*2 + b*4)
+			hash = ((hash << 5) + hash) + uint64(r+g*2+b*4)
 		}
 	}
 	return hash
