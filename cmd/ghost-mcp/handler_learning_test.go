@@ -52,9 +52,13 @@ func TestTextSimilarity_Disjoint(t *testing.T) {
 }
 
 func TestTextSimilarity_ShortStrings(t *testing.T) {
-	// Strings shorter than 3 runes cannot form trigrams → always 0.
-	if s := textSimilarity("ab", "ab"); s != 0.0 {
-		t.Fatalf("too-short strings should return 0, got %f", s)
+	// Strings shorter than 3 runes cannot form trigrams, so dissimilar short
+	// strings return 0. (Identical strings still return 1.0 via early exit.)
+	if s := textSimilarity("ab", "cd"); s != 0.0 {
+		t.Fatalf("dissimilar short strings should return 0, got %f", s)
+	}
+	if s := textSimilarity("ab", "ab"); s != 1.0 {
+		t.Fatalf("identical short strings should return 1.0, got %f", s)
 	}
 }
 
