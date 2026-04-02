@@ -430,6 +430,27 @@ func handleFindAndClick(ctx context.Context, request mcp.CallToolRequest) (*mcp.
 		return findAndClickMultiPage(ctx, request, searchText, button, nth, nextPageKeys, maxPages, screenW, screenH)
 	}
 
+	// Learning-mode fast path: if a learned view exists and no custom region was
+	// specified, use the view to narrow the scan to the element's known location.
+	// When the element was found on a non-zero scroll page, navigate there first.
+	if !userSpecifiedRegion && cachedRegion == "" {
+		autoLearnIfNeeded()
+		if lx, ly, lw, lh, scrollsNeeded, ok := learnerRegionHint(searchText, screenW, screenH); ok {
+			if scrollsNeeded > 0 {
+				logging.Info("find_and_click: learned view — element on scroll page, scrolling down %d ticks then using region (%d,%d) %dx%d",
+					scrollsNeeded, lx, ly, lw, lh)
+				uiScrollDir(scrollsNeeded, "down")
+				time.Sleep(300 * time.Millisecond)
+				if err := uiCheckFailsafe(); err != nil {
+					return mcp.NewToolResultError(err.Error()), nil
+				}
+			}
+			regionX, regionY, regionW, regionH = lx, ly, lw, lh
+			logging.Info("find_and_click: learned view region (%d,%d) %dx%d for %q (scroll_page=%d)",
+				regionX, regionY, regionW, regionH, searchText, scrollsNeeded)
+		}
+	}
+
 	if cachedRegion != "" {
 		logging.Info("find_and_click: using %s, scanning region (%d,%d) %dx%d for text %q", cachedRegion, regionX, regionY, regionW, regionH, searchText)
 	} else {
@@ -1326,18 +1347,29 @@ func handleFindElements(ctx context.Context, request mcp.CallToolRequest) (*mcp.
 	// Optional region parameters
 	regionX, regionY := 0, 0
 	regionW, regionH := screenW, screenH
+	userSpecifiedRegion := false
 	if x, err := getIntParam(request, "x"); err == nil {
 		regionX = x
+		userSpecifiedRegion = true
 	}
 	if y, err := getIntParam(request, "y"); err == nil {
 		regionY = y
+		userSpecifiedRegion = true
 	}
 	if w, err := getIntParam(request, "width"); err == nil {
 		regionW = w
+		userSpecifiedRegion = true
 	}
 	if h, err := getIntParam(request, "height"); err == nil {
 		regionH = h
+		userSpecifiedRegion = true
 	}
+
+	// Auto-learn if learning mode is on and no view exists yet.
+	if !userSpecifiedRegion {
+		autoLearnIfNeeded()
+	}
+	_ = userSpecifiedRegion // used above, suppress unused warning
 
 	// Capture the region
 	img, captureErr := robotgo.CaptureImg(regionX, regionY, regionW, regionH)
@@ -1405,7 +1437,34 @@ func handleFindElements(ctx context.Context, request mcp.CallToolRequest) (*mcp.
 	}
 	labelsJSON += "]"
 
+	// If learning mode is on, append elements from non-visible scroll pages.
+	offPageNote := ""
+	offPageElements := "[]"
+	if globalLearner.IsEnabled() && globalLearner.HasView() {
+		view := globalLearner.GetView()
+		var offPage []string
+		for _, e := range view.Elements {
+			if e.PageIndex > 0 {
+				offPage = append(offPage, fmt.Sprintf(
+					`{"text":%q,"x":%d,"y":%d,"width":%d,"height":%d,"center_x":%d,"center_y":%d,"confidence":%.1f,"page_index":%d}`,
+					e.Text, e.X, e.Y, e.Width, e.Height, e.X+e.Width/2, e.Y+e.Height/2, e.Confidence, e.PageIndex,
+				))
+			}
+		}
+		if len(offPage) > 0 {
+			offPageElements = "[" + strings.Join(offPage, ",") + "]"
+			offPageNote = fmt.Sprintf("(+%d elements from %d scroll page(s) in learned view)", len(offPage), view.PageCount-1)
+			logging.Info("find_elements: appending %d off-page elements from learned view", len(offPage))
+		}
+	}
+
 	// Build JSON response - put labels FIRST so agent sees them immediately
+	if offPageNote != "" {
+		return mcp.NewToolResultText(fmt.Sprintf(
+			`{"success":true,"labels":%s,"label_note":"FIELD LABELS VISIBLE ON SCREEN - search for these exact texts!","element_count":%d,"region":{"x":%d,"y":%d,"width":%d,"height":%d},"elements":%s,"learned_off_page_note":%q,"learned_off_page_elements":%s}`,
+			labelsJSON, len(elements), regionX, regionY, regionW, regionH, elementsJSON, offPageNote, offPageElements,
+		)), nil
+	}
 	return mcp.NewToolResultText(fmt.Sprintf(
 		`{"success":true,"labels":%s,"label_note":"FIELD LABELS VISIBLE ON SCREEN - search for these exact texts!","element_count":%d,"region":{"x":%d,"y":%d,"width":%d,"height":%d},"elements":%s}`,
 		labelsJSON, len(elements), regionX, regionY, regionW, regionH, elementsJSON,

@@ -1099,6 +1099,7 @@ SPEED TIPS:
 	), handleTakeScreenshot)
 
 	registerOCRTools(mcpServer)
+	registerLearningTools(mcpServer)
 
 	logging.Info("All tools registered successfully")
 }
@@ -1124,6 +1125,7 @@ func logEnvConfig() {
 		{"TESSDATA_PREFIX", false, "(not set — OCR will fail)"},
 		{"GHOST_MCP_HTTP_ADDR", false, "localhost:8080"},
 		{"GHOST_MCP_HTTP_BASE_URL", false, ""},
+		{"GHOST_MCP_LEARNING", false, "0 (learning mode off)"},
 	}
 	logging.Info("--- Configuration ---")
 	for _, v := range vars {
@@ -1168,6 +1170,9 @@ func main() {
 
 	// Print configuration so it's visible in logs at startup.
 	logEnvConfig()
+
+	// Initialise optional features.
+	initLearningMode()
 
 	auditLog, auditErr := audit.New()
 	if auditErr != nil {
