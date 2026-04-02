@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ghost-mcp/internal/learner"
 	"github.com/ghost-mcp/internal/logging"
 	"github.com/ghost-mcp/internal/ocr"
 	"github.com/ghost-mcp/internal/validate"
@@ -1509,6 +1510,9 @@ func handleFindElements(ctx context.Context, request mcp.CallToolRequest) (*mcp.
 			continue // Skip tiny text (likely noise) - lowered thresholds for labels
 		}
 
+		// Infer element type to help AI identify buttons vs labels vs headings
+		elementType := learner.InferElementType(w.Text, w.Width, w.Height)
+
 		elements = append(elements, map[string]interface{}{
 			"text":       w.Text,
 			"x":          regionX + w.X,
@@ -1518,6 +1522,7 @@ func handleFindElements(ctx context.Context, request mcp.CallToolRequest) (*mcp.
 			"center_x":   regionX + w.X + w.Width/2,
 			"center_y":   regionY + w.Y + w.Height/2,
 			"confidence": w.Confidence,
+			"type":       elementType, // button, label, heading, link, value, text
 		})
 	}
 
