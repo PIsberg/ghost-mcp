@@ -22,7 +22,9 @@ import (
 
 var (
 	prepareParallelOCRImageSet = ocr.PrepareParallelImageSet
-	readPreparedOCRImage       = ocr.ReadPreparedBytes
+	readPreparedOCRImage       = func(imgBytes []byte, scaleFactor int) (*ocr.Result, error) {
+		return ocr.ReadPreparedBytes(imgBytes, scaleFactor, ocr.Options{})
+	}
 	findTextWithScrolling      = scrollSearchForText
 	waitForTextCaptureImage    = func(x, y, width, height int) (image.Image, error) { return robotgo.CaptureImg(x, y, width, height) }
 	waitForTextSleep           = time.Sleep

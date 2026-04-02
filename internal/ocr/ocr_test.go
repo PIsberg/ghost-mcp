@@ -19,6 +19,8 @@ type fakeOCRClient struct {
 	setImageBytes  [][]byte
 	getBoxesCalls  int
 	pageSegModes   []gosseract.PageSegMode
+	variables      map[string]string
+	language       string
 	boundingBoxes  []gosseract.BoundingBox
 	boundingBoxErr error
 }
@@ -32,6 +34,16 @@ func (f *fakeOCRClient) SetImageFromBytes(data []byte) error {
 
 func (f *fakeOCRClient) SetPageSegMode(mode gosseract.PageSegMode) error {
 	f.pageSegModes = append(f.pageSegModes, mode)
+	return nil
+}
+
+func (f *fakeOCRClient) SetVariable(name gosseract.SettableVariable, value string) error {
+	f.variables[string(name)] = value
+	return nil
+}
+
+func (f *fakeOCRClient) SetLanguage(lang ...string) error {
+	f.language = lang[0]
 	return nil
 }
 
@@ -108,7 +120,7 @@ func TestPrimeClientPool_WarmsFourClients(t *testing.T) {
 
 	created := make([]*fakeOCRClient, 0, pooledClientWarmCount)
 	newOCRClient = func() ocrClient {
-		client := &fakeOCRClient{id: len(created) + 1}
+		client := &fakeOCRClient{id: len(created) + 1, variables: make(map[string]string)}
 		created = append(created, client)
 		return client
 	}
@@ -151,7 +163,7 @@ func TestGetPooledClient_ReusesPrimedClient(t *testing.T) {
 
 	created := make([]*fakeOCRClient, 0, pooledClientWarmCount)
 	newOCRClient = func() ocrClient {
-		client := &fakeOCRClient{id: len(created) + 1}
+		client := &fakeOCRClient{id: len(created) + 1, variables: make(map[string]string)}
 		created = append(created, client)
 		return client
 	}
