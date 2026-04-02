@@ -360,16 +360,16 @@ func handleGetLearnedView(_ context.Context, _ mcp.CallToolRequest) (*mcp.CallTo
 	}
 
 	type elementJSON struct {
-		Text       string      `json:"text"`
-		X          int         `json:"x"`
-		Y          int         `json:"y"`
-		Width      int         `json:"width"`
-		Height     int         `json:"height"`
-		Confidence float64     `json:"confidence"`
-		PageIndex  int         `json:"page_index"`
-		Type       string      `json:"type"`
-		OcrPass    string      `json:"ocr_pass"`
-		LabelFor   string      `json:"label_for,omitempty"`
+		Text       string  `json:"text"`
+		X          int     `json:"x"`
+		Y          int     `json:"y"`
+		Width      int     `json:"width"`
+		Height     int     `json:"height"`
+		Confidence float64 `json:"confidence"`
+		PageIndex  int     `json:"page_index"`
+		Type       string  `json:"type"`
+		OcrPass    string  `json:"ocr_pass"`
+		LabelFor   string  `json:"label_for,omitempty"`
 	}
 	elems := make([]elementJSON, len(view.Elements))
 	for i, e := range view.Elements {
@@ -384,11 +384,11 @@ func handleGetLearnedView(_ context.Context, _ mcp.CallToolRequest) (*mcp.CallTo
 
 	// Page summary (no JPEG bytes — use get_page_screenshot for images).
 	type pageJSON struct {
-		Index                 int `json:"index"`
-		CumulativeScrollTicks int `json:"cumulative_scroll_ticks"`
-		Width                 int `json:"width"`
-		Height                int `json:"height"`
-		ElementCount          int `json:"element_count"`
+		Index                 int  `json:"index"`
+		CumulativeScrollTicks int  `json:"cumulative_scroll_ticks"`
+		Width                 int  `json:"width"`
+		Height                int  `json:"height"`
+		ElementCount          int  `json:"element_count"`
 		HasScreenshot         bool `json:"has_screenshot"`
 	}
 	pgList := make([]pageJSON, len(view.Pages))
@@ -520,4 +520,3 @@ func autoLearnIfNeeded() {
 	sw, sh := uiGetScreenSize()
 	robotgo.Move(sw/2, sh/2)
 }
-

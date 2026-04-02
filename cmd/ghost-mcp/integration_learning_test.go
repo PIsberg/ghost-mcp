@@ -216,7 +216,7 @@ func TestIntegration_LearnScreen_ScrollDiscovery(t *testing.T) {
 
 	// Scroll through multiple pages to find below-fold content.
 	result, err := client.CallToolString(ctx, "learn_screen", map[string]interface{}{
-		"max_pages":    8,
+		"max_pages":     8,
 		"scroll_amount": 5,
 	})
 	if err != nil {
@@ -346,4 +346,3 @@ func TestIntegration_FindElements_ShowsLearnedOffPage(t *testing.T) {
 		t.Log("find_elements: no off-page elements (fixture may fit on one page for this screen size)")
 	}
 }
-

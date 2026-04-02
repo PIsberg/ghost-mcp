@@ -184,8 +184,8 @@ func TestLearner_FindElement_EmptyQuery(t *testing.T) {
 func TestLearner_FindAllElements_OrderedByScore(t *testing.T) {
 	l := New()
 	l.SetView(&View{Elements: []Element{
-		{Text: "Save Draft", PageIndex: 1},   // suffix match on "save" → score 400
-		{Text: "Save", PageIndex: 0},          // exact match → score 1000
+		{Text: "Save Draft", PageIndex: 1},        // suffix match on "save" → score 400
+		{Text: "Save", PageIndex: 0},              // exact match → score 1000
 		{Text: "Auto-Save Enabled", PageIndex: 0}, // substring → score 100
 	}})
 	results := l.FindAllElements("save")
@@ -215,8 +215,8 @@ func TestScoreMatch(t *testing.T) {
 		wantMin  int
 	}{
 		{"save", "save", 1000},
-		{"Save Changes", "save", 500},   // prefix
-		{"Auto Save", "save", 400},      // suffix
+		{"Save Changes", "save", 500},    // prefix
+		{"Auto Save", "save", 400},       // suffix
 		{"Please save now", "save", 100}, // substring
 		{"delete", "save", 0},
 		{"anything", "", 0},

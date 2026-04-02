@@ -3,6 +3,15 @@ repos:
   rev: v8.16.3
   hooks:
   - id: gitleaks
+- repo: local
+  hooks:
+  - id: gofmt
+    name: gofmt
+    entry: gofmt
+    language: system
+    types: [go]
+    args: ["-w"]
+    pass_filenames: true
 - repo: https://github.com/golangci/golangci-lint
   rev: v1.52.2
   hooks:
