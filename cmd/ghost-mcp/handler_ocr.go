@@ -501,6 +501,11 @@ func handleFindAndClick(ctx context.Context, request mcp.CallToolRequest) (*mcp.
 			remainingWarning = fmt.Sprintf(` WARNING: Only %d tool calls remaining before forced stop.`, failStats.RemainingCalls)
 		}
 
+		// Try text variations before giving up (punctuation removal, word splits)
+		if variationResult, found := tryTextVariations(ctx, request, searchText, nth, regionX, regionY, regionW, regionH, screenW, screenH); found {
+			return variationResult, nil
+		}
+
 		// Check if there are partial matches that might be off-screen
 		response := buildFindTextFailureMessage(img, searchText, nth, regionX, regionY, regionW, regionH, grayscale)
 
@@ -1352,6 +1357,25 @@ func buildFindTextFailureMessage(img image.Image, searchText string, nth int, re
 
 	msg += formatFindTextFailureMessage(searchText, nth, regionX, regionY, regionW, regionH, matches)
 
+	// Suggest using find_elements if this is a repeated failure
+	if nth > 1 || strings.Contains(searchText, " ") {
+		msg += ` (e) Use find_elements to see ALL visible text on screen.`
+	}
+
+	// Suggest text variations for common patterns
+	if strings.Contains(searchText, "!") || strings.Contains(searchText, "?") {
+		// Try without punctuation
+		baseText := strings.TrimRight(searchText, "!?")
+		msg += fmt.Sprintf(` (f) Try without punctuation: "%s"`, baseText)
+	}
+	if len(strings.Fields(searchText)) > 1 {
+		// Try shorter substrings
+		words := strings.Fields(searchText)
+		if len(words) >= 2 {
+			msg += fmt.Sprintf(` (g) Try shorter: "%s" or "%s"`, words[0], words[len(words)-1])
+		}
+	}
+
 	// Auto-refresh hint if learning mode is active but view might be stale
 	if globalLearner.IsEnabled() && globalLearner.HasView() {
 		view := globalLearner.GetView()
@@ -1361,6 +1385,64 @@ func buildFindTextFailureMessage(img image.Image, searchText string, nth int, re
 	}
 
 	return msg
+}
+
+// tryTextVariations attempts to find text with common variations (punctuation, word splits)
+// Returns (result, found) - if found is true, result contains the success response
+func tryTextVariations(ctx context.Context, request mcp.CallToolRequest, originalText string, nth int, regionX, regionY, regionW, regionH, screenW, screenH int) (*mcp.CallToolResult, bool) {
+	variations := []string{}
+
+	// Try without punctuation
+	if strings.Contains(originalText, "!") || strings.Contains(originalText, "?") || strings.Contains(originalText, ",") || strings.Contains(originalText, ".") {
+		cleanText := strings.TrimRight(originalText, "!?.,")
+		if cleanText != originalText && len(cleanText) > 0 {
+			variations = append(variations, cleanText)
+			logging.Info("tryTextVariations: trying without punctuation: %q", cleanText)
+		}
+	}
+
+	// Try individual words for multi-word text
+	words := strings.Fields(originalText)
+	if len(words) > 1 {
+		for _, word := range words {
+			cleanWord := strings.Trim(word, "!?.,:")
+			if len(cleanWord) > 2 && cleanWord != originalText {
+				variations = append(variations, cleanWord)
+				logging.Info("tryTextVariations: trying word: %q", cleanWord)
+			}
+		}
+	}
+
+	// Get button parameter from request
+	button, _ := getStringParam(request, "button")
+	if button == "" {
+		button = "left"
+	}
+
+	// Try each variation
+	for _, variation := range variations {
+		foundX, foundY, foundW, foundH, found, _ := parallelFindText(ctx, nil, variation, nth, true)
+		if found {
+			logging.Info("tryTextVariations: FOUND with variation %q at (%d,%d)", variation, foundX, foundY)
+			// Update cache with original text but found variation's bounds
+			normalizedOriginal := normalizeText(originalText)
+			regionCache.Put(normalizedOriginal, foundX, foundY, foundW, foundH, screenW, screenH)
+			
+			// Click on the found element
+			clickX := foundX + foundW/2
+			clickY := foundY + foundH/2
+			robotgo.Move(clickX, clickY)
+			time.Sleep(50 * time.Millisecond)
+			if err := uiCheckFailsafe(); err != nil {
+				return mcp.NewToolResultError(err.Error()), true
+			}
+			robotgo.Click(button, false)
+			logging.Info("ACTION: Clicked %q (variation of %q) at (%d,%d)", variation, originalText, clickX, clickY)
+			return mcp.NewToolResultText(fmt.Sprintf(`{"success":true,"text":%q,"x":%d,"y":%d,"variation":%q}`, originalText, clickX, clickY, variation)), true
+		}
+	}
+
+	return nil, false
 }
 
 // findAndClickWord removed in favor of direct clickFoundBounds logic
