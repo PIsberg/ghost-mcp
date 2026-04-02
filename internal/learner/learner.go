@@ -31,14 +31,18 @@ import (
 type ElementType string
 
 const (
-	ElementTypeUnknown ElementType = "unknown"
-	ElementTypeButton  ElementType = "button"  // clickable action element
-	ElementTypeLabel   ElementType = "label"   // field label (usually ends with ":")
-	ElementTypeInput   ElementType = "input"   // text input field (placeholder text)
-	ElementTypeHeading ElementType = "heading" // section/page heading
-	ElementTypeLink    ElementType = "link"    // hyperlink or navigation text
-	ElementTypeValue   ElementType = "value"   // numeric or status value
-	ElementTypeText    ElementType = "text"    // general body text
+	ElementTypeUnknown   ElementType = "unknown"
+	ElementTypeButton    ElementType = "button"    // clickable action element
+	ElementTypeLabel     ElementType = "label"     // field label (usually ends with ":")
+	ElementTypeInput     ElementType = "input"     // text input field (placeholder text)
+	ElementTypeCheckbox  ElementType = "checkbox"  // checkbox (☐ ☑ ✓ [ ] [x])
+	ElementTypeRadio     ElementType = "radio"     // radio button (○ ● ◉)
+	ElementTypeDropdown  ElementType = "dropdown"  // dropdown/select (▼ Select...)
+	ElementTypeToggle    ElementType = "toggle"    // toggle switch (ON/OFF)
+	ElementTypeHeading   ElementType = "heading"   // section/page heading
+	ElementTypeLink      ElementType = "link"      // hyperlink or navigation text
+	ElementTypeValue     ElementType = "value"     // numeric or status value
+	ElementTypeText      ElementType = "text"      // general body text
 )
 
 // OcrPass identifies which OCR preprocessing pass detected an element.
@@ -266,9 +270,29 @@ func InferElementType(text string, width, height int) ElementType {
 		return ElementTypeValue
 	}
 
+	// Dropdown: dropdown symbols or select/choose patterns (check before input).
+	if isDropdownText(lower) {
+		return ElementTypeDropdown
+	}
+
 	// Input field: common placeholder text patterns.
 	if isInputPlaceholder(lower) {
 		return ElementTypeInput
+	}
+
+	// Checkbox: checkbox symbols or agreement text.
+	if isCheckboxText(lower) {
+		return ElementTypeCheckbox
+	}
+
+	// Radio button: radio symbols or option selection text.
+	if isRadioText(lower) {
+		return ElementTypeRadio
+	}
+
+	// Toggle: ON/OFF or enabled/disabled text (check before button).
+	if isToggleText(lower) {
+		return ElementTypeToggle
 	}
 
 	// Heading: tall text (>28px), few words (max 8), and NOT a button keyword.
@@ -287,25 +311,100 @@ func InferElementType(text string, width, height int) ElementType {
 
 // isInputPlaceholder returns true for common input field placeholder text.
 func isInputPlaceholder(s string) bool {
-	// Common placeholder patterns
+	// Common placeholder patterns (excluding dropdown patterns)
 	placeholders := []string{
 		"enter your", "type here", "type your", "input your",
-		"search...", "search...", "email...", "password...",
+		"email...", "password...",
 		"username...", "name...", "phone...", "address...",
 		"city...", "state...", "zip...", "country...",
 		"message...", "comment...", "notes...", "description...",
-		"select...", "choose...", "pick...",
 	}
 	for _, ph := range placeholders {
 		if strings.Contains(s, ph) {
 			return true
 		}
 	}
-	// Also check for common single-word placeholders
+	// Also check for common single-word placeholders (excluding dropdown/button words)
 	if s == "email" || s == "password" || s == "username" || s == "name" ||
-		s == "phone" || s == "address" || s == "city" || s == "search" ||
-		s == "message" || s == "comment" {
+		s == "phone" || s == "address" || s == "city" || s == "message" ||
+		s == "comment" {
 		return true
+	}
+	return false
+}
+
+// isCheckboxText returns true for checkbox text or symbols.
+func isCheckboxText(s string) bool {
+	// Check for checkbox symbols
+	if strings.ContainsAny(s, "☐☑✓✗✘√[]") {
+		return true
+	}
+	// Check for common checkbox patterns
+	patterns := []string{
+		"[ ]", "[x]", "[✓]", "[✔]",
+		"i agree", "accept", "agree to", "terms",
+		"subscribe", "remember me", "keep me",
+	}
+	for _, p := range patterns {
+		if strings.Contains(s, p) {
+			return true
+		}
+	}
+	return false
+}
+
+// isRadioText returns true for radio button text or symbols.
+func isRadioText(s string) bool {
+	// Check for radio symbols
+	if strings.ContainsAny(s, "○●◉◎") {
+		return true
+	}
+	// Radio buttons often have short option labels
+	// This is harder to detect without context, so we check for common patterns
+	patterns := []string{
+		"option ", "choice ", "select this",
+	}
+	for _, p := range patterns {
+		if strings.Contains(s, p) {
+			return true
+		}
+	}
+	return false
+}
+
+// isDropdownText returns true for dropdown/select text or symbols.
+func isDropdownText(s string) bool {
+	// Check for dropdown symbols
+	if strings.ContainsAny(s, "▼▾◢⌄⌵") {
+		return true
+	}
+	// Check for common dropdown patterns
+	patterns := []string{
+		"select...", "choose...", "pick...",
+		"select one", "choose one", "pick one",
+		"-- select", "-- choose", "-- pick",
+		"dropdown", "menu",
+	}
+	for _, p := range patterns {
+		if strings.Contains(s, p) {
+			return true
+		}
+	}
+	return false
+}
+
+// isToggleText returns true for toggle switch text.
+func isToggleText(s string) bool {
+	// Common toggle patterns (exact matches only to avoid button conflicts)
+	toggles := []string{
+		"on", "off",
+		"enabled", "disabled",
+		"active", "inactive",
+	}
+	for _, t := range toggles {
+		if s == t {
+			return true
+		}
 	}
 	return false
 }

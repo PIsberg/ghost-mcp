@@ -232,21 +232,28 @@ TIPS:
 - FILTER BY TYPE: Use type field to find specific elements:
   - type=button for buttons
   - type=input for text input fields
+  - type=checkbox for checkboxes
+  - type=radio for radio buttons
+  - type=dropdown for dropdown menus
+  - type=toggle for on/off switches
   - type=label for field labels
-- Element types: button, input, label, heading, link, value, text
+- Element types: button, input, checkbox, radio, dropdown, toggle, label, heading, link, value, text
 - width/height help identify element type (wide+short = likely button)
 
-EXAMPLE: Find only buttons:
+EXAMPLE: Find form elements:
 // Response includes type field for each element:
 {
   "elements": [
-    {"text": "Primary", "type": "button", "center_x": 174, "center_y": 770},
     {"text": "Email:", "type": "label", "center_x": 100, "center_y": 100},
-    {"text": "Enter your email", "type": "input", "center_x": 250, "center_y": 100}
+    {"text": "Enter your email", "type": "input", "center_x": 250, "center_y": 100},
+    {"text": "☑ I agree", "type": "checkbox", "center_x": 150, "center_y": 150},
+    {"text": "Submit", "type": "button", "center_x": 200, "center_y": 200}
   ]
 }
-// Then click the button: {"tool": "click_at", "arguments": {"x": 174, "y": 770}}
-// Or type in input: {"tool": "find_click_and_type", "arguments": {"text": "Email:", "type_text": "user@example.com"}}`),
+// Then interact:
+// - Click checkbox: {"tool": "click_at", "arguments": {"x": 150, "y": 150}}
+// - Type in input: {"tool": "find_click_and_type", "arguments": {"text": "Email:", "type_text": "user@example.com"}}
+// - Click button: {"tool": "find_and_click", "arguments": {"text": "Submit"}}`),
 		mcp.WithNumber("x", mcp.Description("X coordinate of region to scan (default: 0 = full screen).")),
 		mcp.WithNumber("y", mcp.Description("Y coordinate of region to scan (default: 0 = full screen).")),
 		mcp.WithNumber("width", mcp.Description("Width of region to scan (default: full screen width).")),

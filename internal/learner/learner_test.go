@@ -436,6 +436,87 @@ func TestInferElementType_Input(t *testing.T) {
 	}
 }
 
+func TestInferElementType_Checkbox(t *testing.T) {
+	tests := []struct {
+		text   string
+		width  int
+		height int
+	}{
+		{"☐ I agree", 150, 20},
+		{"☑ Accept terms", 150, 20},
+		{"✓ Yes", 50, 20},
+		{"[ ] Option", 100, 20},
+		{"[x] Selected", 100, 20},
+		{"Remember me", 100, 20},
+		{"Subscribe", 80, 20},
+	}
+	for _, tc := range tests {
+		got := InferElementType(tc.text, tc.width, tc.height)
+		if got != ElementTypeCheckbox {
+			t.Errorf("InferElementType(%q, %d, %d) = %v, want checkbox", tc.text, tc.width, tc.height, got)
+		}
+	}
+}
+
+func TestInferElementType_Radio(t *testing.T) {
+	tests := []struct {
+		text   string
+		width  int
+		height int
+	}{
+		{"○ Option A", 100, 20},
+		{"● Selected", 100, 20},
+		{"◉ Option B", 100, 20},
+	}
+	for _, tc := range tests {
+		got := InferElementType(tc.text, tc.width, tc.height)
+		if got != ElementTypeRadio {
+			t.Errorf("InferElementType(%q, %d, %d) = %v, want radio", tc.text, tc.width, tc.height, got)
+		}
+	}
+}
+
+func TestInferElementType_Dropdown(t *testing.T) {
+	tests := []struct {
+		text   string
+		width  int
+		height int
+	}{
+		{"Select...", 120, 20},
+		{"Choose...", 120, 20},
+		{"▼ Select option", 150, 20},
+		{"-- Select --", 120, 20},
+		{"Pick one", 80, 20},
+	}
+	for _, tc := range tests {
+		got := InferElementType(tc.text, tc.width, tc.height)
+		if got != ElementTypeDropdown {
+			t.Errorf("InferElementType(%q, %d, %d) = %v, want dropdown", tc.text, tc.width, tc.height, got)
+		}
+	}
+}
+
+func TestInferElementType_Toggle(t *testing.T) {
+	tests := []struct {
+		text   string
+		width  int
+		height int
+	}{
+		{"ON", 50, 20},
+		{"OFF", 50, 20},
+		{"Enabled", 70, 20},
+		{"Disabled", 70, 20},
+		{"Active", 70, 20},
+		{"Inactive", 70, 20},
+	}
+	for _, tc := range tests {
+		got := InferElementType(tc.text, tc.width, tc.height)
+		if got != ElementTypeToggle {
+			t.Errorf("InferElementType(%q, %d, %d) = %v, want toggle", tc.text, tc.width, tc.height, got)
+		}
+	}
+}
+
 func TestInferElementType_Unknown(t *testing.T) {
 	got := InferElementType("", 0, 0)
 	if got != ElementTypeUnknown {
