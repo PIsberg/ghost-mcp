@@ -413,6 +413,29 @@ func TestInferElementType_Text(t *testing.T) {
 	}
 }
 
+func TestInferElementType_Input(t *testing.T) {
+	tests := []struct {
+		text   string
+		width  int
+		height int
+	}{
+		{"Enter your email", 150, 20},
+		{"Type here", 100, 20},
+		{"email...", 120, 20},
+		{"password...", 120, 20},
+		{"username...", 120, 20},
+		{"email", 120, 20},
+		{"username", 120, 20},
+		{"message", 120, 20},
+	}
+	for _, tc := range tests {
+		got := InferElementType(tc.text, tc.width, tc.height)
+		if got != ElementTypeInput {
+			t.Errorf("InferElementType(%q, %d, %d) = %v, want input", tc.text, tc.width, tc.height, got)
+		}
+	}
+}
+
 func TestInferElementType_Unknown(t *testing.T) {
 	got := InferElementType("", 0, 0)
 	if got != ElementTypeUnknown {

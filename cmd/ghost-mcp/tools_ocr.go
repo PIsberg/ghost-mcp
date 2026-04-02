@@ -229,8 +229,11 @@ TIPS:
 - Elements filtered by confidence (min 40%) and size (min 15x8px)
 - center_x/center_y are ready to use with click_at or move_mouse
 - All coordinates use logical pixels
-- FILTER BY TYPE: Use type field to find buttons: look for type=button
-- Element types: button, label, heading, link, value, text
+- FILTER BY TYPE: Use type field to find specific elements:
+  - type=button for buttons
+  - type=input for text input fields
+  - type=label for field labels
+- Element types: button, input, label, heading, link, value, text
 - width/height help identify element type (wide+short = likely button)
 
 EXAMPLE: Find only buttons:
@@ -238,10 +241,12 @@ EXAMPLE: Find only buttons:
 {
   "elements": [
     {"text": "Primary", "type": "button", "center_x": 174, "center_y": 770},
-    {"text": "Email:", "type": "label", "center_x": 100, "center_y": 100}
+    {"text": "Email:", "type": "label", "center_x": 100, "center_y": 100},
+    {"text": "Enter your email", "type": "input", "center_x": 250, "center_y": 100}
   ]
 }
-// Then click the button: {"tool": "click_at", "arguments": {"x": 174, "y": 770}}`),
+// Then click the button: {"tool": "click_at", "arguments": {"x": 174, "y": 770}}
+// Or type in input: {"tool": "find_click_and_type", "arguments": {"text": "Email:", "type_text": "user@example.com"}}`),
 		mcp.WithNumber("x", mcp.Description("X coordinate of region to scan (default: 0 = full screen).")),
 		mcp.WithNumber("y", mcp.Description("Y coordinate of region to scan (default: 0 = full screen).")),
 		mcp.WithNumber("width", mcp.Description("Width of region to scan (default: full screen width).")),

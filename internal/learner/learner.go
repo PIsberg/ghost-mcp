@@ -34,6 +34,7 @@ const (
 	ElementTypeUnknown ElementType = "unknown"
 	ElementTypeButton  ElementType = "button"  // clickable action element
 	ElementTypeLabel   ElementType = "label"   // field label (usually ends with ":")
+	ElementTypeInput   ElementType = "input"   // text input field (placeholder text)
 	ElementTypeHeading ElementType = "heading" // section/page heading
 	ElementTypeLink    ElementType = "link"    // hyperlink or navigation text
 	ElementTypeValue   ElementType = "value"   // numeric or status value
@@ -265,6 +266,11 @@ func InferElementType(text string, width, height int) ElementType {
 		return ElementTypeValue
 	}
 
+	// Input field: common placeholder text patterns.
+	if isInputPlaceholder(lower) {
+		return ElementTypeInput
+	}
+
 	// Heading: tall text (>28px), few words (max 8), and NOT a button keyword.
 	if height > 28 && len(words) <= 8 {
 		return ElementTypeHeading
@@ -277,6 +283,31 @@ func InferElementType(text string, width, height int) ElementType {
 	}
 
 	return ElementTypeText
+}
+
+// isInputPlaceholder returns true for common input field placeholder text.
+func isInputPlaceholder(s string) bool {
+	// Common placeholder patterns
+	placeholders := []string{
+		"enter your", "type here", "type your", "input your",
+		"search...", "search...", "email...", "password...",
+		"username...", "name...", "phone...", "address...",
+		"city...", "state...", "zip...", "country...",
+		"message...", "comment...", "notes...", "description...",
+		"select...", "choose...", "pick...",
+	}
+	for _, ph := range placeholders {
+		if strings.Contains(s, ph) {
+			return true
+		}
+	}
+	// Also check for common single-word placeholders
+	if s == "email" || s == "password" || s == "username" || s == "name" ||
+		s == "phone" || s == "address" || s == "city" || s == "search" ||
+		s == "message" || s == "comment" {
+		return true
+	}
+	return false
 }
 
 // isButtonKeyword returns true for common UI action words.
