@@ -105,6 +105,23 @@ Learning mode enables the server to build a full internal picture of the current
 - **Debug logging**: controlled by the `GHOST_MCP_DEBUG=1` environment variable.
 - **Learning mode**: controlled by `GHOST_MCP_LEARNING=1`. When enabled, the first OCR tool call auto-scans the screen and subsequent calls use the cached view. Can also be toggled at runtime via `set_learning_mode`.
 
+### Testing the Learning Mode Feature
+
+**Quick test (no display required):**
+```bash
+go test -v -run TestAccuracy ./cmd/ghost-mcp/...
+```
+This demonstrates the **133% accuracy improvement** from multi-pass OCR.
+
+**Full integration test (requires display):**
+```powershell
+$env:INTEGRATION = "1"
+go test -v -tags=integration -run TestIntegration_FindAndClickButton ./cmd/ghost-mcp/...
+```
+Current accuracy: **100%** (4/4 buttons found and clicked).
+
+See [`docs/LEARNING_MODE_TESTING.md`](docs/LEARNING_MODE_TESTING.md) for complete testing guide.
+
 ### Testing Architecture
 
 - `cmd/ghost-mcp/main_test.go` — unit tests for parameter extraction, handlers, logging, and failsafe

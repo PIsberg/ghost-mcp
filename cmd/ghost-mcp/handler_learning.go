@@ -1,9 +1,13 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"image"
+	"image/jpeg"
 	"os"
 	"strings"
 	"time"
@@ -21,7 +25,6 @@ import (
 // =============================================================================
 
 // globalLearner is the singleton learner for this server process.
-// It is initialised in initLearningMode and used by OCR tool handlers.
 var globalLearner = learner.New()
 
 // initLearningMode enables learning mode when GHOST_MCP_LEARNING=1.
@@ -33,33 +36,28 @@ func initLearningMode() {
 }
 
 // =============================================================================
-// SCREEN DISCOVERY - builds the internal view
+// SCREEN DISCOVERY
 // =============================================================================
 
 // learnCfg holds parameters for a learning scan.
 type learnCfg struct {
-	// Optional scan region; zero values mean full screen.
 	RegionX, RegionY, RegionW, RegionH int
-	// ScrollAmount is wheel-click ticks scrolled per page (default 5).
-	ScrollAmount int
-	// MaxPages caps the number of scroll pages scanned (default 10).
-	MaxPages int
-	// ScrollDirection is "down" or "up" (default "down").
-	ScrollDirection string
+	ScrollAmount                       int
+	MaxPages                           int
+	ScrollDirection                    string
 }
 
 // learnScreen performs a full GUI discovery scan and returns the combined view.
 //
-// Algorithm:
-//  1. Capture the initial viewport and run multi-pass OCR.
-//  2. Scroll down scroll_amount ticks, wait for animation, repeat up to max_pages.
-//  3. Stop early when consecutive pages share identical text (end of scrollable area).
-//  4. Scroll back to the top to restore the original viewport position.
-//  5. Return all discovered elements with their page indices.
+// Each scroll page produces three layers of understanding:
+//  1. Three OCR passes (normal, inverted, colour) merged and deduplicated.
+//  2. Element type inference on every word found.
+//  3. A JPEG screenshot stored in the view for visual retrieval later.
+//
+// After scanning, the viewport is restored to its original position.
 func learnScreen(cfg learnCfg) (*learner.View, error) {
 	screenW, screenH := uiGetScreenSize()
 
-	// Apply defaults and bounds.
 	if cfg.RegionW <= 0 || cfg.RegionH <= 0 {
 		cfg.RegionX, cfg.RegionY = 0, 0
 		cfg.RegionW, cfg.RegionH = screenW, screenH
@@ -78,6 +76,7 @@ func learnScreen(cfg learnCfg) (*learner.View, error) {
 	}
 
 	var allElements []learner.Element
+	var pages []learner.PageSnapshot
 	prevPageText := ""
 	scrollsDone := 0
 
@@ -87,81 +86,140 @@ func learnScreen(cfg learnCfg) (*learner.View, error) {
 			return nil, fmt.Errorf("page %d: capture failed: %w", page, err)
 		}
 
-		// Run two OCR passes in parallel: normal (grayscale+contrast) and inverted
-		// (catches white text on dark/coloured backgrounds).
+		// ── OCR: four passes ─────────────────────────────────────────────────
+		// 1. Normal — grayscale + contrast stretch. Best for most UI text.
+		// 2. Inverted — catches white text on dark/coloured backgrounds.
+		// 3. BrightText — isolates near-white pixels (white text on any background).
+		// 4. Color — full-colour pass for coloured-background buttons.
 		normalResult, _ := uiReadImage(img, ocr.Options{})
 		invertedResult, _ := uiReadImage(img, ocr.Options{Inverted: true})
+		brightResult, _ := uiReadImage(img, ocr.Options{BrightText: true})
+		colorResult, _ := uiReadImage(img, ocr.Options{Color: true})
 
-		// Merge words from both passes, keeping higher-confidence duplicates.
-		pageElements := mergeOCRResults(page, cfg.RegionX, cfg.RegionY, normalResult, invertedResult)
+		pageElements := mergeOCRPasses(page, cfg.RegionX, cfg.RegionY,
+			normalResult, invertedResult, brightResult, colorResult)
 		allElements = append(allElements, pageElements...)
 
-		// Extract page text for repeat-detection.
+		// ── Screenshot storage ───────────────────────────────────────────────
+		jpegBytes := encodeJPEG(img)
+		snap := learner.PageSnapshot{
+			Index:                 page,
+			CumulativeScrollTicks: scrollsDone * cfg.ScrollAmount,
+			Width:                 cfg.RegionW,
+			Height:                cfg.RegionH,
+			ElementCount:          len(pageElements),
+			JPEG:                  jpegBytes,
+		}
+		pages = append(pages, snap)
+
+		// ── Repeat detection ─────────────────────────────────────────────────
 		currentText := extractText(normalResult)
+		logging.Info("learn_screen: page %d — %d elements, screenshot %d bytes",
+			page, len(pageElements), len(jpegBytes))
 
-		logging.Info("learn_screen: page %d — %d elements (text len=%d)", page, len(pageElements), len(currentText))
-
-		// Stop when the page content hasn't changed (end of scrollable area).
 		if page > 0 && textSimilarity(prevPageText, currentText) > 0.85 {
-			logging.Info("learn_screen: page %d content matches previous page, stopping early", page)
+			logging.Info("learn_screen: page %d content matches previous — reached end of scrollable area", page)
 			break
 		}
 		prevPageText = currentText
 
-		// Scroll to the next page (skip on the last iteration).
 		if page < cfg.MaxPages-1 {
 			uiScrollDir(cfg.ScrollAmount, cfg.ScrollDirection)
 			scrollsDone++
 			time.Sleep(300 * time.Millisecond)
 
 			if err := uiCheckFailsafe(); err != nil {
-				// Scroll back before returning the error.
 				scrollBack(scrollsDone, cfg.ScrollAmount)
 				return nil, err
 			}
 		}
 	}
 
-	// Always restore the original scroll position.
 	scrollBack(scrollsDone, cfg.ScrollAmount)
 
+	// ── Post-processing ──────────────────────────────────────────────────────
+	// Deduplicate, infer element types, then associate labels with inputs.
+	deduped := learner.DeduplicateElements(allElements)
+	typed := inferTypes(deduped)
+	associated := learner.AssociateLabels(typed)
+
 	view := &learner.View{
-		Elements:         learner.DeduplicateElements(allElements),
+		Elements:         associated,
+		Pages:            pages,
 		PageCount:        scrollsDone + 1,
 		ScrollAmountUsed: cfg.ScrollAmount,
 		CapturedAt:       time.Now(),
 		ScreenW:          screenW,
 		ScreenH:          screenH,
 	}
-	logging.Info("learn_screen: complete — %d unique elements across %d pages", len(view.Elements), view.PageCount)
+	logging.Info("learn_screen: complete — %d elements across %d pages (%d screenshots)",
+		len(view.Elements), view.PageCount, len(view.Pages))
 	return view, nil
 }
+
+// inferTypes applies InferElementType to every element in the slice.
+func inferTypes(elements []learner.Element) []learner.Element {
+	out := make([]learner.Element, len(elements))
+	copy(out, elements)
+	for i := range out {
+		out[i].Type = learner.InferElementType(out[i].Text, out[i].Width, out[i].Height)
+	}
+	return out
+}
+
+// encodeJPEG compresses img to JPEG at quality 60 and returns the bytes.
+// Returns nil if encoding fails (non-fatal — screenshot is optional).
+func encodeJPEG(img image.Image) []byte {
+	buf := new(bytes.Buffer)
+	if err := jpeg.Encode(buf, img, &jpeg.Options{Quality: 60}); err != nil {
+		logging.Debug("encodeJPEG: encode failed: %v", err)
+		return nil
+	}
+	return buf.Bytes()
+}
+
+// =============================================================================
+// HELPERS
+// =============================================================================
 
 // scrollBack undoes n down-scrolls by scrolling up the same amount.
 func scrollBack(scrollsDone, scrollAmount int) {
 	if scrollsDone <= 0 {
 		return
 	}
-	logging.Debug("learn_screen: scrolling back up %d steps", scrollsDone)
+	logging.Debug("learn_screen: restoring scroll position (%d steps up)", scrollsDone)
 	for i := 0; i < scrollsDone; i++ {
 		uiScrollDir(scrollAmount, "up")
 		time.Sleep(100 * time.Millisecond)
 	}
 }
 
-// mergeOCRResults combines words from normalResult and invertedResult,
-// offsets them by (offsetX, offsetY) to convert region-relative to screen
-// coordinates, and tags each element with pageIndex.
-func mergeOCRResults(pageIndex, offsetX, offsetY int, normalResult, invertedResult *ocr.Result) []learner.Element {
-	type wordKey struct{ text string; x, y int }
+// mergeOCRPasses combines words from up to four OCR passes into a single
+// deduplicated element list. The pass that first discovers each word is
+// recorded in OcrPass so the AI knows which rendering caught the element.
+func mergeOCRPasses(pageIndex, offsetX, offsetY int, results ...*ocr.Result) []learner.Element {
+	passes := []struct {
+		result *ocr.Result
+		pass   learner.OcrPass
+	}{
+		{results[0], learner.OcrPassNormal},
+		{results[1], learner.OcrPassInverted},
+		{results[2], learner.OcrPassBrightText},
+		{results[3], learner.OcrPassColor},
+	}
+
+	type wordKey struct {
+		text string
+		x, y int
+	}
 	seen := make(map[wordKey]bool)
 	var elements []learner.Element
 
-	addWords := func(result *ocr.Result) {
-		if result == nil {
-			return
+	for _, p := range passes {
+		if p.result == nil {
+			continue
 		}
-		for _, w := range result.Words {
+		for _, w := range p.result.Words {
 			if w.Confidence < ocr.MinConfidence {
 				continue
 			}
@@ -171,9 +229,8 @@ func mergeOCRResults(pageIndex, offsetX, offsetY int, normalResult, invertedResu
 			}
 			key := wordKey{
 				text: strings.ToLower(text),
-				// Quantize to 10-pixel grid to suppress near-duplicate positions.
-				x: (w.X / 10) * 10,
-				y: (w.Y / 10) * 10,
+				x:    (w.X / 10) * 10,
+				y:    (w.Y / 10) * 10,
 			}
 			if seen[key] {
 				continue
@@ -187,16 +244,14 @@ func mergeOCRResults(pageIndex, offsetX, offsetY int, normalResult, invertedResu
 				Height:     w.Height,
 				Confidence: w.Confidence,
 				PageIndex:  pageIndex,
+				OcrPass:    p.pass,
 			})
 		}
 	}
-
-	addWords(normalResult)
-	addWords(invertedResult)
 	return elements
 }
 
-// extractText returns the full text from an OCR result, or empty string.
+// extractText returns trimmed full text from an OCR result, or empty string.
 func extractText(r *ocr.Result) string {
 	if r == nil {
 		return ""
@@ -204,8 +259,7 @@ func extractText(r *ocr.Result) string {
 	return strings.TrimSpace(r.Text)
 }
 
-// textSimilarity returns a rough [0,1] similarity score between two strings.
-// It counts shared trigrams (3-character substrings) relative to their union.
+// textSimilarity returns a [0,1] Jaccard similarity over 3-character trigrams.
 func textSimilarity(a, b string) float64 {
 	if a == b {
 		return 1.0
@@ -215,7 +269,6 @@ func textSimilarity(a, b string) float64 {
 	}
 	setA := trigrams(a)
 	setB := trigrams(b)
-
 	intersection := 0
 	for k := range setA {
 		if setB[k] {
@@ -229,7 +282,6 @@ func textSimilarity(a, b string) float64 {
 	return float64(intersection) / float64(union)
 }
 
-// trigrams returns a set of all 3-character substrings in s.
 func trigrams(s string) map[string]bool {
 	result := make(map[string]bool)
 	runes := []rune(s)
@@ -243,7 +295,6 @@ func trigrams(s string) map[string]bool {
 // MCP TOOL HANDLERS
 // =============================================================================
 
-// handleLearnScreen runs a full GUI discovery scan and stores the result.
 func handleLearnScreen(_ context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	logging.Debug("Handling learn_screen request")
 
@@ -284,15 +335,22 @@ func handleLearnScreen(_ context.Context, request mcp.CallToolRequest) (*mcp.Cal
 	globalLearner.SetView(view)
 
 	elapsed := time.Since(startTime)
-	logging.Info("learn_screen: stored view with %d elements in %v", len(view.Elements), elapsed)
 
+	// Build per-type summary for the response.
+	typeCounts := map[string]int{}
+	for _, e := range view.Elements {
+		typeCounts[string(e.Type)]++
+	}
+	typeJSON, _ := json.Marshal(typeCounts)
+
+	logging.Info("learn_screen: stored view with %d elements in %v", len(view.Elements), elapsed)
 	return mcp.NewToolResultText(fmt.Sprintf(
-		`{"success":true,"elements_found":%d,"pages_scanned":%d,"screen_w":%d,"screen_h":%d,"elapsed_ms":%d}`,
-		len(view.Elements), view.PageCount, view.ScreenW, view.ScreenH, elapsed.Milliseconds(),
+		`{"success":true,"elements_found":%d,"pages_scanned":%d,"screenshots_stored":%d,"element_types":%s,"screen_w":%d,"screen_h":%d,"elapsed_ms":%d}`,
+		len(view.Elements), view.PageCount, len(view.Pages), string(typeJSON),
+		view.ScreenW, view.ScreenH, elapsed.Milliseconds(),
 	)), nil
 }
 
-// handleGetLearnedView returns the current learned view as JSON.
 func handleGetLearnedView(_ context.Context, _ mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	logging.Debug("Handling get_learned_view request")
 
@@ -302,13 +360,16 @@ func handleGetLearnedView(_ context.Context, _ mcp.CallToolRequest) (*mcp.CallTo
 	}
 
 	type elementJSON struct {
-		Text       string  `json:"text"`
-		X          int     `json:"x"`
-		Y          int     `json:"y"`
-		Width      int     `json:"width"`
-		Height     int     `json:"height"`
-		Confidence float64 `json:"confidence"`
-		PageIndex  int     `json:"page_index"`
+		Text       string      `json:"text"`
+		X          int         `json:"x"`
+		Y          int         `json:"y"`
+		Width      int         `json:"width"`
+		Height     int         `json:"height"`
+		Confidence float64     `json:"confidence"`
+		PageIndex  int         `json:"page_index"`
+		Type       string      `json:"type"`
+		OcrPass    string      `json:"ocr_pass"`
+		LabelFor   string      `json:"label_for,omitempty"`
 	}
 	elems := make([]elementJSON, len(view.Elements))
 	for i, e := range view.Elements {
@@ -316,6 +377,26 @@ func handleGetLearnedView(_ context.Context, _ mcp.CallToolRequest) (*mcp.CallTo
 			Text: e.Text, X: e.X, Y: e.Y,
 			Width: e.Width, Height: e.Height,
 			Confidence: e.Confidence, PageIndex: e.PageIndex,
+			Type: string(e.Type), OcrPass: string(e.OcrPass),
+			LabelFor: e.LabelFor,
+		}
+	}
+
+	// Page summary (no JPEG bytes — use get_page_screenshot for images).
+	type pageJSON struct {
+		Index                 int `json:"index"`
+		CumulativeScrollTicks int `json:"cumulative_scroll_ticks"`
+		Width                 int `json:"width"`
+		Height                int `json:"height"`
+		ElementCount          int `json:"element_count"`
+		HasScreenshot         bool `json:"has_screenshot"`
+	}
+	pgList := make([]pageJSON, len(view.Pages))
+	for i, p := range view.Pages {
+		pgList[i] = pageJSON{
+			Index: p.Index, CumulativeScrollTicks: p.CumulativeScrollTicks,
+			Width: p.Width, Height: p.Height, ElementCount: p.ElementCount,
+			HasScreenshot: len(p.JPEG) > 0,
 		}
 	}
 
@@ -325,6 +406,7 @@ func handleGetLearnedView(_ context.Context, _ mcp.CallToolRequest) (*mcp.CallTo
 		ScreenW    int           `json:"screen_w"`
 		ScreenH    int           `json:"screen_h"`
 		CapturedAt string        `json:"captured_at"`
+		Pages      []pageJSON    `json:"pages"`
 		Elements   []elementJSON `json:"elements"`
 	}{
 		Learned:    true,
@@ -332,6 +414,7 @@ func handleGetLearnedView(_ context.Context, _ mcp.CallToolRequest) (*mcp.CallTo
 		ScreenW:    view.ScreenW,
 		ScreenH:    view.ScreenH,
 		CapturedAt: view.CapturedAt.Format(time.RFC3339),
+		Pages:      pgList,
 		Elements:   elems,
 	})
 	if err != nil {
@@ -340,7 +423,6 @@ func handleGetLearnedView(_ context.Context, _ mcp.CallToolRequest) (*mcp.CallTo
 	return mcp.NewToolResultText(string(data)), nil
 }
 
-// handleClearLearnedView discards the current learned view.
 func handleClearLearnedView(_ context.Context, _ mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	logging.Debug("Handling clear_learned_view request")
 	globalLearner.ClearView()
@@ -348,10 +430,8 @@ func handleClearLearnedView(_ context.Context, _ mcp.CallToolRequest) (*mcp.Call
 	return mcp.NewToolResultText(`{"success":true,"message":"Learned view cleared. Call learn_screen to rebuild."}`), nil
 }
 
-// handleSetLearningMode enables or disables learning mode at runtime.
 func handleSetLearningMode(_ context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	logging.Debug("Handling set_learning_mode request")
-
 	enabled := getBoolParam(request, "enabled", false)
 	if enabled {
 		globalLearner.Enable()
@@ -363,16 +443,44 @@ func handleSetLearningMode(_ context.Context, request mcp.CallToolRequest) (*mcp
 	return mcp.NewToolResultText(`{"success":true,"learning_mode":false}`), nil
 }
 
+// handleGetPageScreenshot returns the stored JPEG screenshot for one scroll page
+// as a base64-encoded image. This lets the AI visually analyze the page layout,
+// icons, colours, and non-text elements that OCR cannot capture.
+func handleGetPageScreenshot(_ context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	logging.Debug("Handling get_page_screenshot request")
+
+	pageIndex, err := getIntParam(request, "page_index")
+	if err != nil {
+		return mcp.NewToolResultError("page_index is required"), nil
+	}
+	if pageIndex < 0 {
+		return mcp.NewToolResultError("page_index must be 0 or greater"), nil
+	}
+
+	if !globalLearner.HasView() {
+		return mcp.NewToolResultError("no learned view — call learn_screen first"), nil
+	}
+
+	jpegBytes := globalLearner.GetPageScreenshot(pageIndex)
+	if jpegBytes == nil {
+		return mcp.NewToolResultError(fmt.Sprintf("no screenshot stored for page %d — re-run learn_screen", pageIndex)), nil
+	}
+
+	b64 := base64.StdEncoding.EncodeToString(jpegBytes)
+	logging.Info("get_page_screenshot: returning page %d (%d bytes JPEG)", pageIndex, len(jpegBytes))
+
+	return mcp.NewToolResultText(fmt.Sprintf(
+		`{"success":true,"page_index":%d,"format":"jpeg","size_bytes":%d,"base64":%q}`,
+		pageIndex, len(jpegBytes), b64,
+	)), nil
+}
+
 // =============================================================================
-// LEARNING MODE INTEGRATION - helpers used by OCR handlers
+// LEARNING MODE INTEGRATION — helpers used by OCR handlers
 // =============================================================================
 
 // learnerRegionHint checks the learned view for a matching element and returns
-// a region hint that covers the element with padding.  Returns (0,0,0,0,false)
-// when no hint is available.
-//
-// If the element is on a non-zero page the caller must scroll to that page
-// before using the coordinates.  The required scroll count is returned.
+// a padded region hint plus the number of scroll ticks needed to reach it.
 func learnerRegionHint(searchText string, screenW, screenH int) (x, y, w, h, scrollsNeeded int, found bool) {
 	if !globalLearner.IsEnabled() || !globalLearner.HasView() {
 		return 0, 0, 0, 0, 0, false
@@ -393,12 +501,11 @@ func learnerRegionHint(searchText string, screenW, screenH int) (x, y, w, h, scr
 	if view != nil {
 		scrolls = elem.PageIndex * view.ScrollAmountUsed
 	}
-
 	return rx, ry, rw, rh, scrolls, true
 }
 
 // autoLearnIfNeeded triggers a learning scan the first time a tool is called
-// while learning mode is enabled but no view exists yet.
+// while learning mode is on but no view exists yet.
 func autoLearnIfNeeded() {
 	if !globalLearner.IsEnabled() || globalLearner.HasView() {
 		return
@@ -410,8 +517,7 @@ func autoLearnIfNeeded() {
 		return
 	}
 	globalLearner.SetView(view)
-
-	// Restore focus after scroll-back by moving mouse to centre.
 	sw, sh := uiGetScreenSize()
 	robotgo.Move(sw/2, sh/2)
 }
+

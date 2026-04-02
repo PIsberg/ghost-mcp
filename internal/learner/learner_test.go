@@ -305,3 +305,345 @@ func TestLearner_ConcurrentAccess(t *testing.T) {
 	}
 	wg.Wait()
 }
+
+// =============================================================================
+// InferElementType
+// =============================================================================
+
+func TestInferElementType_Label(t *testing.T) {
+	tests := []struct {
+		text   string
+		width  int
+		height int
+		want   ElementType
+	}{
+		{"Email:", 50, 20, ElementTypeLabel},
+		{"Name:", 50, 20, ElementTypeLabel},
+		{"Phone Number:", 100, 20, ElementTypeLabel},
+		{"Full width colon:", 100, 20, ElementTypeLabel},
+	}
+	for _, tc := range tests {
+		got := InferElementType(tc.text, tc.width, tc.height)
+		if got != tc.want {
+			t.Errorf("InferElementType(%q, %d, %d) = %v, want %v", tc.text, tc.width, tc.height, got, tc.want)
+		}
+	}
+}
+
+func TestInferElementType_Heading(t *testing.T) {
+	got := InferElementType("Welcome to the Dashboard", 300, 32)
+	if got != ElementTypeHeading {
+		t.Errorf("expected heading, got %v", got)
+	}
+}
+
+func TestInferElementType_Button(t *testing.T) {
+	tests := []struct {
+		text   string
+		width  int
+		height int
+		want   ElementType
+	}{
+		{"Save", 60, 30, ElementTypeButton},
+		{"Cancel", 70, 30, ElementTypeButton},
+		{"Submit", 80, 35, ElementTypeButton},
+		{"OK", 50, 25, ElementTypeButton},
+		{"Log In", 70, 30, ElementTypeButton},
+		{"Sign Up", 70, 30, ElementTypeButton},
+	}
+	for _, tc := range tests {
+		got := InferElementType(tc.text, tc.width, tc.height)
+		if got != tc.want {
+			t.Errorf("InferElementType(%q, %d, %d) = %v, want %v", tc.text, tc.width, tc.height, got, tc.want)
+		}
+	}
+}
+
+func TestInferElementType_Link(t *testing.T) {
+	tests := []struct {
+		text   string
+		width  int
+		height int
+		want   ElementType
+	}{
+		{"https://example.com", 150, 20, ElementTypeLink},
+		{"http://test.org", 120, 20, ElementTypeLink},
+		{"www.example.com", 130, 20, ElementTypeLink},
+		{"Learn More", 80, 20, ElementTypeLink},
+		{"Click here", 70, 20, ElementTypeLink},
+		{"Read more", 70, 20, ElementTypeLink},
+	}
+	for _, tc := range tests {
+		got := InferElementType(tc.text, tc.width, tc.height)
+		if got != tc.want {
+			t.Errorf("InferElementType(%q, %d, %d) = %v, want %v", tc.text, tc.width, tc.height, got, tc.want)
+		}
+	}
+}
+
+func TestInferElementType_Value(t *testing.T) {
+	tests := []struct {
+		text   string
+		width  int
+		height int
+		want   ElementType
+	}{
+		{"42", 30, 20, ElementTypeValue},
+		{"$99.99", 60, 20, ElementTypeValue},
+		{"85%", 40, 20, ElementTypeValue},
+		{"1,234.56", 70, 20, ElementTypeValue},
+		{"-100", 50, 20, ElementTypeValue},
+		{"+50", 40, 20, ElementTypeValue},
+		{"1/2", 30, 20, ElementTypeValue},
+	}
+	for _, tc := range tests {
+		got := InferElementType(tc.text, tc.width, tc.height)
+		if got != tc.want {
+			t.Errorf("InferElementType(%q, %d, %d) = %v, want %v", tc.text, tc.width, tc.height, got, tc.want)
+		}
+	}
+}
+
+func TestInferElementType_Text(t *testing.T) {
+	// Use dimensions outside button range: height < 16 or > 65, or width < 40
+	// Also ensure it's not a button keyword, URL, numeric, or heading
+	got := InferElementType("This is some body text", 200, 14)
+	if got != ElementTypeText {
+		t.Errorf("expected text, got %v", got)
+	}
+}
+
+func TestInferElementType_Unknown(t *testing.T) {
+	got := InferElementType("", 0, 0)
+	if got != ElementTypeUnknown {
+		t.Errorf("expected unknown for empty text, got %v", got)
+	}
+}
+
+func TestInferElementType_ButtonKeywords(t *testing.T) {
+	keywords := []string{
+		"ok", "yes", "no", "cancel", "close", "dismiss", "done",
+		"submit", "send", "save", "delete", "remove", "back", "next",
+		"continue", "confirm", "apply", "accept", "login", "sign in",
+		"create", "new", "add", "edit", "update", "copy", "paste",
+		"search", "filter", "sort", "refresh", "reset", "expand",
+		"collapse", "toggle", "show", "hide", "select all",
+	}
+	for _, kw := range keywords {
+		got := InferElementType(kw, 60, 30)
+		if got != ElementTypeButton {
+			t.Errorf("keyword %q should be button, got %v", kw, got)
+		}
+	}
+}
+
+// =============================================================================
+// AssociateLabels
+// =============================================================================
+
+func TestAssociateLabels_LabelToRight(t *testing.T) {
+	elems := []Element{
+		{Text: "Email:", X: 10, Y: 10, Width: 50, Height: 20, Type: ElementTypeLabel},
+		{Text: "Enter your email", X: 80, Y: 10, Width: 150, Height: 20, Type: ElementTypeText},
+	}
+	result := AssociateLabels(elems)
+	if result[0].LabelFor != "Enter your email" {
+		t.Errorf("expected label to be associated with 'Enter your email', got %q", result[0].LabelFor)
+	}
+}
+
+func TestAssociateLabels_LabelBelow(t *testing.T) {
+	elems := []Element{
+		{Text: "Name:", X: 10, Y: 10, Width: 50, Height: 20, Type: ElementTypeLabel},
+		{Text: "John Doe", X: 10, Y: 40, Width: 100, Height: 20, Type: ElementTypeText},
+	}
+	result := AssociateLabels(elems)
+	if result[0].LabelFor != "John Doe" {
+		t.Errorf("expected label to be associated with 'John Doe', got %q", result[0].LabelFor)
+	}
+}
+
+func TestAssociateLabels_NoAssociation(t *testing.T) {
+	elems := []Element{
+		{Text: "Orphan Label:", X: 10, Y: 10, Width: 50, Height: 20, Type: ElementTypeLabel},
+		{Text: "Too far away", X: 500, Y: 500, Width: 100, Height: 20, Type: ElementTypeText},
+	}
+	result := AssociateLabels(elems)
+	if result[0].LabelFor != "" {
+		t.Errorf("expected no association, got %q", result[0].LabelFor)
+	}
+}
+
+func TestAssociateLabels_PreservesOriginal(t *testing.T) {
+	elems := []Element{
+		{Text: "Email:", X: 10, Y: 10, Width: 50, Height: 20, Type: ElementTypeLabel},
+		{Text: "test @example.com", X: 80, Y: 10, Width: 150, Height: 20, Type: ElementTypeText},
+	}
+	original := make([]Element, len(elems))
+	copy(original, elems)
+	_ = AssociateLabels(elems)
+	// Original slice should not be modified.
+	if original[0].LabelFor != "" {
+		t.Error("original slice should not be modified")
+	}
+}
+
+func TestAssociateLabels_MultipleLabels(t *testing.T) {
+	elems := []Element{
+		{Text: "First:", X: 10, Y: 10, Width: 50, Height: 20, Type: ElementTypeLabel},
+		{Text: "John", X: 80, Y: 10, Width: 100, Height: 20, Type: ElementTypeText},
+		{Text: "Last:", X: 10, Y: 50, Width: 50, Height: 20, Type: ElementTypeLabel},
+		{Text: "Doe", X: 80, Y: 50, Width: 100, Height: 20, Type: ElementTypeText},
+	}
+	result := AssociateLabels(elems)
+	if result[0].LabelFor != "John" {
+		t.Errorf("first label should associate with 'John', got %q", result[0].LabelFor)
+	}
+	if result[2].LabelFor != "Doe" {
+		t.Errorf("second label should associate with 'Doe', got %q", result[2].LabelFor)
+	}
+}
+
+func TestAssociateLabels_LabelSkipsOtherLabels(t *testing.T) {
+	elems := []Element{
+		{Text: "Label1:", X: 10, Y: 10, Width: 50, Height: 20, Type: ElementTypeLabel},
+		{Text: "Label2:", X: 80, Y: 10, Width: 50, Height: 20, Type: ElementTypeLabel},
+		{Text: "Value", X: 150, Y: 10, Width: 100, Height: 20, Type: ElementTypeText},
+	}
+	result := AssociateLabels(elems)
+	// Label1 should associate with Value, not Label2
+	if result[0].LabelFor != "Value" {
+		t.Errorf("label should skip over other labels, got %q", result[0].LabelFor)
+	}
+}
+
+// =============================================================================
+// Benchmarks
+// =============================================================================
+
+func BenchmarkFindElement(b *testing.B) {
+	l := New()
+	l.Enable()
+	l.SetView(&View{
+		Elements: []Element{
+			{Text: "Save", X: 100, Y: 200, Width: 60, Height: 30, PageIndex: 0},
+			{Text: "Cancel", X: 200, Y: 200, Width: 70, Height: 30, PageIndex: 0},
+			{Text: "Submit", X: 300, Y: 200, Width: 80, Height: 30, PageIndex: 0},
+			{Text: "Delete", X: 400, Y: 200, Width: 75, Height: 30, PageIndex: 0},
+			{Text: "Edit", X: 500, Y: 200, Width: 50, Height: 30, PageIndex: 0},
+		},
+	})
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		l.FindElement("Save")
+	}
+}
+
+func BenchmarkFindElement_LargeView(b *testing.B) {
+	l := New()
+	l.Enable()
+	elements := make([]Element, 100)
+	for i := 0; i < 100; i++ {
+		elements[i] = Element{
+			Text:      "Element",
+			X:         i * 10,
+			Y:         i * 10,
+			Width:     50,
+			Height:    20,
+			PageIndex: i / 10,
+		}
+	}
+	l.SetView(&View{Elements: elements})
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		l.FindElement("Element")
+	}
+}
+
+func BenchmarkFindAllElements(b *testing.B) {
+	l := New()
+	l.Enable()
+	l.SetView(&View{
+		Elements: []Element{
+			{Text: "Save", PageIndex: 0},
+			{Text: "Save Draft", PageIndex: 0},
+			{Text: "Auto-Save", PageIndex: 1},
+			{Text: "Cancel", PageIndex: 0},
+			{Text: "Submit", PageIndex: 0},
+		},
+	})
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		l.FindAllElements("save")
+	}
+}
+
+func BenchmarkScoreMatch(b *testing.B) {
+	haystack := "Save Changes button on the page"
+	needle := "save"
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		ScoreMatch(haystack, needle)
+	}
+}
+
+func BenchmarkDeduplicateElements(b *testing.B) {
+	elements := []Element{
+		{Text: "OK", X: 10, Y: 10, Width: 60, Height: 30, Confidence: 90, PageIndex: 0},
+		{Text: "OK", X: 12, Y: 11, Width: 58, Height: 28, Confidence: 80, PageIndex: 0},
+		{Text: "Cancel", X: 100, Y: 10, Width: 70, Height: 30, Confidence: 85, PageIndex: 0},
+		{Text: "Submit", X: 200, Y: 10, Width: 80, Height: 35, Confidence: 92, PageIndex: 0},
+		{Text: "Submit", X: 202, Y: 12, Width: 78, Height: 33, Confidence: 88, PageIndex: 0},
+	}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		DeduplicateElements(elements)
+	}
+}
+
+func BenchmarkInferElementType_AllTypes(b *testing.B) {
+	tests := []struct {
+		text   string
+		width  int
+		height int
+	}{
+		{"Email:", 50, 20},
+		{"Save", 60, 30},
+		{"Welcome", 300, 32},
+		{"https://example.com", 150, 20},
+		{"$99.99", 60, 20},
+		{"Body text", 200, 14},
+	}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		for _, tt := range tests {
+			InferElementType(tt.text, tt.width, tt.height)
+		}
+	}
+}
+
+func BenchmarkAssociateLabels_LargeForm(b *testing.B) {
+	elements := make([]Element, 20)
+	for i := 0; i < 10; i++ {
+		elements[i*2] = Element{
+			Text:   "Label",
+			X:      10,
+			Y:      10 + i*40,
+			Width:  50,
+			Height: 20,
+			Type:   ElementTypeLabel,
+		}
+		elements[i*2+1] = Element{
+			Text:   "Value",
+			X:      80,
+			Y:      10 + i*40,
+			Width:  150,
+			Height: 20,
+			Type:   ElementTypeText,
+		}
+	}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		AssociateLabels(elements)
+	}
+}

@@ -72,46 +72,49 @@ func TestTextSimilarity_HighForSimilar(t *testing.T) {
 }
 
 // =============================================================================
-// mergeOCRResults
+// mergeOCRPasses
 // =============================================================================
 
-func TestMergeOCRResults_NilInputs(t *testing.T) {
-	elems := mergeOCRResults(0, 0, 0, nil, nil)
+func TestMergeOCRPasses_NilInputs(t *testing.T) {
+	elems := mergeOCRPasses(0, 0, 0, nil, nil, nil, nil)
 	if len(elems) != 0 {
 		t.Fatalf("nil inputs should return empty slice, got %d elements", len(elems))
 	}
 }
 
-func TestMergeOCRResults_AddsOffset(t *testing.T) {
+func TestMergeOCRPasses_AddsOffset(t *testing.T) {
 	r := &ocr.Result{
 		Words: []ocr.Word{
 			{Text: "OK", X: 10, Y: 20, Width: 30, Height: 15, Confidence: 90},
 		},
 	}
-	elems := mergeOCRResults(0, 100, 200, r, nil)
+	elems := mergeOCRPasses(0, 100, 200, r, nil, nil, nil)
 	if len(elems) != 1 {
 		t.Fatalf("expected 1 element, got %d", len(elems))
 	}
 	if elems[0].X != 110 || elems[0].Y != 220 {
 		t.Errorf("expected offset coords (110,220), got (%d,%d)", elems[0].X, elems[0].Y)
 	}
+	if elems[0].OcrPass != learner.OcrPassNormal {
+		t.Errorf("expected OcrPass=normal, got %v", elems[0].OcrPass)
+	}
 }
 
-func TestMergeOCRResults_DeduplicatesWithinPage(t *testing.T) {
+func TestMergeOCRPasses_DeduplicatesWithinPage(t *testing.T) {
 	word := ocr.Word{Text: "OK", X: 10, Y: 10, Width: 30, Height: 15, Confidence: 80}
 	r1 := &ocr.Result{Words: []ocr.Word{word}}
 	r2 := &ocr.Result{Words: []ocr.Word{word}} // exact same text + position → deduplicated
-	elems := mergeOCRResults(0, 0, 0, r1, r2)
+	elems := mergeOCRPasses(0, 0, 0, r1, r2, nil, nil)
 	if len(elems) != 1 {
 		t.Fatalf("duplicate at same position should be merged; got %d elements", len(elems))
 	}
 }
 
-func TestMergeOCRResults_SetsPageIndex(t *testing.T) {
+func TestMergeOCRPasses_SetsPageIndex(t *testing.T) {
 	r := &ocr.Result{
 		Words: []ocr.Word{{Text: "Hi", X: 5, Y: 5, Width: 20, Height: 12, Confidence: 85}},
 	}
-	elems := mergeOCRResults(3, 0, 0, r, nil)
+	elems := mergeOCRPasses(3, 0, 0, r, nil, nil, nil)
 	if len(elems) == 0 {
 		t.Fatal("expected at least one element")
 	}
@@ -120,27 +123,71 @@ func TestMergeOCRResults_SetsPageIndex(t *testing.T) {
 	}
 }
 
-func TestMergeOCRResults_SkipsLowConfidence(t *testing.T) {
+func TestMergeOCRPasses_SkipsLowConfidence(t *testing.T) {
 	r := &ocr.Result{
 		Words: []ocr.Word{
 			{Text: "Noise", X: 0, Y: 0, Width: 20, Height: 10, Confidence: 10}, // below MinConfidence
 		},
 	}
-	elems := mergeOCRResults(0, 0, 0, r, nil)
+	elems := mergeOCRPasses(0, 0, 0, r, nil, nil, nil)
 	if len(elems) != 0 {
 		t.Fatal("low-confidence words should be skipped")
 	}
 }
 
-func TestMergeOCRResults_SkipsEmptyText(t *testing.T) {
+func TestMergeOCRPasses_SkipsEmptyText(t *testing.T) {
 	r := &ocr.Result{
 		Words: []ocr.Word{
 			{Text: "   ", X: 0, Y: 0, Width: 20, Height: 10, Confidence: 90},
 		},
 	}
-	elems := mergeOCRResults(0, 0, 0, r, nil)
+	elems := mergeOCRPasses(0, 0, 0, r, nil, nil, nil)
 	if len(elems) != 0 {
 		t.Fatal("blank text should be skipped")
+	}
+}
+
+func TestMergeOCRPasses_ThreePasses(t *testing.T) {
+	normal := &ocr.Result{
+		Words: []ocr.Word{
+			{Text: "Normal", X: 10, Y: 10, Width: 50, Height: 20, Confidence: 90},
+		},
+	}
+	inverted := &ocr.Result{
+		Words: []ocr.Word{
+			{Text: "Inverted", X: 100, Y: 10, Width: 60, Height: 20, Confidence: 85},
+		},
+	}
+	bright := &ocr.Result{
+		Words: []ocr.Word{
+			{Text: "Bright", X: 150, Y: 10, Width: 50, Height: 20, Confidence: 86},
+		},
+	}
+	color := &ocr.Result{
+		Words: []ocr.Word{
+			{Text: "Color", X: 200, Y: 10, Width: 40, Height: 20, Confidence: 88},
+		},
+	}
+	elems := mergeOCRPasses(0, 0, 0, normal, inverted, bright, color)
+	if len(elems) != 4 {
+		t.Fatalf("expected 4 elements from 4 passes, got %d", len(elems))
+	}
+
+	passes := map[learner.OcrPass]bool{}
+	for _, e := range elems {
+		passes[e.OcrPass] = true
+	}
+	if !passes[learner.OcrPassNormal] {
+		t.Error("expected normal pass element")
+	}
+	if !passes[learner.OcrPassInverted] {
+		t.Error("expected inverted pass element")
+	}
+	if !passes[learner.OcrPassBrightText] {
+		t.Error("expected bright_text pass element")
+	}
+	if !passes[learner.OcrPassColor] {
+		t.Error("expected color pass element")
 	}
 }
 
@@ -415,5 +462,269 @@ func TestHandleSetLearningMode_Disable(t *testing.T) {
 	text := textFromResult(t, result)
 	if !strings.Contains(text, `"learning_mode":false`) {
 		t.Errorf("expected learning_mode:false in response; got %s", text)
+	}
+}
+
+// =============================================================================
+// Element type inference (inferTypes helper)
+// =============================================================================
+
+func TestInferTypes_Label(t *testing.T) {
+	elems := []learner.Element{
+		{Text: "Email:", X: 10, Y: 10, Width: 50, Height: 20},
+		{Text: "Name:", X: 10, Y: 50, Width: 50, Height: 20},
+	}
+	result := inferTypes(elems)
+	if result[0].Type != learner.ElementTypeLabel {
+		t.Errorf("expected 'Email:' to be label, got %v", result[0].Type)
+	}
+	if result[1].Type != learner.ElementTypeLabel {
+		t.Errorf("expected 'Name:' to be label, got %v", result[1].Type)
+	}
+}
+
+func TestInferTypes_Heading(t *testing.T) {
+	elems := []learner.Element{
+		{Text: "Welcome to the Dashboard", X: 10, Y: 10, Width: 300, Height: 32},
+	}
+	result := inferTypes(elems)
+	if result[0].Type != learner.ElementTypeHeading {
+		t.Errorf("expected heading, got %v", result[0].Type)
+	}
+}
+
+func TestInferTypes_Button(t *testing.T) {
+	elems := []learner.Element{
+		{Text: "Save", X: 10, Y: 10, Width: 60, Height: 30},
+		{Text: "Cancel", X: 100, Y: 10, Width: 70, Height: 30},
+		{Text: "Submit", X: 200, Y: 10, Width: 80, Height: 35},
+	}
+	result := inferTypes(elems)
+	for i, e := range result {
+		if e.Type != learner.ElementTypeButton {
+			t.Errorf("element %d (%q) expected button, got %v", i, e.Text, e.Type)
+		}
+	}
+}
+
+func TestInferTypes_Link(t *testing.T) {
+	elems := []learner.Element{
+		{Text: "https://example.com", X: 10, Y: 10, Width: 150, Height: 20},
+		{Text: "Learn More", X: 10, Y: 50, Width: 80, Height: 20},
+	}
+	result := inferTypes(elems)
+	for i, e := range result {
+		if e.Type != learner.ElementTypeLink {
+			t.Errorf("element %d (%q) expected link, got %v", i, e.Text, e.Type)
+		}
+	}
+}
+
+func TestInferTypes_Value(t *testing.T) {
+	elems := []learner.Element{
+		{Text: "42", X: 10, Y: 10, Width: 30, Height: 20},
+		{Text: "$99.99", X: 10, Y: 50, Width: 60, Height: 20},
+		{Text: "85%", X: 10, Y: 90, Width: 40, Height: 20},
+	}
+	result := inferTypes(elems)
+	for i, e := range result {
+		if e.Type != learner.ElementTypeValue {
+			t.Errorf("element %d (%q) expected value, got %v", i, e.Text, e.Type)
+		}
+	}
+}
+
+func TestInferTypes_Text(t *testing.T) {
+	// Use dimensions outside button range: height < 16 or > 65, or width < 40
+	// Also ensure it's not a button keyword, URL, numeric, or heading
+	elems := []learner.Element{
+		{Text: "This is some body text", X: 10, Y: 10, Width: 200, Height: 14},
+	}
+	result := inferTypes(elems)
+	if result[0].Type != learner.ElementTypeText {
+		t.Errorf("expected text, got %v", result[0].Type)
+	}
+}
+
+// =============================================================================
+// AssociateLabels
+// =============================================================================
+
+func TestAssociateLabels_LabelToRight(t *testing.T) {
+	elems := []learner.Element{
+		{Text: "Email:", X: 10, Y: 10, Width: 50, Height: 20, Type: learner.ElementTypeLabel},
+		{Text: "Enter your email", X: 80, Y: 10, Width: 150, Height: 20, Type: learner.ElementTypeText},
+	}
+	result := learner.AssociateLabels(elems)
+	if result[0].LabelFor != "Enter your email" {
+		t.Errorf("expected label to be associated with 'Enter your email', got %q", result[0].LabelFor)
+	}
+}
+
+func TestAssociateLabels_LabelBelow(t *testing.T) {
+	elems := []learner.Element{
+		{Text: "Name:", X: 10, Y: 10, Width: 50, Height: 20, Type: learner.ElementTypeLabel},
+		{Text: "John Doe", X: 10, Y: 40, Width: 100, Height: 20, Type: learner.ElementTypeText},
+	}
+	result := learner.AssociateLabels(elems)
+	if result[0].LabelFor != "John Doe" {
+		t.Errorf("expected label to be associated with 'John Doe', got %q", result[0].LabelFor)
+	}
+}
+
+func TestAssociateLabels_NoAssociation(t *testing.T) {
+	elems := []learner.Element{
+		{Text: "Orphan Label:", X: 10, Y: 10, Width: 50, Height: 20, Type: learner.ElementTypeLabel},
+		{Text: "Too far away", X: 500, Y: 500, Width: 100, Height: 20, Type: learner.ElementTypeText},
+	}
+	result := learner.AssociateLabels(elems)
+	if result[0].LabelFor != "" {
+		t.Errorf("expected no association, got %q", result[0].LabelFor)
+	}
+}
+
+func TestAssociateLabels_PreservesOriginal(t *testing.T) {
+	elems := []learner.Element{
+		{Text: "Email:", X: 10, Y: 10, Width: 50, Height: 20, Type: learner.ElementTypeLabel},
+		{Text: "test @example.com", X: 80, Y: 10, Width: 150, Height: 20, Type: learner.ElementTypeText},
+	}
+	original := make([]learner.Element, len(elems))
+	copy(original, elems)
+	_ = learner.AssociateLabels(elems)
+	// Original slice should not be modified.
+	if original[0].LabelFor != "" {
+		t.Error("original slice should not be modified")
+	}
+}
+
+// =============================================================================
+// encodeJPEG
+// =============================================================================
+
+func TestEncodeJPEG_NilImage(t *testing.T) {
+	// Should not panic, should return nil.
+	// Note: encodeJPEG will panic on nil image because jpeg.Encode doesn't handle it.
+	// This is acceptable since encodeJPEG is only called with valid images from uiCaptureImage.
+	t.Skip("encodeJPEG is not designed to handle nil images; only called with valid captures")
+}
+
+// =============================================================================
+// BENCHMARKS
+// =============================================================================
+
+func BenchmarkTextSimilarity_Identical(b *testing.B) {
+	a := "Save Changes button on the page"
+	b.Run("identical", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			textSimilarity(a, a)
+		}
+	})
+}
+
+func BenchmarkTextSimilarity_Similar(b *testing.B) {
+	a := "Save Changes button on the page"
+	b2 := "Save Changes button on the page - now with more text"
+	b.Run("similar", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			textSimilarity(a, b2)
+		}
+	})
+}
+
+func BenchmarkTextSimilarity_Different(b *testing.B) {
+	a := "Save Changes button on the page"
+	b2 := "Completely different text with no similarity at all"
+	b.Run("different", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			textSimilarity(a, b2)
+		}
+	})
+}
+
+func BenchmarkMergeOCRPasses_Empty(b *testing.B) {
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		mergeOCRPasses(0, 0, 0, nil, nil, nil, nil)
+	}
+}
+
+func BenchmarkMergeOCRPasses_SingleWord(b *testing.B) {
+	r := &ocr.Result{
+		Words: []ocr.Word{
+			{Text: "OK", X: 10, Y: 20, Width: 30, Height: 15, Confidence: 90},
+		},
+	}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		mergeOCRPasses(0, 0, 0, r, nil, nil, nil)
+	}
+}
+
+func BenchmarkMergeOCRPasses_ThreePasses(b *testing.B) {
+	normal := &ocr.Result{
+		Words: []ocr.Word{
+			{Text: "Normal", X: 10, Y: 10, Width: 50, Height: 20, Confidence: 90},
+			{Text: "Text", X: 70, Y: 10, Width: 40, Height: 20, Confidence: 88},
+			{Text: "Here", X: 120, Y: 10, Width: 45, Height: 20, Confidence: 92},
+		},
+	}
+	inverted := &ocr.Result{
+		Words: []ocr.Word{
+			{Text: "Inverted", X: 10, Y: 40, Width: 60, Height: 20, Confidence: 85},
+			{Text: "Words", X: 80, Y: 40, Width: 50, Height: 20, Confidence: 87},
+		},
+	}
+	bright := &ocr.Result{
+		Words: []ocr.Word{
+			{Text: "Bright", X: 10, Y: 70, Width: 55, Height: 20, Confidence: 86},
+		},
+	}
+	color := &ocr.Result{
+		Words: []ocr.Word{
+			{Text: "Color", X: 10, Y: 100, Width: 45, Height: 20, Confidence: 88},
+			{Text: "Button", X: 65, Y: 100, Width: 55, Height: 20, Confidence: 91},
+		},
+	}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		mergeOCRPasses(0, 0, 0, normal, inverted, bright, color)
+	}
+}
+
+func BenchmarkInferElementType(b *testing.B) {
+	tests := []struct {
+		name   string
+		text   string
+		width  int
+		height int
+	}{
+		{"label", "Email:", 50, 20},
+		{"button", "Save", 60, 30},
+		{"heading", "Welcome to Dashboard", 300, 32},
+		{"link", "https://example.com", 150, 20},
+		{"value", "$99.99", 60, 20},
+		{"text", "Some body text here", 200, 14},
+	}
+	for _, tt := range tests {
+		b.Run(tt.name, func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				learner.InferElementType(tt.text, tt.width, tt.height)
+			}
+		})
+	}
+}
+
+func BenchmarkAssociateLabels(b *testing.B) {
+	elems := []learner.Element{
+		{Text: "First:", X: 10, Y: 10, Width: 50, Height: 20, Type: learner.ElementTypeLabel},
+		{Text: "John", X: 80, Y: 10, Width: 100, Height: 20, Type: learner.ElementTypeText},
+		{Text: "Last:", X: 10, Y: 50, Width: 50, Height: 20, Type: learner.ElementTypeLabel},
+		{Text: "Doe", X: 80, Y: 50, Width: 100, Height: 20, Type: learner.ElementTypeText},
+		{Text: "Email:", X: 10, Y: 90, Width: 50, Height: 20, Type: learner.ElementTypeLabel},
+		{Text: "john@example.com", X: 80, Y: 90, Width: 150, Height: 20, Type: learner.ElementTypeText},
+	}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		learner.AssociateLabels(elems)
 	}
 }

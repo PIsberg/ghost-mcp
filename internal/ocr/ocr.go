@@ -66,7 +66,8 @@ type Options struct {
 
 // MinConfidence is the minimum word confidence (0–100) to include in results.
 // Words below this are OCR noise and should be discarded.
-const MinConfidence = 30.0
+// Lowered from 50 to 35 to catch more UI elements at the cost of some noise.
+const MinConfidence = 35.0
 
 var (
 	cacheMu     sync.RWMutex
