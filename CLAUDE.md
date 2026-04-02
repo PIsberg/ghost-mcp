@@ -56,9 +56,35 @@ gofmt -l .   # List unformatted files
 AI Client (Claude) ←→[stdio JSON-RPC]←→ Ghost MCP Server ←→[CGo]←→ RobotGo ←→ OS
 ```
 
-The server exposes twelve tools across two files:
+The server exposes tools across several files:
 - `cmd/ghost-mcp/main.go`: `get_screen_size`, `move_mouse`, `click`, `click_at`, `type_text`, `press_key`, `take_screenshot`
 - `cmd/ghost-mcp/tools_ocr.go`: `find_and_click`, `find_and_click_all`, `find_elements`, `find_click_and_type`, `wait_for_text`
+- `cmd/ghost-mcp/tools_learning.go`: `learn_screen`, `get_learned_view`, `clear_learned_view`, `set_learning_mode`
+
+### Learning Mode
+
+Learning mode enables the server to build a full internal picture of the current GUI or webpage **before** acting on it. Enable it by setting `GHOST_MCP_LEARNING=1` or by calling `set_learning_mode` at runtime.
+
+**How it works:**
+
+1. On the first `find_and_click` or `find_elements` call (or explicitly via `learn_screen`), the server:
+   - Takes a screenshot of the full screen (or a specified region)
+   - Runs two OCR passes (normal + inverted) to catch both dark-on-light and light-on-dark text
+   - Scrolls down and repeats until content repeats or `max_pages` is reached
+   - Scrolls back to the original position
+   - Stores all discovered elements in an internal `View` indexed by scroll page
+
+2. Subsequent calls use the learned view for **region-targeted lookups**:
+   - `find_and_click`: narrows the OCR scan to the element's known bounding box (10–25× faster)
+   - If the element was on a non-zero scroll page, the tool scrolls there first
+   - `find_elements`: includes off-page elements from the learned view in the response
+
+3. Call `clear_learned_view` after navigation or significant UI changes to rebuild.
+
+**Key files:**
+- `internal/learner/learner.go` — pure-Go data structures (`Element`, `View`, `Learner`), thread-safe lookup
+- `cmd/ghost-mcp/handler_learning.go` — screen discovery algorithm, MCP handlers, `autoLearnIfNeeded()`
+- `cmd/ghost-mcp/tools_learning.go` — MCP tool registrations
 
 ### Internal Packages
 
@@ -67,6 +93,7 @@ The server exposes twelve tools across two files:
 - `internal/audit` — tamper-evident audit logging. Each JSONL entry carries a SHA-256 hash chain. Configured via `GHOST_MCP_AUDIT_LOG` (directory); defaults to `<UserConfigDir>/ghost-mcp/audit/`. Files rotate daily.
 - `internal/transport` — transport mode selection: stdio (default) or HTTP/SSE (`GHOST_MCP_TRANSPORT=http`). HTTP mode requires Bearer token auth and uses `GHOST_MCP_HTTP_ADDR` / `GHOST_MCP_HTTP_BASE_URL`.
 - `internal/ocr` — Tesseract OCR via `gosseract`. Requires Tesseract libraries installed (vcpkg on Windows). Supports grayscale, inverted, and color preprocessing passes.
+- `internal/learner` — learning mode core logic. Pure Go (no CGo), fully unit-tested, thread-safe.
 - `internal/visual`, `internal/cursor` — visual click feedback animations (mouse-circle effects).
 
 ### Critical Design Constraints
@@ -76,12 +103,15 @@ The server exposes twelve tools across two files:
 - **Parameter validation**: use `internal/validate` functions after parameter extraction, before any OS call.
 - **Authentication**: set `GHOST_MCP_TOKEN` to require a token. In stdio mode the token is checked via an MCP hook; in HTTP mode it's a Bearer header.
 - **Debug logging**: controlled by the `GHOST_MCP_DEBUG=1` environment variable.
+- **Learning mode**: controlled by `GHOST_MCP_LEARNING=1`. When enabled, the first OCR tool call auto-scans the screen and subsequent calls use the cached view. Can also be toggled at runtime via `set_learning_mode`.
 
 ### Testing Architecture
 
 - `cmd/ghost-mcp/main_test.go` — unit tests for parameter extraction, handlers, logging, and failsafe
+- `cmd/ghost-mcp/handler_learning_test.go` — unit tests for learning mode helpers and handlers (no robotgo required)
 - `cmd/ghost-mcp/integration_test.go` — full MCP server tests using the helper client in `mcpclient/`
-- `cmd/ghost-mcp/test_fixture/` — a Go HTTP server + HTML/JS page that renders interactive UI elements for integration tests to automate against
+- `cmd/ghost-mcp/integration_learning_test.go` — learning mode integration tests against the fixture page
+- `cmd/ghost-mcp/test_fixture/` — a Go HTTP server + HTML/JS page that renders interactive UI elements for integration tests to automate against. Includes a scrollable "Learning Mode Test Section" below the fold for scroll-discovery tests.
 - `internal/*/..._test.go` — unit and fuzz tests for each internal package (run with `go test ./internal/...`)
 
 Integration tests are gated behind the `INTEGRATION=1` env var because they require a real display (or Xvfb on Linux) and a GCC toolchain for CGo.
