@@ -10,7 +10,16 @@ import (
 func registerOCRTools(mcpServer *server.MCPServer) {
 
 	mcpServer.AddTool(mcp.NewTool("find_and_click",
-		mcp.WithDescription(`THE ONLY TOOL YOU NEED TO CLICK A BUTTON. Start here for every click task. Do NOT call get_screen_size, take_screenshot, or find_elements first — just call this.
+		mcp.WithDescription(`THE PRIMARY TOOL FOR CLICKING A BUTTON BY ITS TEXT LABEL.
+
+⚡ LEARNING MODE (recommended): If you called learn_screen first, this tool
+automatically uses the learned view to narrow the scan to the element's known
+region — no full-screen OCR needed. For elements below the fold the tool
+scrolls to the right page before clicking.
+Call learn_screen → get_learned_view before this if you haven't already.
+
+WHEN THERE IS NO LEARNED VIEW: this tool still works — it scans the full
+screen. But calling learn_screen first is always faster and more reliable.
 
 🎯 WHEN TO USE:
 - You need to click a single button/link/menu item by its text label
@@ -169,28 +178,31 @@ TIPS:
 	), handleWaitForText)
 
 	mcpServer.AddTool(mcp.NewTool("find_elements",
-		mcp.WithDescription(`THE PRIMARY TOOL FOR READING SCREEN TEXT. Scans the screen with OCR and returns all visible text grouped into elements (buttons, links, labels) with bounding boxes.
+		mcp.WithDescription(`READ ALL VISIBLE TEXT ON SCREEN with coordinates and bounding boxes.
 
-🎯 WHEN TO USE:
-- You need to read text on the screen (e.g. verify a label, read a status message, extract values).
-- find_and_click couldn't find your text — use this to see what OCR actually detected.
-- You need center_x/center_y coordinates for click_at (when there's no text label available).
-- Auditing what text is visible in a specific region of the screen.
+⚡ LEARNING MODE: If learning mode is on and no view exists yet, this call
+automatically triggers learn_screen first. When a multi-page view exists the
+response also includes learned_off_page_elements — all elements found on
+scroll pages below the current viewport — so you can see the FULL UI in one
+call without manually scrolling.
 
-⚠️ IMPORTANT LIMITATIONS:
-- OCR detects TEXT ONLY — it cannot tell if text is on a button, link, or label.
-- Same text may appear multiple times (e.g., "Submit" in header vs button).
-- Icons/images without text are NOT detected.
-- Colored buttons (white text on blue/green/red) may not appear in grayscale (disable grayscale to see them).
+PREFERRED WORKFLOW FOR NEW SCREENS:
+  1. learn_screen           ← scan entire interface (once per page)
+  2. get_learned_view       ← full element list including below-fold elements
+  3. find_elements          ← confirm visible elements before acting (optional)
+  4. find_and_click / find_click_and_type
 
-🚫 WHEN NOT TO USE:
-- You want to click a button — use find_and_click directly, do NOT scan first.
-- Need to see visual layout or non-text icons → use take_screenshot.
+🎯 WHEN TO USE WITHOUT LEARNING MODE:
+- find_and_click failed — call this to see what OCR actually detected.
+- You need center_x/center_y coordinates for click_at.
+- Auditing what text is visible in a specific screen region.
 
-DIAGNOSTIC WORKFLOW (when find_and_click fails):
-1. find_and_click fails → call find_elements to see what OCR detected.
-2. Examine results to identify the true visible label text.
-3. If text is a partial match, retry find_and_click with the exact string. If no text exists, use click_at with center_x/center_y from step 2.
+⚠️ LIMITATIONS:
+- Detects TEXT ONLY — not icons or images.
+- Only shows what is CURRENTLY VISIBLE (use learn_screen to see below-fold).
+- Colored buttons (white on dark) may require grayscale=false.
+
+🚫 DO NOT USE to look up a button before clicking — call find_and_click directly.
 
 EXAMPLE USAGE:
 // Find all elements in button area (faster than full screen)
