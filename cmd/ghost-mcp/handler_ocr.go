@@ -435,6 +435,17 @@ func handleFindAndClick(ctx context.Context, request mcp.CallToolRequest) (*mcp.
 	// When the element was found on a non-zero scroll page, navigate there first.
 	if !userSpecifiedRegion && cachedRegion == "" {
 		autoLearnIfNeeded()
+		
+		// Check if learned view is stale (>60 seconds old) - auto-clear it
+		if globalLearner.IsEnabled() && globalLearner.HasView() {
+			view := globalLearner.GetView()
+			if view != nil && time.Since(view.CapturedAt) > 60*time.Second {
+				logging.Info("find_and_click: learned view is stale (%v old), auto-clearing", time.Since(view.CapturedAt))
+				globalLearner.ClearView()
+				autoLearnIfNeeded()
+			}
+		}
+		
 		if lx, ly, lw, lh, scrollsNeeded, ok := learnerRegionHint(searchText, screenW, screenH); ok {
 			if scrollsNeeded > 0 {
 				logging.Info("find_and_click: learned view — element on scroll page, scrolling down %d ticks then using region (%d,%d) %dx%d",
@@ -1295,6 +1306,15 @@ func formatFindTextFailureMessage(searchText string, nth int, regionX, regionY, 
 	// Add specific actionable suggestions
 	msg += ` TRY THESE: (a) Search for LABEL text like "Text Input:" or "Email:" (not placeholder). (b) Use find_elements to see visible text. (c) Use scroll_until_text for off-screen content. (d) Try a SHORTER substring - if "CLICK ME!" fails, try "Click" (OCR may split spaced text).`
 
+	// Add learning mode suggestion if not already using it
+	if globalLearner.IsEnabled() && globalLearner.HasView() {
+		msg += ` ⚡ LEARNING MODE ACTIVE: Using cached view. If screen changed, call clear_learned_view then learn_screen to refresh.`
+	} else if globalLearner.IsEnabled() && !globalLearner.HasView() {
+		msg += ` ⚡ LEARNING MODE ON BUT NO VIEW: Call learn_screen NOW to capture full UI - this will make future searches 10-25x faster and more accurate!`
+	} else {
+		msg += ` ⚡ NOT USING LEARNING MODE: Call set_learning_mode(enabled=true), then call learn_screen for much better accuracy!`
+	}
+
 	return msg
 }
 
@@ -1331,6 +1351,14 @@ func buildFindTextFailureMessage(img image.Image, searchText string, nth int, re
 	}
 
 	msg += formatFindTextFailureMessage(searchText, nth, regionX, regionY, regionW, regionH, matches)
+
+	// Auto-refresh hint if learning mode is active but view might be stale
+	if globalLearner.IsEnabled() && globalLearner.HasView() {
+		view := globalLearner.GetView()
+		if view != nil && time.Since(view.CapturedAt) > 30*time.Second {
+			msg += ` ⚠️ VIEW STALE (captured >30s ago): Call clear_learned_view + learn_screen NOW to refresh!`
+		}
+	}
 
 	return msg
 }

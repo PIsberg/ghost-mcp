@@ -10,16 +10,15 @@ import (
 func registerOCRTools(mcpServer *server.MCPServer) {
 
 	mcpServer.AddTool(mcp.NewTool("find_and_click",
-		mcp.WithDescription(`THE PRIMARY TOOL FOR CLICKING A BUTTON BY ITS TEXT LABEL.
+		mcp.WithDescription(`⚠️ CRITICAL: ALWAYS CALL learn_screen FIRST BEFORE THIS TOOL!
 
-⚡ LEARNING MODE (recommended): If you called learn_screen first, this tool
-automatically uses the learned view to narrow the scan to the element's known
-region — no full-screen OCR needed. For elements below the fold the tool
-scrolls to the right page before clicking.
-Call learn_screen → get_learned_view before this if you haven't already.
+This tool works BEST with learning mode enabled. Without learn_screen, this tool
+is SLOWER and LESS ACCURATE. The workflow is:
+  1. learn_screen() ← REQUIRED: captures full UI with 4-pass OCR
+  2. get_learned_view() ← See what elements exist
+  3. find_and_click() ← Uses cached view (10-25x faster, more accurate)
 
-WHEN THERE IS NO LEARNED VIEW: this tool still works — it scans the full
-screen. But calling learn_screen first is always faster and more reliable.
+If you haven't called learn_screen in this session, DO IT NOW before clicking.
 
 🎯 WHEN TO USE:
 - You need to click a single button/link/menu item by its text label
@@ -29,27 +28,31 @@ screen. But calling learn_screen first is always faster and more reliable.
 🚫 WHEN NOT TO USE:
 - Multiple buttons in sequence → use find_and_click_all instead
 - Need to verify UI change after click → use find_and_click + wait_for_text
+- Screen just changed (new page/dialog) → call learn_screen FIRST, then this
 
-⚡ AUTOMATIC OPTIMIZATION: After the first successful call, the button's region is cached. Subsequent calls with the same text automatically scan only the cached region (10-25x faster than full screen). Cache is invalidated if screen resolution changes.
+⚡ AUTOMATIC OPTIMIZATION: After learn_screen, this tool uses cached regions.
+Subsequent calls scan only the cached region (10-25x faster).
 
-🎯 SMART MATCHING: Uses intelligent scoring to prefer standalone buttons over text inside other elements (e.g., prefers "Click" button over "Button Click Tests" header).
+🎯 SMART MATCHING: Uses intelligent scoring to prefer standalone buttons over
+text inside other elements (e.g., prefers "Click" button over "Button Click Tests" header).
 
-SPEED TIP: Supply x/y/width/height to scan only the relevant area (e.g., a dialog or toolbar). Much faster than full screen.
+SPEED TIP: Supply x/y/width/height to scan only the relevant area (e.g., a dialog or toolbar).
 
 HOW IT WORKS:
-1. Captures screen (or region) once
-2. Automatically runs OCR with 3 passes: grayscale → inverted (dark backgrounds) → color (colored buttons)
+1. If learning mode ON + view exists: Uses cached element location (instant)
+2. Otherwise: Captures screen once, runs 4-pass OCR (normal→inverted→bright→color)
 3. Finds text matching your search (case-insensitive substring)
-4. Clicks the CENTER of the matched button (merges multi-word labels)
+4. Clicks the CENTER of the matched button
 5. Returns exact coordinates
 
-📜 SCROLL-AND-SEARCH: If text may be off-screen, add scroll_direction="down" to automatically scroll and search. The tool will scroll up to max_scrolls times until text is found.
+📜 SCROLL-AND-SEARCH: If text may be off-screen, add scroll_direction="down" to
+automatically scroll and search. Scrolls up to max_scrolls times.
 
-📄 MULTI-PAGE SEARCH: If text may be on another page/tab, add next_page_keys="Page_Down" and max_pages=5. The tool will navigate pages and search each one until found.
+📄 MULTI-PAGE SEARCH: Add next_page_keys="Page_Down" and max_pages=5 to search
+multiple pages. Tool navigates and searches each page until found.
 
-🎯 SELECT BEST MODE: Add select_best=true to scan ALL pages first, compare match scores, then click the highest-score match. Slower but more accurate - recommended for multi-page searches!
-
-COLORED BUTTONS (white text on blue/green/red/cyan): handled automatically by the color pass. No special parameters needed — just call find_and_click with the button label.
+🎯 SELECT BEST MODE: Add select_best=true to scan ALL pages first, compare scores,
+then click the highest-score match. Slower but more accurate.
 
 IF TEXT NOT FOUND:
 The error response includes helpful guidance:

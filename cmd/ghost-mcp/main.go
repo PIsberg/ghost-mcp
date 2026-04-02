@@ -1100,6 +1100,8 @@ SPEED TIPS:
 
 	registerOCRTools(mcpServer)
 	registerLearningTools(mcpServer)
+	registerSmartClickTool(mcpServer)
+	registerWorkflowTool(mcpServer)
 
 	logging.Info("All tools registered successfully")
 }

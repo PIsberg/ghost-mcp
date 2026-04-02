@@ -14,7 +14,7 @@ $env:Path = "$env:USERPROFILE\vcpkg\installed\x64-mingw-dynamic\bin;C:\ProgramDa
 $env:TESSDATA_PREFIX = "$env:USERPROFILE\vcpkg\installed\x64-mingw-dynamic\share\tessdata"
 
 # Run unit tests (no display required)
-go test -v -run "TestAccuracy|TestInferTypes|TestMergeOCR|TestAssociateLabels" ./cmd/ghost-mcp/...
+go test -v -run "TestAccuracy|TestInferTypes|TestMergeOCR|TestAssociateLabels|TestSmartClick" ./cmd/ghost-mcp/...
 
 # Run benchmarks
 go test -bench=Benchmark -benchmem ./internal/learner/... ./cmd/ghost-mcp/...
@@ -46,6 +46,7 @@ These tests verify the learning mode algorithms work correctly:
 | `internal/learner/learner_test.go` | Element lookup, deduplication, type inference |
 | `cmd/ghost-mcp/handler_learning_test.go` | OCR merge passes, label association |
 | `cmd/ghost-mcp/accuracy_demo_test.go` | **Accuracy improvements demonstration** |
+| `cmd/ghost-mcp/smart_click_test.go` | **NEW: smart_click tool tests** |
 
 **Run accuracy demo:**
 ```powershell
@@ -61,6 +62,11 @@ go test -v -run TestAccuracy ./cmd/ghost-mcp/...
 --- PASS: TestAccuracy_MultiPassOCR (0.00s)
 ```
 
+**Run smart_click tests:**
+```powershell
+go test -v -run TestSmartClick ./cmd/ghost-mcp/...
+```
+
 ### 2. Integration Tests (Requires Display + Fixture Server)
 
 These tests run against a live web page:
@@ -71,6 +77,7 @@ These tests run against a live web page:
 | `TestIntegration_LearnScreen_ScrollDiscovery` | Finds off-screen elements |
 | `TestIntegration_FindAndClick_WithLearning` | Learning mode workflow |
 | `TestIntegration_FindAndClickButton` | Real button clicking |
+| `TestIntegration_SmartClick` | **NEW: smart_click end-to-end** |
 
 **Run specific integration test:**
 ```powershell
