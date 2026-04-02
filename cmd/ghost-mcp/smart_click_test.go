@@ -145,9 +145,9 @@ func TestHashImageFast_NilImage(t *testing.T) {
 }
 
 func TestHashImageFast_DifferentImages(t *testing.T) {
-	// Create two different test images
-	img1 := createTestImage(100, 100, 0xFFFF0000) // Red
-	img2 := createTestImage(100, 100, 0xFF00FF00) // Green
+	// Create two different test images (with full alpha = 0xFF at the end)
+	img1 := createTestImage(100, 100, 0xFF0000FF) // Red (RGBA: 255,0,0,255)
+	img2 := createTestImage(100, 100, 0x00FF00FF) // Green (RGBA: 0,255,0,255)
 
 	hash1 := hashImageFast(img1)
 	hash2 := hashImageFast(img2)
@@ -177,7 +177,7 @@ func TestHashImageFast_VariousSizes(t *testing.T) {
 	}
 
 	for _, size := range sizes {
-		img := createTestImage(size.w, size.h, 0xFF0000FF) // Blue
+		img := createTestImage(size.w, size.h, 0x0000FFFF) // Blue (RGBA: 0,0,255,255)
 		hash := hashImageFast(img)
 		if hash == 0 {
 			t.Errorf("hash should not be 0 for %dx%d image", size.w, size.h)
