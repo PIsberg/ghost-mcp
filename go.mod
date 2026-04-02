@@ -1,6 +1,6 @@
 module github.com/ghost-mcp
 
-go 1.25.0
+go 1.25.8
 
 require (
 	github.com/go-vgo/robotgo v1.0.2

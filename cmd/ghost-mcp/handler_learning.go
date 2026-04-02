@@ -344,11 +344,26 @@ func handleLearnScreen(_ context.Context, request mcp.CallToolRequest) (*mcp.Cal
 	typeJSON, _ := json.Marshal(typeCounts)
 
 	logging.Info("learn_screen: stored view with %d elements in %v", len(view.Elements), elapsed)
-	return mcp.NewToolResultText(fmt.Sprintf(
-		`{"success":true,"elements_found":%d,"pages_scanned":%d,"screenshots_stored":%d,"element_types":%s,"screen_w":%d,"screen_h":%d,"elapsed_ms":%d}`,
-		len(view.Elements), view.PageCount, len(view.Pages), string(typeJSON),
-		view.ScreenW, view.ScreenH, elapsed.Milliseconds(),
-	)), nil
+
+	// Build response using proper JSON marshaling to avoid injection issues
+	response := map[string]interface{}{
+		"success":            true,
+		"elements_found":     len(view.Elements),
+		"pages_scanned":      view.PageCount,
+		"screenshots_stored": len(view.Pages),
+		"element_types":      json.RawMessage(typeJSON), // Embed JSON directly
+		"screen_w":           view.ScreenW,
+		"screen_h":           view.ScreenH,
+		"elapsed_ms":         elapsed.Milliseconds(),
+	}
+
+	responseJSON, err := json.Marshal(response)
+	if err != nil {
+		logging.Error("learn_screen: failed to marshal response: %v", err)
+		return mcp.NewToolResultError("failed to build response"), nil
+	}
+
+	return mcp.NewToolResultText(string(responseJSON)), nil
 }
 
 func handleGetLearnedView(_ context.Context, _ mcp.CallToolRequest) (*mcp.CallToolResult, error) {
