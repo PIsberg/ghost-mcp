@@ -517,6 +517,29 @@ func TestInferElementType_Toggle(t *testing.T) {
 	}
 }
 
+func TestInferElementType_Slider(t *testing.T) {
+	tests := []struct {
+		text   string
+		width  int
+		height int
+	}{
+		{"Volume 50%", 100, 20},
+		{"Brightness: 75%", 120, 20},
+		{"Zoom: 100%", 80, 20},
+		{"Speed", 60, 20},
+		{"Opacity", 70, 20},
+		{"Range: 0-100", 100, 20},
+		{"Level", 60, 20},
+		{"Contrast 80%", 100, 20},
+	}
+	for _, tc := range tests {
+		got := InferElementType(tc.text, tc.width, tc.height)
+		if got != ElementTypeSlider {
+			t.Errorf("InferElementType(%q, %d, %d) = %v, want slider", tc.text, tc.width, tc.height, got)
+		}
+	}
+}
+
 func TestInferElementType_Unknown(t *testing.T) {
 	got := InferElementType("", 0, 0)
 	if got != ElementTypeUnknown {

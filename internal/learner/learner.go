@@ -39,6 +39,7 @@ const (
 	ElementTypeRadio     ElementType = "radio"     // radio button (○ ● ◉)
 	ElementTypeDropdown  ElementType = "dropdown"  // dropdown/select (▼ Select...)
 	ElementTypeToggle    ElementType = "toggle"    // toggle switch (ON/OFF)
+	ElementTypeSlider    ElementType = "slider"    // slider/range control (◄ ► ───●───)
 	ElementTypeHeading   ElementType = "heading"   // section/page heading
 	ElementTypeLink      ElementType = "link"      // hyperlink or navigation text
 	ElementTypeValue     ElementType = "value"     // numeric or status value
@@ -295,6 +296,11 @@ func InferElementType(text string, width, height int) ElementType {
 		return ElementTypeToggle
 	}
 
+	// Slider: slider symbols or range/volume/brightness text.
+	if isSliderText(lower) {
+		return ElementTypeSlider
+	}
+
 	// Heading: tall text (>28px), few words (max 8), and NOT a button keyword.
 	if height > 28 && len(words) <= 8 {
 		return ElementTypeHeading
@@ -405,6 +411,31 @@ func isToggleText(s string) bool {
 		if s == t {
 			return true
 		}
+	}
+	return false
+}
+
+// isSliderText returns true for slider/range control text or symbols.
+func isSliderText(s string) bool {
+	// Check for slider symbols (horizontal line with handle)
+	if strings.Contains(s, "─●") || strings.Contains(s, "▬●") || strings.Contains(s, "│●") {
+		return true
+	}
+	// Check for common slider patterns
+	patterns := []string{
+		"volume", "brightness", "contrast",
+		"zoom", "speed", "opacity",
+		"range", "level", "intensity",
+		"min", "max",
+	}
+	for _, p := range patterns {
+		if strings.Contains(s, p) {
+			return true
+		}
+	}
+	// Check for percentage (common with sliders)
+	if strings.HasSuffix(s, "%") {
+		return true
 	}
 	return false
 }

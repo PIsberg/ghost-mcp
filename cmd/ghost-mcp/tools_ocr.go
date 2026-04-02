@@ -236,8 +236,9 @@ TIPS:
   - type=radio for radio buttons
   - type=dropdown for dropdown menus
   - type=toggle for on/off switches
+  - type=slider for sliders/range controls
   - type=label for field labels
-- Element types: button, input, checkbox, radio, dropdown, toggle, label, heading, link, value, text
+- Element types: button, input, checkbox, radio, dropdown, toggle, slider, label, heading, link, value, text
 - width/height help identify element type (wide+short = likely button)
 
 EXAMPLE: Find form elements:
@@ -247,12 +248,14 @@ EXAMPLE: Find form elements:
     {"text": "Email:", "type": "label", "center_x": 100, "center_y": 100},
     {"text": "Enter your email", "type": "input", "center_x": 250, "center_y": 100},
     {"text": "☑ I agree", "type": "checkbox", "center_x": 150, "center_y": 150},
-    {"text": "Submit", "type": "button", "center_x": 200, "center_y": 200}
+    {"text": "Volume 50%", "type": "slider", "center_x": 200, "center_y": 200},
+    {"text": "Submit", "type": "button", "center_x": 200, "center_y": 250}
   ]
 }
 // Then interact:
 // - Click checkbox: {"tool": "click_at", "arguments": {"x": 150, "y": 150}}
 // - Type in input: {"tool": "find_click_and_type", "arguments": {"text": "Email:", "type_text": "user@example.com"}}
+// - Adjust slider: {"tool": "click_at", "arguments": {"x": 200, "y": 200}} (then drag)
 // - Click button: {"tool": "find_and_click", "arguments": {"text": "Submit"}}`),
 		mcp.WithNumber("x", mcp.Description("X coordinate of region to scan (default: 0 = full screen).")),
 		mcp.WithNumber("y", mcp.Description("Y coordinate of region to scan (default: 0 = full screen).")),
