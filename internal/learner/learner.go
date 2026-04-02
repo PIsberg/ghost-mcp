@@ -1,4 +1,4 @@
-﻿// Package learner provides the learning mode feature for ghost-mcp.
+// Package learner provides the learning mode feature for ghost-mcp.
 //
 // Learning mode performs a full GUI reconnaissance before acting: it takes
 // screenshots and runs OCR across multiple scroll positions to build a
@@ -31,29 +31,29 @@ import (
 type ElementType string
 
 const (
-	ElementTypeUnknown   ElementType = "unknown"
-	ElementTypeButton    ElementType = "button"    // clickable action element
-	ElementTypeLabel     ElementType = "label"     // field label (usually ends with ":")
-	ElementTypeInput     ElementType = "input"     // text input field (placeholder text)
-	ElementTypeCheckbox  ElementType = "checkbox"  // checkbox (☐ ☑ ✓ [ ] [x])
-	ElementTypeRadio     ElementType = "radio"     // radio button (○ ● ◉)
-	ElementTypeDropdown  ElementType = "dropdown"  // dropdown/select (▼ Select...)
-	ElementTypeToggle    ElementType = "toggle"    // toggle switch (ON/OFF)
-	ElementTypeSlider    ElementType = "slider"    // slider/range control (◄ ► ───●───)
-	ElementTypeHeading   ElementType = "heading"   // section/page heading
-	ElementTypeLink      ElementType = "link"      // hyperlink or navigation text
-	ElementTypeValue     ElementType = "value"     // numeric or status value
-	ElementTypeText      ElementType = "text"      // general body text
+	ElementTypeUnknown  ElementType = "unknown"
+	ElementTypeButton   ElementType = "button"   // clickable action element
+	ElementTypeLabel    ElementType = "label"    // field label (usually ends with ":")
+	ElementTypeInput    ElementType = "input"    // text input field (placeholder text)
+	ElementTypeCheckbox ElementType = "checkbox" // checkbox (☐ ☑ ✓ [ ] [x])
+	ElementTypeRadio    ElementType = "radio"    // radio button (○ ● ◉)
+	ElementTypeDropdown ElementType = "dropdown" // dropdown/select (▼ Select...)
+	ElementTypeToggle   ElementType = "toggle"   // toggle switch (ON/OFF)
+	ElementTypeSlider   ElementType = "slider"   // slider/range control (◄ ► ───●───)
+	ElementTypeHeading  ElementType = "heading"  // section/page heading
+	ElementTypeLink     ElementType = "link"     // hyperlink or navigation text
+	ElementTypeValue    ElementType = "value"    // numeric or status value
+	ElementTypeText     ElementType = "text"     // general body text
 )
 
 // OcrPass identifies which OCR preprocessing pass detected an element.
 type OcrPass string
 
 const (
-	OcrPassNormal    OcrPass = "normal"     // grayscale + contrast stretch
-	OcrPassInverted  OcrPass = "inverted"   // brightness inversion (white-on-dark)
+	OcrPassNormal     OcrPass = "normal"      // grayscale + contrast stretch
+	OcrPassInverted   OcrPass = "inverted"    // brightness inversion (white-on-dark)
 	OcrPassBrightText OcrPass = "bright_text" // isolates near-white pixels
-	OcrPassColor     OcrPass = "color"      // full colour (coloured-background buttons)
+	OcrPassColor      OcrPass = "color"       // full colour (coloured-background buttons)
 )
 
 // =============================================================================
@@ -62,22 +62,22 @@ const (
 
 // Element represents a UI text element discovered during screen learning.
 type Element struct {
-	Text       string      `json:"text"`
-	X          int         `json:"x"`
-	Y          int         `json:"y"`
-	Width      int         `json:"width"`
-	Height     int         `json:"height"`
-	Confidence float64     `json:"confidence"`
+	Text       string  `json:"text"`
+	X          int     `json:"x"`
+	Y          int     `json:"y"`
+	Width      int     `json:"width"`
+	Height     int     `json:"height"`
+	Confidence float64 `json:"confidence"`
 	// PageIndex is the scroll-page on which this element was captured.
 	// 0 = top of the screen (no scrolling), 1 = after one scroll step, etc.
-	PageIndex  int         `json:"page_index"`
+	PageIndex int `json:"page_index"`
 	// Type is the inferred element classification.
-	Type       ElementType `json:"type"`
+	Type ElementType `json:"type"`
 	// OcrPass is which preprocessing pass first detected this element.
-	OcrPass    OcrPass     `json:"ocr_pass"`
+	OcrPass OcrPass `json:"ocr_pass"`
 	// LabelFor is the text of the nearest input element this label describes,
 	// populated by AssociateLabels. Empty when no association was found.
-	LabelFor   string      `json:"label_for,omitempty"`
+	LabelFor string `json:"label_for,omitempty"`
 }
 
 // PageSnapshot stores a compressed screenshot of one scroll page alongside
@@ -85,13 +85,13 @@ type Element struct {
 // JSON (tagged json:"-") to keep get_learned_view responses compact.
 // Use get_page_screenshot to retrieve the visual data for a specific page.
 type PageSnapshot struct {
-	Index                 int    `json:"index"`
-	CumulativeScrollTicks int    `json:"cumulative_scroll_ticks"`
-	Width                 int    `json:"width"`
-	Height                int    `json:"height"`
-	ElementCount          int    `json:"element_count"`
+	Index                 int `json:"index"`
+	CumulativeScrollTicks int `json:"cumulative_scroll_ticks"`
+	Width                 int `json:"width"`
+	Height                int `json:"height"`
+	ElementCount          int `json:"element_count"`
 	// JPEG holds the compressed screenshot. Not included in JSON responses.
-	JPEG                    []byte `json:"-"`
+	JPEG []byte `json:"-"`
 }
 
 // View is the combined internal representation of the GUI built by scanning

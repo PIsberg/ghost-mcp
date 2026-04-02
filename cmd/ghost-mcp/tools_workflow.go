@@ -81,22 +81,22 @@ CALL: execute_workflow({steps: [...]})
 
 // WorkflowStep represents a single step in a workflow
 type WorkflowStep struct {
-	Action   string `json:"action"`   // click, type, wait, scroll
-	Text     string `json:"text"`     // For click/type: element text
-	Value    string `json:"value"`    // For type: text to type
-	DelayMS  int    `json:"delay_ms"` // For wait: milliseconds
-	Amount   int    `json:"amount"`   // For scroll: scroll amount
+	Action    string `json:"action"`    // click, type, wait, scroll
+	Text      string `json:"text"`      // For click/type: element text
+	Value     string `json:"value"`     // For type: text to type
+	DelayMS   int    `json:"delay_ms"`  // For wait: milliseconds
+	Amount    int    `json:"amount"`    // For scroll: scroll amount
 	Direction string `json:"direction"` // For scroll: up/down/left/right
 }
 
 // WorkflowResult holds the result of executing a workflow
 type WorkflowResult struct {
-	Success      bool              `json:"success"`
-	StepsExecuted int              `json:"steps_executed"`
-	StepsFailed   int              `json:"steps_failed"`
-	TotalDuration string             `json:"total_duration"`
-	StepResults   []StepResult      `json:"step_results"`
-	Error         string            `json:"error,omitempty"`
+	Success       bool         `json:"success"`
+	StepsExecuted int          `json:"steps_executed"`
+	StepsFailed   int          `json:"steps_failed"`
+	TotalDuration string       `json:"total_duration"`
+	StepResults   []StepResult `json:"step_results"`
+	Error         string       `json:"error,omitempty"`
 }
 
 // StepResult holds the result of a single workflow step

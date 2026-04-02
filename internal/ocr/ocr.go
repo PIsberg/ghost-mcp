@@ -95,23 +95,23 @@ const MinConfidence = 35.0
 const (
 	// CharSetButtons - Alphanumeric only, best for button text
 	CharSetButtons = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-	
+
 	// CharSetNumeric - Digits and common numeric symbols
 	CharSetNumeric = "0123456789.$€£¥%+-"
-	
+
 	// CharSetEmail - Email address characters
 	CharSetEmail = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789@._-+"
-	
+
 	// CharSetAll - All characters (default, no restriction)
 	CharSetAll = ""
 )
 
 // Page Segmentation Mode constants (from gosseract)
 const (
-	PSM_SPARSE_TEXT   = 11  // Default - find text anywhere without layout assumptions
-	PSM_SINGLE_WORD   = 12  // Treat image as a single word
-	PSM_SINGLE_LINE   = 13  // Treat image as a single text line
-	PSM_RAW_LINE      = 14  // Treat image as a single line, no layout analysis
+	PSM_SPARSE_TEXT = 11 // Default - find text anywhere without layout assumptions
+	PSM_SINGLE_WORD = 12 // Treat image as a single word
+	PSM_SINGLE_LINE = 13 // Treat image as a single text line
+	PSM_RAW_LINE    = 14 // Treat image as a single line, no layout analysis
 )
 
 var (
@@ -407,7 +407,7 @@ func applyOCROptions(client ocrClient, opts Options) {
 	}
 
 	// Apply page segmentation mode if different from default
-	if opts.PageSegMode != 0 && opts.PageSegMode != 11 {  // 11 = PSM_SPARSE_TEXT (default)
+	if opts.PageSegMode != 0 && opts.PageSegMode != 11 { // 11 = PSM_SPARSE_TEXT (default)
 		client.SetPageSegMode(gosseract.PageSegMode(opts.PageSegMode))
 	}
 }

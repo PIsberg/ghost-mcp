@@ -33,7 +33,7 @@ func TestAccuracy_MultiPassOCR(t *testing.T) {
 		text string
 		x, y int
 	}{
-		{"Dark Mode", 50, 50},    // White on dark - ONLY found by inverted
+		{"Dark Mode", 50, 50}, // White on dark - ONLY found by inverted
 		{"Settings", 300, 300},
 	}
 
@@ -41,7 +41,7 @@ func TestAccuracy_MultiPassOCR(t *testing.T) {
 		text string
 		x, y int
 	}{
-		{"Submit", 150, 250},      // Blue button - ONLY found by color pass
+		{"Submit", 150, 250}, // Blue button - ONLY found by color pass
 		{"Cancel", 250, 250},
 	}
 
@@ -381,14 +381,14 @@ func TestAccuracy_JSONSerialization(t *testing.T) {
 			{
 				Text: "Email:", X: 100, Y: 100, Width: 50, Height: 20,
 				Confidence: 95, PageIndex: 0,
-				Type: learner.ElementTypeLabel,
-				OcrPass: learner.OcrPassNormal,
+				Type:     learner.ElementTypeLabel,
+				OcrPass:  learner.OcrPassNormal,
 				LabelFor: "Enter your email",
 			},
 			{
 				Text: "Submit", X: 200, Y: 100, Width: 80, Height: 30,
 				Confidence: 92, PageIndex: 0,
-				Type: learner.ElementTypeButton,
+				Type:    learner.ElementTypeButton,
 				OcrPass: learner.OcrPassColor,
 			},
 		},

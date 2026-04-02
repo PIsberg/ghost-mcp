@@ -25,9 +25,9 @@ var (
 	readPreparedOCRImage       = func(imgBytes []byte, scaleFactor int) (*ocr.Result, error) {
 		return ocr.ReadPreparedBytes(imgBytes, scaleFactor, ocr.Options{})
 	}
-	findTextWithScrolling      = scrollSearchForText
-	waitForTextCaptureImage    = func(x, y, width, height int) (image.Image, error) { return robotgo.CaptureImg(x, y, width, height) }
-	waitForTextSleep           = time.Sleep
+	findTextWithScrolling   = scrollSearchForText
+	waitForTextCaptureImage = func(x, y, width, height int) (image.Image, error) { return robotgo.CaptureImg(x, y, width, height) }
+	waitForTextSleep        = time.Sleep
 )
 
 const (
@@ -438,7 +438,7 @@ func handleFindAndClick(ctx context.Context, request mcp.CallToolRequest) (*mcp.
 	// When the element was found on a non-zero scroll page, navigate there first.
 	if !userSpecifiedRegion && cachedRegion == "" {
 		autoLearnIfNeeded()
-		
+
 		// Check if learned view is stale (>60 seconds old) - auto-clear it
 		if globalLearner.IsEnabled() && globalLearner.HasView() {
 			view := globalLearner.GetView()
@@ -448,7 +448,7 @@ func handleFindAndClick(ctx context.Context, request mcp.CallToolRequest) (*mcp.
 				autoLearnIfNeeded()
 			}
 		}
-		
+
 		if lx, ly, lw, lh, scrollsNeeded, ok := learnerRegionHint(searchText, screenW, screenH); ok {
 			if scrollsNeeded > 0 {
 				logging.Info("find_and_click: learned view — element on scroll page, scrolling down %d ticks then using region (%d,%d) %dx%d",
@@ -1430,7 +1430,7 @@ func tryTextVariations(ctx context.Context, request mcp.CallToolRequest, origina
 			// Update cache with original text but found variation's bounds
 			normalizedOriginal := normalizeText(originalText)
 			regionCache.Put(normalizedOriginal, foundX, foundY, foundW, foundH, screenW, screenH)
-			
+
 			// Click on the found element
 			clickX := foundX + foundW/2
 			clickY := foundY + foundH/2
