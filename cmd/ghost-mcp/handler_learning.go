@@ -495,10 +495,11 @@ func handleGetPageScreenshot(_ context.Context, request mcp.CallToolRequest) (*m
 	b64 := base64.StdEncoding.EncodeToString(jpegBytes)
 	logging.Info("get_page_screenshot: returning page %d (%d bytes JPEG)", pageIndex, len(jpegBytes))
 
-	return mcp.NewToolResultText(fmt.Sprintf(
-		`{"success":true,"page_index":%d,"format":"jpeg","size_bytes":%d,"base64":%q}`,
-		pageIndex, len(jpegBytes), b64,
-	)), nil
+	return mcp.NewToolResultImage(
+		fmt.Sprintf(`{"success":true,"page_index":%d,"format":"jpeg","size_bytes":%d}`, pageIndex, len(jpegBytes)),
+		b64,
+		"image/jpeg",
+	), nil
 }
 
 // =============================================================================
