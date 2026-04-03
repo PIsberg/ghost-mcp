@@ -1638,7 +1638,19 @@ func handleFindAndClickAll(ctx context.Context, request mcp.CallToolRequest) (*m
 		minX, minY, maxX, maxY, found, passName := parallelFindPreparedText(ctx, prepared, text, 1, grayscale)
 		if !found {
 			logging.Info("find_and_click_all: text %q not found, stopping", text)
-			return mcp.NewToolResultError(fmt.Sprintf("text %q not found on screen", text)), nil
+			// Report which items were already clicked before this failure so the
+			// AI knows exactly what has and hasn't been done.
+			if len(clicks) == 0 {
+				return mcp.NewToolResultError(fmt.Sprintf("text %q not found on screen", text)), nil
+			}
+			alreadyClicked := make([]string, len(clicks))
+			for i, c := range clicks {
+				alreadyClicked[i] = fmt.Sprintf("%q", c["text"])
+			}
+			return mcp.NewToolResultError(fmt.Sprintf(
+				"text %q not found on screen — already clicked: [%s]. Do NOT re-click those; only retry the missing item.",
+				text, strings.Join(alreadyClicked, ", "),
+			)), nil
 		}
 
 		cx := (minX + maxX) / 2

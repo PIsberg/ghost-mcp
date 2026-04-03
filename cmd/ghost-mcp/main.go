@@ -919,8 +919,10 @@ func createServer(token string, al *audit.Logger) *server.MCPServer {
 		ServerVersion,
 		server.WithResourceCapabilities(true, true),
 		server.WithHooks(hooks),
+		server.WithInstructions(ghostMCPGuide),
 	)
 	registerTools(mcpServer)
+	registerPrompts(mcpServer)
 	return mcpServer
 }
 

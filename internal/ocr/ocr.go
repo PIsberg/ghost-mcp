@@ -53,14 +53,16 @@ type Options struct {
 	Inverted bool
 
 	// BrightText isolates near-white pixels for detecting white text on any
-	// coloured or dark background. Each pixel is mapped to black if all three
-	// RGB channels are ≥ 240, otherwise to white. The result is a high-contrast
-	// binary image where pure-white button labels appear as black text on a
-	// white background — the pattern Tesseract is trained on. Threshold 240
-	// captures true white text while excluding near-white body text (e.g.
-	// #eee = 238) and all coloured backgrounds. Use as a last-resort fallback
-	// when grayscale, inverted, and colour passes all fail. Ignored when Color
-	// or Inverted is true.
+	// coloured or dark background. A pixel is mapped to black (text) when its
+	// BT.709 luminance ≥ 185 AND its channel spread (max−min) ≤ 100; everything
+	// else becomes white (background). The dual condition handles gradients like
+	// the WARNING button (#f093fb→#f5576c) where a min-channel threshold fails:
+	// a 50%-blended anti-aliased edge has lum=188.5 ≥ 185 while the pure pink
+	// start colour has lum=174.3 < 185, giving a clean gap. The spread cap
+	// (brightTextMaxSpread=100) additionally excludes high-luma coloured
+	// backgrounds such as cyan #00f2fe (spread=254) and bright green #38ef7d
+	// (spread=183). Use as a fallback when grayscale, inverted, and colour
+	// passes all fail. Ignored when Color or Inverted is true.
 	BrightText bool
 
 	// CharacterSet restricts OCR to specific characters for improved accuracy.
@@ -90,6 +92,23 @@ type Options struct {
 // Words below this are OCR noise and should be discarded.
 // Lowered from 50 to 35 to catch more UI elements at the cost of some noise.
 const MinConfidence = 35.0
+
+// brightTextMaxSpread is the maximum allowed channel spread (max−min across R,G,B)
+// for a pixel to be classified as near-white text in brightTextToGray.
+//
+// Value 130 is chosen to catch anti-aliased edges of white text on the full
+// range of button gradient colours used in practice:
+//   - White on purple #667eea (50% blend): spread=66  ≤ 130 ✓
+//   - White on warning red #f5576c (50%):  spread=79  ≤ 130 ✓
+//   - White on cyan #00f2fe (50% blend):   spread=127 ≤ 130 ✓  (was failing at 100)
+//   - White on green #38ef7d (50% blend):  spread=92  ≤ 130 ✓
+//
+// Pure coloured backgrounds are still excluded because their luminance check
+// fails first (lum < 185) or their spread far exceeds 130:
+//   - Pure #00f2fe (0,242,254):   lum=191 but spread=254 > 130 ✓
+//   - Pure #38ef7d (56,239,125):  lum=192 but spread=183 > 130 ✓
+//   - Pure #4facfe (79,172,254):  lum=158 < 185 ✓
+const brightTextMaxSpread = 130
 
 // Common character sets for specific OCR contexts
 const (
@@ -474,7 +493,7 @@ func preprocessToBytes(src string, factor int, opts Options) ([]byte, error) {
 func encodeForOCR(img image.Image, factor int, opts Options) ([]byte, error) {
 	var scaledImg image.Image
 	if opts.BrightText {
-		preprocessed := brightTextToGray(img, 240)
+		preprocessed := brightTextToGray(img, 185)
 		scaledImg = scaleGrayNearest(preprocessed, factor)
 	} else if opts.Color {
 		b := img.Bounds()
@@ -546,17 +565,29 @@ func invertGray(img *image.Gray) {
 	}
 }
 
-// brightTextToGray creates a binary image where pixels with all three RGB
-// channels at or above threshold become black, and all other pixels become
-// white. This reliably isolates white (or near-white) text from any coloured
-// or dark background by exploiting the fact that pure white has all channels
-// uniformly high, while coloured backgrounds have at least one low channel.
+// brightTextToGray creates a binary image where near-white pixels become black
+// (text) and everything else becomes white (background). It is designed to
+// isolate white button labels — including their anti-aliased edges — from
+// any coloured or dark background.
 //
-// Result: black text on white background — the pattern Tesseract is trained on.
+// Detection condition (both must hold):
 //
-// threshold=240 is chosen to capture true white button text (255,255,255)
-// while excluding near-white body text like #eee (238,238,238) and any
-// coloured background gradient (always has at least one channel < 240).
+//  1. BT.709 luminance ≥ threshold  (pixel is bright enough to be white text
+//     or a lightly blended edge).
+//  2. max(R,G,B) − min(R,G,B) ≤ brightTextMaxSpread  (pixel is achromatic
+//     enough — high-luma coloured backgrounds like cyan #00f2fe or bright green
+//     #38ef7d have spread > 200 and are excluded here even though their
+//     luminance is high).
+//
+// Why luminance instead of min(R,G,B):
+// Gradients like the WARNING button (#f093fb→#f5576c) have a very low green
+// channel on the red end (G=87). A 50%-blended anti-aliased edge produces
+// (250,171,181), where min=171 — acceptable — but a 60% blend gives min=154,
+// which falls below any min-channel threshold that also excludes the pink start
+// (#f093fb, min=147). Luminance side-steps this: lum(250,171,181)=188.5 ≥ 185
+// while lum(240,147,251)=174.3 < 185, giving a clean 14-point gap.
+//
+// The production threshold is 185 (set by the caller in encodeForOCR).
 func brightTextToGray(img image.Image, threshold uint8) *image.Gray {
 	b := img.Bounds()
 	out := image.NewGray(b)
@@ -571,10 +602,24 @@ func brightTextToGray(img image.Image, threshold uint8) *image.Gray {
 				r := srcRow[x*4]
 				g := srcRow[x*4+1]
 				bl := srcRow[x*4+2]
-				if r >= threshold && g >= threshold && bl >= threshold {
-					out.Pix[dstOff+x] = 0 // near-white → black (text)
+				// BT.709 luminance, scaled ×10000 to stay integer.
+				lum := (2126*uint32(r) + 7152*uint32(g) + 722*uint32(bl) + 5000) / 10000
+				// Channel spread: high spread = colourful (not near-white).
+				hi, lo := r, r
+				if g > hi {
+					hi = g
+				} else if g < lo {
+					lo = g
+				}
+				if bl > hi {
+					hi = bl
+				} else if bl < lo {
+					lo = bl
+				}
+				if lum >= uint32(threshold) && hi-lo <= brightTextMaxSpread {
+					out.Pix[dstOff+x] = 0 // near-white, low-saturation → black (text)
 				} else {
-					out.Pix[dstOff+x] = 255 // everything else → white (background)
+					out.Pix[dstOff+x] = 255 // coloured or dark → white (background)
 				}
 			}
 		}
@@ -585,7 +630,19 @@ func brightTextToGray(img image.Image, threshold uint8) *image.Gray {
 			for x := b.Min.X; x < b.Max.X; x++ {
 				r32, g32, b32, _ := img.At(x, y).RGBA()
 				r8, g8, b8 := uint8(r32>>8), uint8(g32>>8), uint8(b32>>8)
-				if r8 >= threshold && g8 >= threshold && b8 >= threshold {
+				lum := (2126*uint32(r8) + 7152*uint32(g8) + 722*uint32(b8) + 5000) / 10000
+				hi, lo := r8, r8
+				if g8 > hi {
+					hi = g8
+				} else if g8 < lo {
+					lo = g8
+				}
+				if b8 > hi {
+					hi = b8
+				} else if b8 < lo {
+					lo = b8
+				}
+				if lum >= uint32(threshold) && hi-lo <= brightTextMaxSpread {
 					out.Pix[dstOff+x] = 0
 				} else {
 					out.Pix[dstOff+x] = 255

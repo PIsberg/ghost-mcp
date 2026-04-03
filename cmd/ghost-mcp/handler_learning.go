@@ -91,10 +91,21 @@ func learnScreen(cfg learnCfg) (*learner.View, error) {
 		// 2. Inverted — catches white text on dark/coloured backgrounds.
 		// 3. BrightText — isolates near-white pixels (white text on any background).
 		// 4. Color — full-colour pass for coloured-background buttons.
-		normalResult, _ := uiReadImage(img, ocr.Options{})
-		invertedResult, _ := uiReadImage(img, ocr.Options{Inverted: true})
-		brightResult, _ := uiReadImage(img, ocr.Options{BrightText: true})
-		colorResult, _ := uiReadImage(img, ocr.Options{Color: true})
+		//
+		// PrepareParallelImageSet runs all four preprocessing variants concurrently,
+		// then each is decoded by a separate pooled Tesseract client. This bypasses
+		// ReadImage's single-slot cache which, when given the same image object,
+		// returns the cached normal result for every subsequent opts variant — so
+		// inverted, bright-text, and colour passes would silently produce duplicate
+		// normal-pass output instead of their own preprocessed results.
+		prepared, prepErr := ocr.PrepareParallelImageSet(img, true)
+		if prepErr != nil {
+			return nil, fmt.Errorf("page %d: prepare OCR passes: %w", page, prepErr)
+		}
+		normalResult, _ := ocr.ReadPreparedBytes(prepared.Normal, ocr.ScaleFactor, ocr.Options{})
+		invertedResult, _ := ocr.ReadPreparedBytes(prepared.Inverted, ocr.ScaleFactor, ocr.Options{})
+		brightResult, _ := ocr.ReadPreparedBytes(prepared.BrightText, ocr.ScaleFactor, ocr.Options{})
+		colorResult, _ := ocr.ReadPreparedBytes(prepared.Color, ocr.ScaleFactor, ocr.Options{})
 
 		pageElements := mergeOCRPasses(page, cfg.RegionX, cfg.RegionY,
 			normalResult, invertedResult, brightResult, colorResult)
@@ -484,10 +495,11 @@ func handleGetPageScreenshot(_ context.Context, request mcp.CallToolRequest) (*m
 	b64 := base64.StdEncoding.EncodeToString(jpegBytes)
 	logging.Info("get_page_screenshot: returning page %d (%d bytes JPEG)", pageIndex, len(jpegBytes))
 
-	return mcp.NewToolResultText(fmt.Sprintf(
-		`{"success":true,"page_index":%d,"format":"jpeg","size_bytes":%d,"base64":%q}`,
-		pageIndex, len(jpegBytes), b64,
-	)), nil
+	return mcp.NewToolResultImage(
+		fmt.Sprintf(`{"success":true,"page_index":%d,"format":"jpeg","size_bytes":%d}`, pageIndex, len(jpegBytes)),
+		b64,
+		"image/jpeg",
+	), nil
 }
 
 // =============================================================================

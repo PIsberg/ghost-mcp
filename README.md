@@ -4,7 +4,7 @@
 
 **License:** Free for personal and hobby use ([PolyForm Noncommercial](LICENSE)). Commercial use requires a license — contact [Peter Isberg](mailto:isberg.peter+gm@gmail.com).
 
-[![codecov](https://codecov.io/gh/PIsberg/ghost-mcp/graph/badge.svg)](https://codecov.io/gh/PIsberg/ghost-mcp)
+[![codecov](https://codecov.io/gh/PIsberg/ghost-mcp/graph/badge.svg)](https://codecov.io/gh/PIsberg/ghost-mcp) [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/PIsberg/ghost-mcp/badge)](https://scorecard.dev/viewer/?uri=github.com/PIsberg/ghost-mcp/)
 
 ## Overview
 
@@ -26,46 +26,37 @@ Ghost MCP allows AI assistants like Claude to control your computer's mouse, key
 
 ## Available Tools
 
-### Core Tools
+> **AI routing guide:** Before automating a UI, read [`docs/routing_prompt.md`](docs/routing_prompt.md) for decision tables, optimal tool sequences, and when to use learning mode. The server also delivers this guide automatically to AI clients via the `ghost_mcp_guide` MCP prompt on connect.
 
-| Tool | Description | Parameters |
-|------|-------------|------------|
-| `get_screen_size` | Get screen resolution and DPI scale factor. | None |
-| `move_mouse` | Move mouse cursor to absolute coordinates. Origin (0,0) is top-left. | `x`, `y` |
-| `click` | Click mouse at current cursor position. Use `move_mouse` first. | `button` (left/right/middle) |
-| `click_at` | Move mouse to coordinates and click in one operation. Preferred over separate move+click. | `x`, `y`, `button` (optional, default left) |
-| `double_click` | Move mouse to coordinates and double-click. Use for opening files or activating items. | `x`, `y` |
-| `scroll` | Move mouse to coordinates and scroll the wheel. | `x`, `y`, `direction` (up/down/left/right), `amount` (optional, default 3) |
-| `scroll_until_text` | Scroll and OCR-search in one bounded call. Stops when found, after `max_scrolls`, or when the viewport stops changing. | `text`, `direction`, `amount`, `max_scrolls`, `scroll_x`, `scroll_y`, `x`, `y`, `width`, `height`, `nth`, `grayscale` |
-| `type_text` | Type text via keyboard. Use for input fields. | `text`, `press_enter` (optional, hit enter after typing) |
-| `click_and_type` | Move mouse, click, wait slightly, and type text. Fast unified atomic operation. | `x`, `y`, `type_text`, `button`, `delay_ms`, `press_enter` |
-| `press_key` | Press a single key. Use for Enter, Tab, shortcuts, etc. | `key` |
-| `take_screenshot` | Capture screen as base64 PNG. Optional region parameters. | `x`, `y`, `width`, `height`, `quality` |
+| Tool | Description | Parameters | OCR |
+|------|-------------|------------|-----|
+| `get_screen_size` | Get screen resolution and DPI scale factor. | None | — |
+| `move_mouse` | Move mouse cursor to absolute coordinates. Origin (0,0) is top-left. | `x`, `y` | — |
+| `click` | Click mouse at current cursor position. Use `move_mouse` first. | `button` (left/right/middle) | — |
+| `click_at` | Move mouse to coordinates and click in one operation. Preferred over separate move+click. | `x`, `y`, `button` | — |
+| `double_click` | Move mouse to coordinates and double-click. Use for opening files or activating items. | `x`, `y` | — |
+| `scroll` | Move mouse to coordinates and scroll the wheel. | `x`, `y`, `direction`, `amount` | — |
+| `type_text` | Type text via keyboard. Use for input fields. | `text`, `press_enter` | — |
+| `click_and_type` | Move mouse, click, and type text in one atomic operation. | `x`, `y`, `type_text`, `button`, `delay_ms`, `press_enter` | — |
+| `press_key` | Press a single key or shortcut (e.g. Enter, Tab, Ctrl+C). | `key` | — |
+| `take_screenshot` | Capture screen as base64 PNG. Use for visual inspection only — prefer `find_elements` to read text. | `x`, `y`, `width`, `height`, `quality` | — |
+| `scroll_until_text` | Scroll in one bounded call until OCR finds the target text or `max_scrolls` is reached. | `text`, `direction`, `amount`, `max_scrolls`, `scroll_x`, `scroll_y`, `x`, `y`, `width`, `height`, `nth`, `grayscale` | ✓ |
+| `find_elements` | Read all visible text elements with coordinates and types. Fast alternative to screenshots for understanding screen content. | `x`, `y`, `width`, `height` | ✓ |
+| `find_and_click` | Find text on screen and click its center. Smart matching, auto-cached regions (10–25× faster on repeat), loop protection (max 25 calls/session). | `text`, `button`, `nth`, `x`, `y`, `width`, `height`, `scroll_direction`, `max_scrolls`, `next_page_keys`, `max_pages`, `select_best` | ✓ |
+| `find_click_and_type` | Find a label or placeholder, click the associated input field, and type immediately. | `text`, `type_text`, `x_offset`, `y_offset`, `press_enter`, `delay_ms`, `scroll_direction`, `scroll_amount`, `max_scrolls`, `scroll_x`, `scroll_y` | ✓ |
+| `find_and_click_all` | Click multiple distinct elements atomically in one call. Use for checking several checkboxes or clicking a sequence of known buttons — not for trying alternative labels. | `texts` (array), `button`, `delay_ms` | ✓ |
+| `wait_for_text` | Wait for text to appear or disappear. Always use this after actions that trigger a UI change instead of fixed delays. | `text`, `visible`, `timeout_ms`, `x`, `y`, `width`, `height` | ✓ |
+| `click_until_text_appears` | Click coordinates and retry until confirmation text appears or `max_clicks` is reached. Prevents infinite click loops. | `x`, `y`, `wait_for_text`, `button`, `timeout_ms`, `max_clicks` | ✓ |
+| `execute_workflow` | Execute multiple sequential steps sharing one learned screen map. 3–6× faster than individual calls when all steps are on the same screen. | `steps` (array), `clear_view_after` | ✓ |
+| `learn_screen` | Scan the full interface across scroll positions, run OCR, and cache the element map. Required before fast cached lookups. | `x`, `y`, `width`, `height`, `max_pages`, `scroll_amount` | ✓ |
+| `get_learned_view` | Return the cached element list from the last `learn_screen`. Use to inspect what was found or debug missed elements. | None | — |
+| `clear_learned_view` | Discard the current learned view. Call after navigation or significant UI changes to prevent stale positions. | None | — |
+| `set_learning_mode` | Enable or disable learning mode at runtime. When enabled, the first OCR call auto-scans the screen. | `enabled` | — |
+| `smart_click` | Convenience wrapper: runs `learn_screen` then `find_and_click` in one call. Use for a single click on an unfamiliar screen; use `learn_screen` explicitly for multi-step sessions. | `text`, `button`, `nth` | ✓ |
+| `get_region_cache_stats` | Return cache statistics (hits, misses, hit rate). Use to monitor region cache effectiveness. | None | — |
+| `clear_region_cache` | Clear all cached regions. Use after screen resolution changes or UI layout rearrangement. | None | — |
 
-### OCR Tools ⭐ (Require Tesseract)
-
-| Tool | Description | Parameters |
-|------|-------------|------------|
-| `find_elements` ⭐ | Discover all clickable text elements with coordinates. Fast alternative to screenshots. | `x`, `y`, `width`, `height` |
-| `find_and_click` ⚡🎯🛡️ | Find text on screen with OCR and click its center. **Smart matching** prefers standalone buttons. **Auto-caches regions** for 10-25x faster clicks. **Built-in loop protection** (max 25 calls/session). | `text`, `button`, `nth`, `x`, `y`, `width`, `height`, `scroll_direction`, `max_scrolls`, `next_page_keys`, `max_pages`, `select_best` |
-| `find_click_and_type` | Find a label/placeholder, click the inferred input target, and type immediately. Can optionally scroll while searching. | `text`, `type_text`, `x_offset`, `y_offset`, `press_enter`, `delay_ms`, `scroll_direction`, `scroll_amount`, `max_scrolls`, `scroll_x`, `scroll_y` |
-| `find_and_click_all` ⭐ | Click multiple buttons in ONE atomic operation. | `texts` (array), `button`, `delay_ms` |
-| `wait_for_text` ⭐ | Wait for text to appear or disappear. Verify UI changes. | `text`, `visible`, `timeout_ms`, `x`, `y`, `width`, `height` |
-| `click_until_text_appears` 🆕🛡️ | Click coordinates and wait for text to appear. Auto-retries if text doesn't appear. **Prevents infinite click loops.** | `x`, `y`, `wait_for_text`, `button`, `timeout_ms`, `max_clicks` |
-| `execute_workflow` 🆕🚀 | Execute multi-step automation with learning mode. Learn ONCE, execute MANY steps (3-6x faster!). | `steps` (array), `clear_view_after` |
-| `get_region_cache_stats` | Get cache statistics (hits, misses, hit rate). Monitor optimization effectiveness. | None |
-| `clear_region_cache` | Clear all cached regions. Use after screen resolution changes or UI layout updates. | None |
-
-> **Note:** OCR tools require Tesseract to be installed and `TESSDATA_PREFIX` to be set. The installation scripts handle this automatically. See [Prerequisites](#prerequisites).
-
-### ⭐ New Tools for AI Accuracy
-
-- **`find_and_click_all`** - Click 3 buttons with ONE call instead of 3+ verification loops (75% faster)
-- **`wait_for_text`** - Properly verify UI state changes instead of guessing with screenshots
-- **`find_elements`** - Discover all clickable elements 10x faster than taking screenshots
-- **`scroll_until_text`** - Search long pages with one bounded tool call instead of repeated scroll + OCR loops
-- **`click_until_text_appears`** 🆕 - Click and wait for confirmation text. Auto-retries up to 3 times. Prevents infinite loops.
-- **`execute_workflow`** 🆕🚀 - **Multi-step automation with learning mode**. Execute forms, wizards, complex workflows in ONE call. Learn screen ONCE, execute MANY steps (3-6x faster!). See [`docs/WORKFLOW_TOOL.md`](docs/WORKFLOW_TOOL.md) for examples.
+> **Tesseract required:** tools marked ✓ in the OCR column require Tesseract to be installed and `TESSDATA_PREFIX` set. The installation scripts handle this automatically. See [Prerequisites](#prerequisites).
 
 ### 🛡️ Safety Features & Loop Protection
 
@@ -764,4 +755,3 @@ Contributions welcome! Please ensure:
 - [MCP SDK](https://github.com/mark3labs/mcp-go) - Model Context Protocol implementation
 - [RobotGo](https://github.com/go-vgo/robotgo) - Cross-platform automation library
 
-[![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/PIsberg/ghost-mcp/badge)](https://scorecard.dev/viewer/?uri=github.com/PIsberg/ghost-mcp/)
