@@ -94,11 +94,21 @@ type Options struct {
 const MinConfidence = 35.0
 
 // brightTextMaxSpread is the maximum allowed channel spread (max−min across R,G,B)
-// for a pixel to be classified as near-white text in brightTextToGray. Pixels
-// with spread > 100 are too colourful to be anti-aliased white text, even if
-// their luminance is high (e.g. cyan #00f2fe has spread=254, bright green
-// #38ef7d has spread=183 — both correctly excluded).
-const brightTextMaxSpread = 100
+// for a pixel to be classified as near-white text in brightTextToGray.
+//
+// Value 130 is chosen to catch anti-aliased edges of white text on the full
+// range of button gradient colours used in practice:
+//   - White on purple #667eea (50% blend): spread=66  ≤ 130 ✓
+//   - White on warning red #f5576c (50%):  spread=79  ≤ 130 ✓
+//   - White on cyan #00f2fe (50% blend):   spread=127 ≤ 130 ✓  (was failing at 100)
+//   - White on green #38ef7d (50% blend):  spread=92  ≤ 130 ✓
+//
+// Pure coloured backgrounds are still excluded because their luminance check
+// fails first (lum < 185) or their spread far exceeds 130:
+//   - Pure #00f2fe (0,242,254):   lum=191 but spread=254 > 130 ✓
+//   - Pure #38ef7d (56,239,125):  lum=192 but spread=183 > 130 ✓
+//   - Pure #4facfe (79,172,254):  lum=158 < 185 ✓
+const brightTextMaxSpread = 130
 
 // Common character sets for specific OCR contexts
 const (
