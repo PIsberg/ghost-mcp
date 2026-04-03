@@ -1,0 +1,159 @@
+{
+  "timestamp": "2026-04-03T08:29:23Z",
+  "git_commit": "9bf226e6ff80218717e8e0ab9c799c5ebe9b4355",
+  "git_branch": "feature/benchmark-reports",
+  "go_version": "go version go1.25.8 windows/amd64",
+  "package": "github.com/ghost-mcp/internal/learner",
+  "goos": "windows",
+  "goarch": "amd64",
+  "cpu": "12th Gen Intel(R) Core(TM) i7-1260P",
+  "results": [
+    {
+      "name": "BenchmarkFindElement",
+      "iterations": 4434092,
+      "ns_per_op": 256.8,
+      "bytes_per_op": 160,
+      "allocs_per_op": 7
+    },
+    {
+      "name": "BenchmarkFindElement",
+      "iterations": 4653183,
+      "ns_per_op": 246.9,
+      "bytes_per_op": 160,
+      "allocs_per_op": 7
+    },
+    {
+      "name": "BenchmarkFindElement",
+      "iterations": 4765344,
+      "ns_per_op": 253,
+      "bytes_per_op": 160,
+      "allocs_per_op": 7
+    },
+    {
+      "name": "BenchmarkFindElement_LargeView",
+      "iterations": 391730,
+      "ns_per_op": 2997,
+      "bytes_per_op": 920,
+      "allocs_per_op": 102
+    },
+    {
+      "name": "BenchmarkFindElement_LargeView",
+      "iterations": 377863,
+      "ns_per_op": 3039,
+      "bytes_per_op": 920,
+      "allocs_per_op": 102
+    },
+    {
+      "name": "BenchmarkFindElement_LargeView",
+      "iterations": 361472,
+      "ns_per_op": 2982,
+      "bytes_per_op": 920,
+      "allocs_per_op": 102
+    },
+    {
+      "name": "BenchmarkFindAllElements",
+      "iterations": 1663736,
+      "ns_per_op": 717.7,
+      "bytes_per_op": 1456,
+      "allocs_per_op": 12
+    },
+    {
+      "name": "BenchmarkFindAllElements",
+      "iterations": 1700427,
+      "ns_per_op": 718.3,
+      "bytes_per_op": 1456,
+      "allocs_per_op": 12
+    },
+    {
+      "name": "BenchmarkFindAllElements",
+      "iterations": 1698058,
+      "ns_per_op": 715.1,
+      "bytes_per_op": 1456,
+      "allocs_per_op": 12
+    },
+    {
+      "name": "BenchmarkScoreMatch",
+      "iterations": 17712150,
+      "ns_per_op": 63.76,
+      "bytes_per_op": 32,
+      "allocs_per_op": 1
+    },
+    {
+      "name": "BenchmarkScoreMatch",
+      "iterations": 18493831,
+      "ns_per_op": 64.82,
+      "bytes_per_op": 32,
+      "allocs_per_op": 1
+    },
+    {
+      "name": "BenchmarkScoreMatch",
+      "iterations": 18088225,
+      "ns_per_op": 61.61,
+      "bytes_per_op": 32,
+      "allocs_per_op": 1
+    },
+    {
+      "name": "BenchmarkDeduplicateElements",
+      "iterations": 2582288,
+      "ns_per_op": 478.6,
+      "bytes_per_op": 1336,
+      "allocs_per_op": 5
+    },
+    {
+      "name": "BenchmarkDeduplicateElements",
+      "iterations": 2114422,
+      "ns_per_op": 637.7,
+      "bytes_per_op": 1336,
+      "allocs_per_op": 5
+    },
+    {
+      "name": "BenchmarkDeduplicateElements",
+      "iterations": 1908958,
+      "ns_per_op": 614.2,
+      "bytes_per_op": 1336,
+      "allocs_per_op": 5
+    },
+    {
+      "name": "BenchmarkInferElementType_AllTypes",
+      "iterations": 67628,
+      "ns_per_op": 16944,
+      "bytes_per_op": 152,
+      "allocs_per_op": 10
+    },
+    {
+      "name": "BenchmarkInferElementType_AllTypes",
+      "iterations": 79309,
+      "ns_per_op": 17937,
+      "bytes_per_op": 152,
+      "allocs_per_op": 10
+    },
+    {
+      "name": "BenchmarkInferElementType_AllTypes",
+      "iterations": 61414,
+      "ns_per_op": 18610,
+      "bytes_per_op": 152,
+      "allocs_per_op": 10
+    },
+    {
+      "name": "BenchmarkAssociateLabels_LargeForm",
+      "iterations": 935467,
+      "ns_per_op": 1434,
+      "bytes_per_op": 2304,
+      "allocs_per_op": 1
+    },
+    {
+      "name": "BenchmarkAssociateLabels_LargeForm",
+      "iterations": 815050,
+      "ns_per_op": 1650,
+      "bytes_per_op": 2304,
+      "allocs_per_op": 1
+    },
+    {
+      "name": "BenchmarkAssociateLabels_LargeForm",
+      "iterations": 1000000,
+      "ns_per_op": 1530,
+      "bytes_per_op": 2304,
+      "allocs_per_op": 1
+    }
+  ]
+}

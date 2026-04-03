@@ -1,0 +1,129 @@
+{
+  "timestamp": "2026-04-03T08:29:23Z",
+  "git_commit": "9bf226e6ff80218717e8e0ab9c799c5ebe9b4355",
+  "git_branch": "feature/benchmark-reports",
+  "go_version": "go version go1.25.8 windows/amd64",
+  "package": "github.com/ghost-mcp/internal/validate",
+  "goos": "windows",
+  "goarch": "amd64",
+  "cpu": "12th Gen Intel(R) Core(TM) i7-1260P",
+  "results": [
+    {
+      "name": "BenchmarkCoords_Valid",
+      "iterations": 1000000000,
+      "ns_per_op": 1.014
+    },
+    {
+      "name": "BenchmarkCoords_Valid",
+      "iterations": 1000000000,
+      "ns_per_op": 1.02
+    },
+    {
+      "name": "BenchmarkCoords_Valid",
+      "iterations": 1000000000,
+      "ns_per_op": 1.001
+    },
+    {
+      "name": "BenchmarkCoords_Invalid",
+      "iterations": 11516336,
+      "ns_per_op": 109.2,
+      "bytes_per_op": 56,
+      "allocs_per_op": 3
+    },
+    {
+      "name": "BenchmarkCoords_Invalid",
+      "iterations": 10292654,
+      "ns_per_op": 108.9,
+      "bytes_per_op": 56,
+      "allocs_per_op": 3
+    },
+    {
+      "name": "BenchmarkCoords_Invalid",
+      "iterations": 11260753,
+      "ns_per_op": 110.8,
+      "bytes_per_op": 56,
+      "allocs_per_op": 3
+    },
+    {
+      "name": "BenchmarkScreenRegion_Valid",
+      "iterations": 873270922,
+      "ns_per_op": 1.381
+    },
+    {
+      "name": "BenchmarkScreenRegion_Valid",
+      "iterations": 533671850,
+      "ns_per_op": 2.095
+    },
+    {
+      "name": "BenchmarkScreenRegion_Valid",
+      "iterations": 684465429,
+      "ns_per_op": 2.59
+    },
+    {
+      "name": "BenchmarkText_Short",
+      "iterations": 327505418,
+      "ns_per_op": 4.024
+    },
+    {
+      "name": "BenchmarkText_Short",
+      "iterations": 359663929,
+      "ns_per_op": 4.104
+    },
+    {
+      "name": "BenchmarkText_Short",
+      "iterations": 336944914,
+      "ns_per_op": 3.742
+    },
+    {
+      "name": "BenchmarkText_Long",
+      "iterations": 591883,
+      "ns_per_op": 1775
+    },
+    {
+      "name": "BenchmarkText_Long",
+      "iterations": 674982,
+      "ns_per_op": 1802
+    },
+    {
+      "name": "BenchmarkText_Long",
+      "iterations": 780411,
+      "ns_per_op": 1879
+    },
+    {
+      "name": "BenchmarkKey_Valid",
+      "iterations": 152588065,
+      "ns_per_op": 8.884
+    },
+    {
+      "name": "BenchmarkKey_Valid",
+      "iterations": 83506725,
+      "ns_per_op": 12.81
+    },
+    {
+      "name": "BenchmarkKey_Valid",
+      "iterations": 88266446,
+      "ns_per_op": 14.17
+    },
+    {
+      "name": "BenchmarkKey_Invalid",
+      "iterations": 5060188,
+      "ns_per_op": 229.1,
+      "bytes_per_op": 112,
+      "allocs_per_op": 3
+    },
+    {
+      "name": "BenchmarkKey_Invalid",
+      "iterations": 5894983,
+      "ns_per_op": 226.6,
+      "bytes_per_op": 112,
+      "allocs_per_op": 3
+    },
+    {
+      "name": "BenchmarkKey_Invalid",
+      "iterations": 5365514,
+      "ns_per_op": 239.5,
+      "bytes_per_op": 112,
+      "allocs_per_op": 3
+    }
+  ]
+}
