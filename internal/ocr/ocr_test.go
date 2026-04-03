@@ -368,20 +368,23 @@ func TestOptions_Inverted_WhiteTextOnDark(t *testing.T) {
 	}
 }
 
-// TestBrightTextToGray_WhiteOnColored verifies that pure-white pixels become
-// black (text detected) and coloured / near-white pixels become white (background).
-// This documents the threshold=240 design choice:
+// TestBrightTextToGray_WhiteOnColored verifies that white text and anti-aliased
+// edge pixels become black, while fully-coloured backgrounds stay white.
+// Documents the production threshold=160 behaviour:
 //   - Pure white button text (255,255,255) → black ✓
-//   - Body text colour #eee (238,238,238) → white (238 < 240, not captured) ✓
-//   - Coloured button background, e.g. primary #667eea (102,126,234) → white ✓
-//     (R=102 < 240 fails the "all channels ≥ threshold" check)
+//   - Anti-aliased edge: white 50% blended with #667eea → (178,190,244) → black ✓
+//   - Near-white body text #eee (238,238,238) → black (238 ≥ 160, also detected) ✓
+//   - Fully-coloured background #667eea (102,126,234) → white (R=102 < 160) ✓
 func TestBrightTextToGray_WhiteOnColored(t *testing.T) {
 	img := image.NewRGBA(image.Rect(0, 0, 10, 10))
 	// Primary button blue (#667eea) — coloured background, should become white.
 	btnColor := color.RGBA{R: 102, G: 126, B: 234, A: 255}
 	// Pure white — button label text, should become black.
 	whiteText := color.RGBA{R: 255, G: 255, B: 255, A: 255}
-	// Near-white body text (#eee = 238,238,238) — must NOT be captured (238 < 240).
+	// Anti-aliased edge: white blended 50% with #667eea → (178,190,244).
+	// min=178 ≥ 160, so must be captured (previously missed at threshold 240).
+	antiAliased := color.RGBA{R: 178, G: 190, B: 244, A: 255}
+	// Near-white body text (#eee = 238,238,238) — also captured at threshold 160.
 	bodyText := color.RGBA{R: 238, G: 238, B: 238, A: 255}
 
 	for y := 0; y < 10; y++ {
@@ -389,6 +392,8 @@ func TestBrightTextToGray_WhiteOnColored(t *testing.T) {
 			switch {
 			case x == 5 && y == 5:
 				img.Set(x, y, whiteText)
+			case x == 4 && y == 5:
+				img.Set(x, y, antiAliased)
 			case x == 0 && y == 0:
 				img.Set(x, y, bodyText)
 			default:
@@ -397,19 +402,23 @@ func TestBrightTextToGray_WhiteOnColored(t *testing.T) {
 		}
 	}
 
-	got := brightTextToGray(img, 240)
+	got := brightTextToGray(img, 160)
 
 	// Pure white text pixel → black (0 = text detected).
 	if got.GrayAt(5, 5).Y != 0 {
 		t.Errorf("white text pixel: gray=%d; want 0 (black)", got.GrayAt(5, 5).Y)
 	}
-	// Coloured button background → white (255 = background, not captured).
-	if got.GrayAt(1, 1).Y != 255 {
-		t.Errorf("blue background pixel: gray=%d; want 255 (white)", got.GrayAt(1, 1).Y)
+	// Anti-aliased edge pixel → black (was missed at threshold 240, now captured at 160).
+	if got.GrayAt(4, 5).Y != 0 {
+		t.Errorf("anti-aliased edge (178,190,244): gray=%d; want 0 (black, min=178 >= 160)", got.GrayAt(4, 5).Y)
 	}
-	// Near-white body text #eee (238) → white (238 < 240, should not be captured).
-	if got.GrayAt(0, 0).Y != 255 {
-		t.Errorf("body text #eee pixel: gray=%d; want 255 (238 < threshold 240, not captured)", got.GrayAt(0, 0).Y)
+	// Near-white body text #eee (238,238,238) → black (238 >= 160, detected).
+	if got.GrayAt(0, 0).Y != 0 {
+		t.Errorf("body text #eee pixel: gray=%d; want 0 (black, 238 >= threshold 160)", got.GrayAt(0, 0).Y)
+	}
+	// Fully-coloured button background → white (R=102 < 160, correctly excluded).
+	if got.GrayAt(1, 1).Y != 255 {
+		t.Errorf("blue background pixel: gray=%d; want 255 (white, R=102 < 160)", got.GrayAt(1, 1).Y)
 	}
 }
 
@@ -432,7 +441,7 @@ func TestBrightTextToGray_DarkBackground(t *testing.T) {
 		}
 	}
 
-	got := brightTextToGray(img, 240)
+	got := brightTextToGray(img, 160)
 
 	if got.GrayAt(5, 5).Y != 0 {
 		t.Errorf("white text on dark bg: gray=%d; want 0 (black)", got.GrayAt(5, 5).Y)

@@ -54,12 +54,15 @@ type Options struct {
 
 	// BrightText isolates near-white pixels for detecting white text on any
 	// coloured or dark background. Each pixel is mapped to black if all three
-	// RGB channels are ≥ 240, otherwise to white. The result is a high-contrast
-	// binary image where pure-white button labels appear as black text on a
-	// white background — the pattern Tesseract is trained on. Threshold 240
-	// captures true white text while excluding near-white body text (e.g.
-	// #eee = 238) and all coloured backgrounds. Use as a last-resort fallback
-	// when grayscale, inverted, and colour passes all fail. Ignored when Color
+	// RGB channels are ≥ 160, otherwise to white. The result is a high-contrast
+	// binary image where white button labels (and their anti-aliased edges)
+	// appear as black text on a white background — the pattern Tesseract is
+	// trained on. Threshold 160 is chosen to capture anti-aliased edge pixels
+	// of white text blended with coloured button gradients (e.g. white on
+	// #667eea purple produces edge pixels around (178,190,244), min=178 ≥ 160),
+	// while still excluding fully-coloured backgrounds (all gradients used in
+	// the fixture have at least one channel < 100). Use as a fallback when
+	// grayscale, inverted, and colour passes all fail. Ignored when Color
 	// or Inverted is true.
 	BrightText bool
 
@@ -474,7 +477,7 @@ func preprocessToBytes(src string, factor int, opts Options) ([]byte, error) {
 func encodeForOCR(img image.Image, factor int, opts Options) ([]byte, error) {
 	var scaledImg image.Image
 	if opts.BrightText {
-		preprocessed := brightTextToGray(img, 240)
+		preprocessed := brightTextToGray(img, 160)
 		scaledImg = scaleGrayNearest(preprocessed, factor)
 	} else if opts.Color {
 		b := img.Bounds()
@@ -548,15 +551,18 @@ func invertGray(img *image.Gray) {
 
 // brightTextToGray creates a binary image where pixels with all three RGB
 // channels at or above threshold become black, and all other pixels become
-// white. This reliably isolates white (or near-white) text from any coloured
-// or dark background by exploiting the fact that pure white has all channels
-// uniformly high, while coloured backgrounds have at least one low channel.
+// white. This isolates white (and near-white) text — including anti-aliased
+// edge pixels — from coloured or dark backgrounds, exploiting the fact that
+// blending white with any colour produces a pixel where all channels shift
+// upward, while fully-coloured backgrounds always have at least one low channel.
 //
 // Result: black text on white background — the pattern Tesseract is trained on.
 //
-// threshold=240 is chosen to capture true white button text (255,255,255)
-// while excluding near-white body text like #eee (238,238,238) and any
-// coloured background gradient (always has at least one channel < 240).
+// The production threshold is 160 (set by the caller in encodeForOCR). This
+// captures pure-white button text (255,255,255) and anti-aliased edges such as
+// white blended 50% with #667eea purple → (178,190,244), min=178 ≥ 160.
+// Fully-coloured button gradients are excluded: they always have at least one
+// channel below 100 (e.g. #667eea R=102, #f5576c G=87, #4facfe R=79).
 func brightTextToGray(img image.Image, threshold uint8) *image.Gray {
 	b := img.Bounds()
 	out := image.NewGray(b)
