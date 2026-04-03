@@ -1,0 +1,54 @@
+{
+  "timestamp": "2026-04-03T08:29:23Z",
+  "git_commit": "9bf226e6ff80218717e8e0ab9c799c5ebe9b4355",
+  "git_branch": "feature/benchmark-reports",
+  "go_version": "go version go1.25.8 windows/amd64",
+  "package": "github.com/ghost-mcp/internal/ocr",
+  "goos": "windows",
+  "goarch": "amd64",
+  "cpu": "12th Gen Intel(R) Core(TM) i7-1260P",
+  "results": [
+    {
+      "name": "BenchmarkPrepareParallelImageSet_Grayscale",
+      "iterations": 7,
+      "ns_per_op": 145101500,
+      "bytes_per_op": 480824068,
+      "allocs_per_op": 106
+    },
+    {
+      "name": "BenchmarkPrepareParallelImageSet_Grayscale",
+      "iterations": 8,
+      "ns_per_op": 253033338,
+      "bytes_per_op": 480821292,
+      "allocs_per_op": 101
+    },
+    {
+      "name": "BenchmarkPrepareParallelImageSet_Grayscale",
+      "iterations": 4,
+      "ns_per_op": 388012900,
+      "bytes_per_op": 480822064,
+      "allocs_per_op": 103
+    },
+    {
+      "name": "BenchmarkToGrayscaleContrast_RGBA",
+      "iterations": 55,
+      "ns_per_op": 18331038,
+      "bytes_per_op": 2080832,
+      "allocs_per_op": 2
+    },
+    {
+      "name": "BenchmarkToGrayscaleContrast_RGBA",
+      "iterations": 70,
+      "ns_per_op": 18776659,
+      "bytes_per_op": 2080832,
+      "allocs_per_op": 2
+    },
+    {
+      "name": "BenchmarkToGrayscaleContrast_RGBA",
+      "iterations": 87,
+      "ns_per_op": 20459132,
+      "bytes_per_op": 2080832,
+      "allocs_per_op": 2
+    }
+  ]
+}

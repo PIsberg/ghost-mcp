@@ -1,0 +1,75 @@
+{
+  "timestamp": "2026-04-03T08:29:23Z",
+  "git_commit": "9bf226e6ff80218717e8e0ab9c799c5ebe9b4355",
+  "git_branch": "feature/benchmark-reports",
+  "go_version": "go version go1.25.8 windows/amd64",
+  "package": "github.com/ghost-mcp/internal/audit",
+  "goos": "windows",
+  "goarch": "amd64",
+  "cpu": "12th Gen Intel(R) Core(TM) i7-1260P",
+  "results": [
+    {
+      "name": "BenchmarkComputeEntryHash",
+      "iterations": 1000000,
+      "ns_per_op": 1125,
+      "bytes_per_op": 704,
+      "allocs_per_op": 11
+    },
+    {
+      "name": "BenchmarkComputeEntryHash",
+      "iterations": 967226,
+      "ns_per_op": 1100,
+      "bytes_per_op": 704,
+      "allocs_per_op": 11
+    },
+    {
+      "name": "BenchmarkComputeEntryHash",
+      "iterations": 1000000,
+      "ns_per_op": 1079,
+      "bytes_per_op": 704,
+      "allocs_per_op": 11
+    },
+    {
+      "name": "BenchmarkSanitizeParams",
+      "iterations": 5642472,
+      "ns_per_op": 207.8,
+      "bytes_per_op": 336,
+      "allocs_per_op": 2
+    },
+    {
+      "name": "BenchmarkSanitizeParams",
+      "iterations": 5284278,
+      "ns_per_op": 204.4,
+      "bytes_per_op": 336,
+      "allocs_per_op": 2
+    },
+    {
+      "name": "BenchmarkSanitizeParams",
+      "iterations": 6134216,
+      "ns_per_op": 205.4,
+      "bytes_per_op": 336,
+      "allocs_per_op": 2
+    },
+    {
+      "name": "BenchmarkSanitizeParams_LongValue",
+      "iterations": 324108,
+      "ns_per_op": 3828,
+      "bytes_per_op": 5567,
+      "allocs_per_op": 8
+    },
+    {
+      "name": "BenchmarkSanitizeParams_LongValue",
+      "iterations": 321144,
+      "ns_per_op": 3920,
+      "bytes_per_op": 5567,
+      "allocs_per_op": 8
+    },
+    {
+      "name": "BenchmarkSanitizeParams_LongValue",
+      "iterations": 317072,
+      "ns_per_op": 3897,
+      "bytes_per_op": 5567,
+      "allocs_per_op": 8
+    }
+  ]
+}

@@ -40,6 +40,27 @@ test_runner.bat integration  # Windows: integration tests
 ./test_runner.sh fixture     # Start the test fixture web server
 ```
 
+## Benchmark Commands
+
+```bash
+# Run all benchmark packages (no display required)
+go test -bench=. -benchmem ./internal/validate/...
+go test -bench=. -benchmem ./internal/audit/...
+go test -bench=. -benchmem ./internal/learner/...
+go test -bench=. -benchmem ./internal/ocr/...
+
+# Generate an HTML report with charts and historical comparison
+go run ./cmd/bench-report/                              # runs all packages, opens browser
+go run ./cmd/bench-report/ -no-run                     # regenerate HTML from stored results
+go run ./cmd/bench-report/ -benchtime=2s -count=5      # more stable numbers
+go run ./cmd/bench-report/ -compare=3                  # show only last 3 runs per package
+
+# Report is written to benchmarks/report.html
+# JSON results are stored in benchmarks/results/ (committed to git for history)
+```
+
+See [`docs/BENCHMARKING.md`](docs/BENCHMARKING.md) for the full guide including CGo setup and dependency comparison workflow.
+
 ## Lint / Format
 
 ```bash

@@ -1,0 +1,51 @@
+{
+  "timestamp": "2026-04-03T08:11:59Z",
+  "git_commit": "5fa2ba5571b4e5286209bdf52aaa8cdbe6b31a98",
+  "git_branch": "feature/benchmark-reports",
+  "go_version": "go version go1.25.8 windows/amd64",
+  "package": "github.com/ghost-mcp/internal/validate",
+  "goos": "windows",
+  "goarch": "amd64",
+  "cpu": "12th Gen Intel(R) Core(TM) i7-1260P",
+  "results": [
+    {
+      "name": "BenchmarkCoords_Valid",
+      "iterations": 228028936,
+      "ns_per_op": 1.062
+    },
+    {
+      "name": "BenchmarkCoords_Invalid",
+      "iterations": 2169100,
+      "ns_per_op": 111.3,
+      "bytes_per_op": 56,
+      "allocs_per_op": 3
+    },
+    {
+      "name": "BenchmarkScreenRegion_Valid",
+      "iterations": 168494361,
+      "ns_per_op": 1.385
+    },
+    {
+      "name": "BenchmarkText_Short",
+      "iterations": 100000000,
+      "ns_per_op": 2.533
+    },
+    {
+      "name": "BenchmarkText_Long",
+      "iterations": 160942,
+      "ns_per_op": 1372
+    },
+    {
+      "name": "BenchmarkKey_Valid",
+      "iterations": 40745644,
+      "ns_per_op": 5.634
+    },
+    {
+      "name": "BenchmarkKey_Invalid",
+      "iterations": 1283802,
+      "ns_per_op": 172.3,
+      "bytes_per_op": 112,
+      "allocs_per_op": 3
+    }
+  ]
+}
