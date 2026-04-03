@@ -4,6 +4,7 @@
 
 **License:** Free for personal and hobby use ([PolyForm Noncommercial](LICENSE)). Commercial use requires a license — contact [Peter Isberg](mailto:isberg.peter+gm@gmail.com).
 
+[![codecov](https://codecov.io/gh/PIsberg/ghost-mcp/graph/badge.svg)](https://codecov.io/gh/PIsberg/ghost-mcp)
 
 ## Overview
 
