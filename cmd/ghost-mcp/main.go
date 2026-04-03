@@ -919,6 +919,12 @@ func createServer(token string, al *audit.Logger) *server.MCPServer {
 		ServerVersion,
 		server.WithResourceCapabilities(true, true),
 		server.WithHooks(hooks),
+		server.WithInstructions(
+			"Before taking any UI automation actions, call the `ghost_mcp_guide` prompt "+
+				"(prompts/get) to learn which tools to use and in what order. "+
+				"This guide contains decision tables, optimal tool sequences for common scenarios, "+
+				"and safety rules. Reading it first prevents inefficient tool choices and errors.",
+		),
 	)
 	registerTools(mcpServer)
 	registerPrompts(mcpServer)
