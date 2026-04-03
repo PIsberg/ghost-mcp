@@ -774,3 +774,76 @@ func BenchmarkAssociateLabels_LargeForm(b *testing.B) {
 		AssociateLabels(elements)
 	}
 }
+
+// =============================================================================
+// GetPageScreenshot
+// =============================================================================
+
+func TestGetPageScreenshot_NoView(t *testing.T) {
+	l := New()
+	l.Enable()
+	if got := l.GetPageScreenshot(0); got != nil {
+		t.Errorf("expected nil with no view, got %v", got)
+	}
+}
+
+func TestGetPageScreenshot_PageExists(t *testing.T) {
+	l := New()
+	l.Enable()
+	jpeg := []byte{0xFF, 0xD8, 0xFF, 0xD9}
+	l.SetView(&View{
+		Pages: []PageSnapshot{{Index: 0, JPEG: jpeg}},
+	})
+	got := l.GetPageScreenshot(0)
+	if len(got) != len(jpeg) {
+		t.Errorf("expected %d bytes, got %d", len(jpeg), len(got))
+	}
+}
+
+func TestGetPageScreenshot_PageMissing(t *testing.T) {
+	l := New()
+	l.Enable()
+	l.SetView(&View{
+		Pages: []PageSnapshot{{Index: 0, JPEG: []byte{1, 2, 3}}},
+	})
+	if got := l.GetPageScreenshot(1); got != nil {
+		t.Errorf("expected nil for missing page, got %v", got)
+	}
+}
+
+// =============================================================================
+// isRadioText — symbol coverage
+// =============================================================================
+
+func TestIsRadioText_Symbols(t *testing.T) {
+	for _, sym := range []string{"○", "●", "◉", "◎"} {
+		if !isRadioText(sym) {
+			t.Errorf("isRadioText(%q) = false, want true", sym)
+		}
+	}
+}
+
+// =============================================================================
+// isSliderText — symbol coverage
+// =============================================================================
+
+func TestIsSliderText_Symbols(t *testing.T) {
+	for _, sym := range []string{"─●", "▬●", "│●"} {
+		if !isSliderText(sym) {
+			t.Errorf("isSliderText(%q) = false, want true", sym)
+		}
+	}
+}
+
+// =============================================================================
+// isNumericValue — currency symbol coverage
+// =============================================================================
+
+func TestIsNumericValue_Currency(t *testing.T) {
+	cases := []string{"€99", "£50", "¥1000", "₹500", "$9.99"}
+	for _, s := range cases {
+		if !isNumericValue(s) {
+			t.Errorf("isNumericValue(%q) = false, want true", s)
+		}
+	}
+}

@@ -4,9 +4,12 @@ package transport
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/ghost-mcp/internal/audit"
+	"github.com/mark3labs/mcp-go/server"
 )
 
 // =============================================================================
@@ -191,5 +194,44 @@ func TestBearerMiddleware_InnerHandlerNotCalledOnFailure(t *testing.T) {
 
 	if called {
 		t.Error("Inner handler should not be called when auth fails")
+	}
+}
+
+// =============================================================================
+// ServeHTTP
+// =============================================================================
+
+func TestServeHTTP_InvalidAddr(t *testing.T) {
+	al := newTestAuditLogger(t)
+	mcpSrv := server.NewMCPServer("test", "1.0")
+	shutdownCh := make(chan struct{})
+	cfg := Config{Mode: HTTP, Addr: "localhost:99999", BaseURL: "http://localhost:99999"}
+
+	err := ServeHTTP(shutdownCh, mcpSrv, cfg, "token", al)
+	if err == nil {
+		t.Error("expected error for invalid port 99999, got nil")
+	}
+}
+
+func TestServeHTTP_ImmediateShutdown(t *testing.T) {
+	al := newTestAuditLogger(t)
+	mcpSrv := server.NewMCPServer("test", "1.0")
+
+	shutdownCh := make(chan struct{})
+	close(shutdownCh) // already closed — shutdown fires before server loops
+
+	cfg := Config{Mode: HTTP, Addr: "localhost:18766", BaseURL: "http://localhost:18766"}
+
+	done := make(chan error, 1)
+	go func() { done <- ServeHTTP(shutdownCh, mcpSrv, cfg, "token", al) }()
+
+	select {
+	case err := <-done:
+		// nil or a "server closed" error are both acceptable outcomes
+		if err != nil && !strings.Contains(err.Error(), "closed") && !strings.Contains(err.Error(), "use of closed") {
+			t.Logf("ServeHTTP returned non-fatal error: %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Error("ServeHTTP did not return within 5 seconds after shutdown signal")
 	}
 }
