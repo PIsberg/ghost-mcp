@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"os"
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -29,6 +30,9 @@ func TestHandleFindAndClickMissingText(t *testing.T) {
 }
 
 func TestHandleFindAndClickWithText(t *testing.T) {
+	if os.Getenv("CI") != "" || os.Getenv("GITHUB_ACTIONS") != "" {
+		t.Skip("skipping: requires real desktop screen")
+	}
 	ctx := context.Background()
 
 	req := mcp.CallToolRequest{
@@ -50,6 +54,9 @@ func TestHandleFindAndClickWithText(t *testing.T) {
 }
 
 func TestHandleFindAndClickWithAllParams(t *testing.T) {
+	if os.Getenv("CI") != "" || os.Getenv("GITHUB_ACTIONS") != "" {
+		t.Skip("skipping: requires real desktop screen")
+	}
 	ctx := context.Background()
 
 	req := mcp.CallToolRequest{
@@ -148,6 +155,9 @@ func TestHandleFindAndClickAllEmptyArray(t *testing.T) {
 }
 
 func TestHandleFindAndClickAllValidParams(t *testing.T) {
+	if os.Getenv("CI") != "" || os.Getenv("GITHUB_ACTIONS") != "" {
+		t.Skip("skipping: requires real desktop screen")
+	}
 	ctx := context.Background()
 
 	req := mcp.CallToolRequest{
@@ -191,6 +201,9 @@ func TestHandleWaitForTextMissingText(t *testing.T) {
 }
 
 func TestHandleWaitForTextWithParams(t *testing.T) {
+	if os.Getenv("CI") != "" || os.Getenv("GITHUB_ACTIONS") != "" {
+		t.Skip("skipping: requires real desktop screen")
+	}
 	ctx := context.Background()
 
 	req := mcp.CallToolRequest{
@@ -217,6 +230,9 @@ func TestHandleWaitForTextWithParams(t *testing.T) {
 }
 
 func TestHandleWaitForTextInvisible(t *testing.T) {
+	if os.Getenv("CI") != "" || os.Getenv("GITHUB_ACTIONS") != "" {
+		t.Skip("skipping: requires real desktop screen")
+	}
 	ctx := context.Background()
 
 	req := mcp.CallToolRequest{
@@ -238,6 +254,9 @@ func TestHandleWaitForTextInvisible(t *testing.T) {
 }
 
 func TestHandleFindElementsWithRegion(t *testing.T) {
+	if os.Getenv("CI") != "" || os.Getenv("GITHUB_ACTIONS") != "" {
+		t.Skip("skipping: requires real desktop screen")
+	}
 	ctx := context.Background()
 
 	req := mcp.CallToolRequest{
@@ -261,6 +280,9 @@ func TestHandleFindElementsWithRegion(t *testing.T) {
 }
 
 func TestHandleFindElementsNoRegion(t *testing.T) {
+	if os.Getenv("CI") != "" || os.Getenv("GITHUB_ACTIONS") != "" {
+		t.Skip("skipping: requires real desktop screen")
+	}
 	ctx := context.Background()
 
 	req := mcp.CallToolRequest{
@@ -326,6 +348,9 @@ func TestHandleFindClickAndTypeMissingParams(t *testing.T) {
 }
 
 func TestHandleFindClickAndTypeWithAllParams(t *testing.T) {
+	if os.Getenv("CI") != "" || os.Getenv("GITHUB_ACTIONS") != "" {
+		t.Skip("skipping: requires real desktop screen")
+	}
 	ctx := context.Background()
 
 	req := mcp.CallToolRequest{
@@ -452,6 +477,9 @@ func TestHandleClickUntilTextAppearsMissingParams(t *testing.T) {
 }
 
 func TestHandleClickUntilTextAppearsWithParams(t *testing.T) {
+	if os.Getenv("CI") != "" || os.Getenv("GITHUB_ACTIONS") != "" {
+		t.Skip("skipping: requires real desktop screen")
+	}
 	ctx := context.Background()
 
 	req := mcp.CallToolRequest{

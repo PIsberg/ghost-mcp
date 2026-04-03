@@ -2,12 +2,16 @@ package main
 
 import (
 	"context"
+	"os"
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
 )
 
 func TestHandleLearnScreen(t *testing.T) {
+	if os.Getenv("CI") != "" || os.Getenv("GITHUB_ACTIONS") != "" {
+		t.Skip("skipping: requires real desktop screen")
+	}
 	ctx := context.Background()
 
 	req := mcp.CallToolRequest{
@@ -27,6 +31,9 @@ func TestHandleLearnScreen(t *testing.T) {
 }
 
 func TestHandleLearnScreenWithRegion(t *testing.T) {
+	if os.Getenv("CI") != "" || os.Getenv("GITHUB_ACTIONS") != "" {
+		t.Skip("skipping: requires real desktop screen")
+	}
 	ctx := context.Background()
 
 	req := mcp.CallToolRequest{
@@ -50,6 +57,9 @@ func TestHandleLearnScreenWithRegion(t *testing.T) {
 }
 
 func TestHandleLearnScreenWithScrollParams(t *testing.T) {
+	if os.Getenv("CI") != "" || os.Getenv("GITHUB_ACTIONS") != "" {
+		t.Skip("skipping: requires real desktop screen")
+	}
 	ctx := context.Background()
 
 	req := mcp.CallToolRequest{
@@ -188,6 +198,9 @@ func TestLearningToolRegistration(t *testing.T) {
 }
 
 func TestHandleLearnScreenInvalidParams(t *testing.T) {
+	if os.Getenv("CI") != "" || os.Getenv("GITHUB_ACTIONS") != "" {
+		t.Skip("skipping: requires real desktop screen")
+	}
 	ctx := context.Background()
 
 	// Test with invalid parameter types
@@ -212,6 +225,9 @@ func TestHandleLearnScreenInvalidParams(t *testing.T) {
 }
 
 func TestHandleLearnScreenEdgeCases(t *testing.T) {
+	if os.Getenv("CI") != "" || os.Getenv("GITHUB_ACTIONS") != "" {
+		t.Skip("skipping: requires real desktop screen")
+	}
 	ctx := context.Background()
 
 	tests := []struct {

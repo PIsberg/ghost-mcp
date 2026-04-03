@@ -4,6 +4,7 @@ import (
 	"context"
 	"image"
 	"image/color"
+	"os"
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -31,6 +32,9 @@ func TestHandleSmartClickMissingText(t *testing.T) {
 }
 
 func TestHandleSmartClickWithText(t *testing.T) {
+	if os.Getenv("CI") != "" || os.Getenv("GITHUB_ACTIONS") != "" {
+		t.Skip("skipping: requires real desktop screen")
+	}
 	ctx := context.Background()
 
 	req := mcp.CallToolRequest{
