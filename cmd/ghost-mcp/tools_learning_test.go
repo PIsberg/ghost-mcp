@@ -119,8 +119,9 @@ func TestHandleSetLearningModeMissingEnabled(t *testing.T) {
 	if result == nil {
 		t.Fatal("expected result, got nil")
 	}
-	if !result.IsError {
-		t.Error("expected error result for missing enabled parameter")
+	// Missing enabled parameter defaults to false (disabled), not an error
+	if result.IsError {
+		t.Error("expected successful result with default false for missing enabled")
 	}
 }
 
