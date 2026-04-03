@@ -49,17 +49,17 @@ func generateHTMLReport(w io.Writer, runs []RunRecord) error {
 	data := buildReportData(runs)
 
 	funcMap := template.FuncMap{
-		"formatNs":         formatNs,
-		"jsonNumbers":      jsonNumbers,
-		"jsonStrings":      jsonStrings,
-		"safeID":           safeID,
-		"absf":             math.Abs,
-		"printf":           fmt.Sprintf,
-		"latestPoint":      latestPoint,
-		"benchLabels":      benchLabels,
-		"benchLatestNs":    benchLatestNs,
+		"formatNs":          formatNs,
+		"jsonNumbers":       jsonNumbers,
+		"jsonStrings":       jsonStrings,
+		"safeID":            safeID,
+		"absf":              math.Abs,
+		"printf":            fmt.Sprintf,
+		"latestPoint":       latestPoint,
+		"benchLabels":       benchLabels,
+		"benchLatestNs":     benchLatestNs,
 		"benchLatestAllocs": benchLatestAllocs,
-		"shortCommit":      shortCommit,
+		"shortCommit":       shortCommit,
 	}
 
 	t, err := template.New("report").Funcs(funcMap).Parse(reportTemplate)

@@ -1,0 +1,33 @@
+{
+  "timestamp": "2026-04-03T08:11:59Z",
+  "git_commit": "5fa2ba5571b4e5286209bdf52aaa8cdbe6b31a98",
+  "git_branch": "feature/benchmark-reports",
+  "go_version": "go version go1.25.8 windows/amd64",
+  "package": "github.com/ghost-mcp/internal/audit",
+  "goos": "windows",
+  "goarch": "amd64",
+  "cpu": "12th Gen Intel(R) Core(TM) i7-1260P",
+  "results": [
+    {
+      "name": "BenchmarkComputeEntryHash",
+      "iterations": 219414,
+      "ns_per_op": 1147,
+      "bytes_per_op": 704,
+      "allocs_per_op": 11
+    },
+    {
+      "name": "BenchmarkSanitizeParams",
+      "iterations": 1000000,
+      "ns_per_op": 213.9,
+      "bytes_per_op": 336,
+      "allocs_per_op": 2
+    },
+    {
+      "name": "BenchmarkSanitizeParams_LongValue",
+      "iterations": 64426,
+      "ns_per_op": 3725,
+      "bytes_per_op": 5567,
+      "allocs_per_op": 8
+    }
+  ]
+}
