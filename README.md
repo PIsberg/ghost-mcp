@@ -4,7 +4,7 @@
 
 **License:** Free for personal and hobby use ([PolyForm Noncommercial](LICENSE)). Commercial use requires a license — contact [Peter Isberg](mailto:isberg.peter+gm@gmail.com).
 
-[![codecov](https://codecov.io/gh/PIsberg/ghost-mcp/graph/badge.svg)](https://codecov.io/gh/PIsberg/ghost-mcp)
+[![codecov](https://codecov.io/gh/PIsberg/ghost-mcp/graph/badge.svg)](https://codecov.io/gh/PIsberg/ghost-mcp) [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/PIsberg/ghost-mcp/badge)](https://scorecard.dev/viewer/?uri=github.com/PIsberg/ghost-mcp/)
 
 ## Overview
 
@@ -764,4 +764,3 @@ Contributions welcome! Please ensure:
 - [MCP SDK](https://github.com/mark3labs/mcp-go) - Model Context Protocol implementation
 - [RobotGo](https://github.com/go-vgo/robotgo) - Cross-platform automation library
 
-[![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/PIsberg/ghost-mcp/badge)](https://scorecard.dev/viewer/?uri=github.com/PIsberg/ghost-mcp/)
