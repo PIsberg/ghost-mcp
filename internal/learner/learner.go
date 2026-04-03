@@ -228,6 +228,8 @@ func (l *Learner) AllElements() []Element {
 // Element type inference
 // =============================================================================
 
+var linkPhrases = []string{"click here", "learn more", "see all", "read more", "view all", "show more"}
+
 // InferElementType classifies a UI element using its text content and size.
 // Heuristics (in priority order):
 //  1. Ends with ":" → label
@@ -260,7 +262,7 @@ func InferElementType(text string, width, height int) ElementType {
 		strings.HasPrefix(lower, "www.") {
 		return ElementTypeLink
 	}
-	for _, phrase := range []string{"click here", "learn more", "see all", "read more", "view all", "show more"} {
+	for _, phrase := range linkPhrases {
 		if lower == phrase || strings.HasSuffix(lower, " "+phrase) {
 			return ElementTypeLink
 		}
@@ -315,17 +317,17 @@ func InferElementType(text string, width, height int) ElementType {
 	return ElementTypeText
 }
 
+var inputPlaceholders = []string{
+	"enter your", "type here", "type your", "input your",
+	"email...", "password...",
+	"username...", "name...", "phone...", "address...",
+	"city...", "state...", "zip...", "country...",
+	"message...", "comment...", "notes...", "description...",
+}
+
 // isInputPlaceholder returns true for common input field placeholder text.
 func isInputPlaceholder(s string) bool {
-	// Common placeholder patterns (excluding dropdown patterns)
-	placeholders := []string{
-		"enter your", "type here", "type your", "input your",
-		"email...", "password...",
-		"username...", "name...", "phone...", "address...",
-		"city...", "state...", "zip...", "country...",
-		"message...", "comment...", "notes...", "description...",
-	}
-	for _, ph := range placeholders {
+	for _, ph := range inputPlaceholders {
 		if strings.Contains(s, ph) {
 			return true
 		}
@@ -339,59 +341,55 @@ func isInputPlaceholder(s string) bool {
 	return false
 }
 
+var checkboxPatterns = []string{
+	"[ ]", "[x]", "[✓]", "[✔]",
+	"i agree", "accept", "agree to", "terms",
+	"subscribe", "remember me", "keep me",
+}
+
 // isCheckboxText returns true for checkbox text or symbols.
 func isCheckboxText(s string) bool {
-	// Check for checkbox symbols
 	if strings.ContainsAny(s, "☐☑✓✗✘√[]") {
 		return true
 	}
-	// Check for common checkbox patterns
-	patterns := []string{
-		"[ ]", "[x]", "[✓]", "[✔]",
-		"i agree", "accept", "agree to", "terms",
-		"subscribe", "remember me", "keep me",
-	}
-	for _, p := range patterns {
+	for _, p := range checkboxPatterns {
 		if strings.Contains(s, p) {
 			return true
 		}
 	}
 	return false
+}
+
+var radioPatterns = []string{
+	"option ", "choice ", "select this",
 }
 
 // isRadioText returns true for radio button text or symbols.
 func isRadioText(s string) bool {
-	// Check for radio symbols
 	if strings.ContainsAny(s, "○●◉◎") {
 		return true
 	}
-	// Radio buttons often have short option labels
-	// This is harder to detect without context, so we check for common patterns
-	patterns := []string{
-		"option ", "choice ", "select this",
-	}
-	for _, p := range patterns {
+	for _, p := range radioPatterns {
 		if strings.Contains(s, p) {
 			return true
 		}
 	}
 	return false
+}
+
+var dropdownPatterns = []string{
+	"select...", "choose...", "pick...",
+	"select one", "choose one", "pick one",
+	"-- select", "-- choose", "-- pick",
+	"dropdown", "menu",
 }
 
 // isDropdownText returns true for dropdown/select text or symbols.
 func isDropdownText(s string) bool {
-	// Check for dropdown symbols
 	if strings.ContainsAny(s, "▼▾◢⌄⌵") {
 		return true
 	}
-	// Check for common dropdown patterns
-	patterns := []string{
-		"select...", "choose...", "pick...",
-		"select one", "choose one", "pick one",
-		"-- select", "-- choose", "-- pick",
-		"dropdown", "menu",
-	}
-	for _, p := range patterns {
+	for _, p := range dropdownPatterns {
 		if strings.Contains(s, p) {
 			return true
 		}
@@ -399,15 +397,15 @@ func isDropdownText(s string) bool {
 	return false
 }
 
+var toggleKeywords = []string{
+	"on", "off",
+	"enabled", "disabled",
+	"active", "inactive",
+}
+
 // isToggleText returns true for toggle switch text.
 func isToggleText(s string) bool {
-	// Common toggle patterns (exact matches only to avoid button conflicts)
-	toggles := []string{
-		"on", "off",
-		"enabled", "disabled",
-		"active", "inactive",
-	}
-	for _, t := range toggles {
+	for _, t := range toggleKeywords {
 		if s == t {
 			return true
 		}
@@ -415,51 +413,50 @@ func isToggleText(s string) bool {
 	return false
 }
 
+var sliderPatterns = []string{
+	"volume", "brightness", "contrast",
+	"zoom", "speed", "opacity",
+	"range", "level", "intensity",
+	"min", "max",
+}
+
 // isSliderText returns true for slider/range control text or symbols.
 func isSliderText(s string) bool {
-	// Check for slider symbols (horizontal line with handle)
 	if strings.Contains(s, "─●") || strings.Contains(s, "▬●") || strings.Contains(s, "│●") {
 		return true
 	}
-	// Check for common slider patterns
-	patterns := []string{
-		"volume", "brightness", "contrast",
-		"zoom", "speed", "opacity",
-		"range", "level", "intensity",
-		"min", "max",
-	}
-	for _, p := range patterns {
+	for _, p := range sliderPatterns {
 		if strings.Contains(s, p) {
 			return true
 		}
 	}
-	// Check for percentage (common with sliders)
 	if strings.HasSuffix(s, "%") {
 		return true
 	}
 	return false
 }
 
+var buttonKeywords = []string{
+	"ok", "yes", "no", "cancel", "close", "dismiss", "done",
+	"submit", "send", "save", "save as", "save all",
+	"delete", "remove", "discard", "clear",
+	"back", "next", "previous", "continue", "finish",
+	"confirm", "apply", "accept", "reject", "deny",
+	"login", "log in", "logout", "log out",
+	"sign in", "sign out", "sign up", "register",
+	"create", "new", "add", "edit", "update", "duplicate",
+	"copy", "cut", "paste", "undo", "redo",
+	"open", "browse", "upload", "download", "export", "import",
+	"search", "find", "filter", "sort", "refresh", "reload",
+	"retry", "try again", "reset", "restore",
+	"expand", "collapse", "toggle",
+	"more", "less", "show", "hide",
+	"select all", "deselect all",
+}
+
 // isButtonKeyword returns true for common UI action words.
 func isButtonKeyword(s string) bool {
-	keywords := []string{
-		"ok", "yes", "no", "cancel", "close", "dismiss", "done",
-		"submit", "send", "save", "save as", "save all",
-		"delete", "remove", "discard", "clear",
-		"back", "next", "previous", "continue", "finish",
-		"confirm", "apply", "accept", "reject", "deny",
-		"login", "log in", "logout", "log out",
-		"sign in", "sign out", "sign up", "register",
-		"create", "new", "add", "edit", "update", "duplicate",
-		"copy", "cut", "paste", "undo", "redo",
-		"open", "browse", "upload", "download", "export", "import",
-		"search", "find", "filter", "sort", "refresh", "reload",
-		"retry", "try again", "reset", "restore",
-		"expand", "collapse", "toggle",
-		"more", "less", "show", "hide",
-		"select all", "deselect all",
-	}
-	for _, kw := range keywords {
+	for _, kw := range buttonKeywords {
 		if s == kw || s == kw+"..." || s == kw+" »" || s == "« "+kw {
 			return true
 		}
