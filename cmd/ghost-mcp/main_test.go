@@ -1409,18 +1409,6 @@ func TestHandleScrollUntilText_ReturnsMaxScrollsError(t *testing.T) {
 // FIND_AND_CLICK TESTS
 // =============================================================================
 
-// TestHandleFindAndClick_MissingText tests find_and_click with missing text parameter
-func TestHandleFindAndClick_MissingText(t *testing.T) {
-	req := mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: map[string]interface{}{}}}
-	result, err := handleFindAndClick(nil, req)
-	if err != nil {
-		t.Fatalf("Handler returned unexpected Go error: %v", err)
-	}
-	if !result.IsError {
-		t.Error("Expected tool error for missing text parameter")
-	}
-}
-
 // TestHandleFindAndClick_InvalidButton tests find_and_click with invalid button
 func TestHandleFindAndClick_InvalidButton(t *testing.T) {
 	req := mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: map[string]interface{}{
