@@ -73,7 +73,7 @@ What do you need to do?
 │   └─ Returns: elements[] with text, center_x, center_y, width, height, confidence
 │
 ├─ Click single button → find_and_click
-│   └─ Auto 3-pass OCR (normal→inverted→color)
+│   └─ Auto 4-pass OCR (normal→inverted→bright→color)
 │
 ├─ Click multiple buttons → find_and_click_all ⭐
 │   └─ {"texts": ["A", "B", "C"], "delay_ms": 200}
@@ -127,7 +127,7 @@ find_and_click "Warning" ×3
 | Click 3 buttons | 8-12 clicks, 30+ sec | 3 clicks, 5 sec | **75% fewer clicks, 83% faster** |
 | Find unknown UI | 3-4 screenshots | 1 find_elements | **75% fewer API calls** |
 | Verify success | Manual screenshot | wait_for_text | **Automatic, reliable** |
-| Colored buttons | Often failed | 3-pass OCR | **90%+ success rate** |
+| Colored buttons | Often failed | 4-pass OCR | **90%+ success rate** |
 
 ---
 

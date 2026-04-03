@@ -10,7 +10,15 @@ import (
 func registerOCRTools(mcpServer *server.MCPServer) {
 
 	mcpServer.AddTool(mcp.NewTool("find_and_click",
-		mcp.WithDescription(`THE ONLY TOOL YOU NEED TO CLICK A BUTTON. Start here for every click task. Do NOT call get_screen_size, take_screenshot, or find_elements first — just call this.
+		mcp.WithDescription(`⚠️ CRITICAL: ALWAYS CALL learn_screen FIRST BEFORE THIS TOOL!
+
+This tool works BEST with learning mode enabled. Without learn_screen, this tool
+is SLOWER and LESS ACCURATE. The workflow is:
+  1. learn_screen() ← REQUIRED: captures full UI with 4-pass OCR
+  2. get_learned_view() ← See what elements exist
+  3. find_and_click() ← Uses cached view (10-25x faster, more accurate)
+
+If you haven't called learn_screen in this session, DO IT NOW before clicking.
 
 🎯 WHEN TO USE:
 - You need to click a single button/link/menu item by its text label
@@ -20,27 +28,31 @@ func registerOCRTools(mcpServer *server.MCPServer) {
 🚫 WHEN NOT TO USE:
 - Multiple buttons in sequence → use find_and_click_all instead
 - Need to verify UI change after click → use find_and_click + wait_for_text
+- Screen just changed (new page/dialog) → call learn_screen FIRST, then this
 
-⚡ AUTOMATIC OPTIMIZATION: After the first successful call, the button's region is cached. Subsequent calls with the same text automatically scan only the cached region (10-25x faster than full screen). Cache is invalidated if screen resolution changes.
+⚡ AUTOMATIC OPTIMIZATION: After learn_screen, this tool uses cached regions.
+Subsequent calls scan only the cached region (10-25x faster).
 
-🎯 SMART MATCHING: Uses intelligent scoring to prefer standalone buttons over text inside other elements (e.g., prefers "Click" button over "Button Click Tests" header).
+🎯 SMART MATCHING: Uses intelligent scoring to prefer standalone buttons over
+text inside other elements (e.g., prefers "Click" button over "Button Click Tests" header).
 
-SPEED TIP: Supply x/y/width/height to scan only the relevant area (e.g., a dialog or toolbar). Much faster than full screen.
+SPEED TIP: Supply x/y/width/height to scan only the relevant area (e.g., a dialog or toolbar).
 
 HOW IT WORKS:
-1. Captures screen (or region) once
-2. Automatically runs OCR with 3 passes: grayscale → inverted (dark backgrounds) → color (colored buttons)
+1. If learning mode ON + view exists: Uses cached element location (instant)
+2. Otherwise: Captures screen once, runs 4-pass OCR (normal→inverted→bright→color)
 3. Finds text matching your search (case-insensitive substring)
-4. Clicks the CENTER of the matched button (merges multi-word labels)
+4. Clicks the CENTER of the matched button
 5. Returns exact coordinates
 
-📜 SCROLL-AND-SEARCH: If text may be off-screen, add scroll_direction="down" to automatically scroll and search. The tool will scroll up to max_scrolls times until text is found.
+📜 SCROLL-AND-SEARCH: If text may be off-screen, add scroll_direction="down" to
+automatically scroll and search. Scrolls up to max_scrolls times.
 
-📄 MULTI-PAGE SEARCH: If text may be on another page/tab, add next_page_keys="Page_Down" and max_pages=5. The tool will navigate pages and search each one until found.
+📄 MULTI-PAGE SEARCH: Add next_page_keys="Page_Down" and max_pages=5 to search
+multiple pages. Tool navigates and searches each page until found.
 
-🎯 SELECT BEST MODE: Add select_best=true to scan ALL pages first, compare match scores, then click the highest-score match. Slower but more accurate - recommended for multi-page searches!
-
-COLORED BUTTONS (white text on blue/green/red/cyan): handled automatically by the color pass. No special parameters needed — just call find_and_click with the button label.
+🎯 SELECT BEST MODE: Add select_best=true to scan ALL pages first, compare scores,
+then click the highest-score match. Slower but more accurate.
 
 IF TEXT NOT FOUND:
 The error response includes helpful guidance:
@@ -169,28 +181,31 @@ TIPS:
 	), handleWaitForText)
 
 	mcpServer.AddTool(mcp.NewTool("find_elements",
-		mcp.WithDescription(`THE PRIMARY TOOL FOR READING SCREEN TEXT. Scans the screen with OCR and returns all visible text grouped into elements (buttons, links, labels) with bounding boxes.
+		mcp.WithDescription(`READ ALL VISIBLE TEXT ON SCREEN with coordinates and bounding boxes.
 
-🎯 WHEN TO USE:
-- You need to read text on the screen (e.g. verify a label, read a status message, extract values).
-- find_and_click couldn't find your text — use this to see what OCR actually detected.
-- You need center_x/center_y coordinates for click_at (when there's no text label available).
-- Auditing what text is visible in a specific region of the screen.
+⚡ LEARNING MODE: If learning mode is on and no view exists yet, this call
+automatically triggers learn_screen first. When a multi-page view exists the
+response also includes learned_off_page_elements — all elements found on
+scroll pages below the current viewport — so you can see the FULL UI in one
+call without manually scrolling.
 
-⚠️ IMPORTANT LIMITATIONS:
-- OCR detects TEXT ONLY — it cannot tell if text is on a button, link, or label.
-- Same text may appear multiple times (e.g., "Submit" in header vs button).
-- Icons/images without text are NOT detected.
-- Colored buttons (white text on blue/green/red) may not appear in grayscale (disable grayscale to see them).
+PREFERRED WORKFLOW FOR NEW SCREENS:
+  1. learn_screen           ← scan entire interface (once per page)
+  2. get_learned_view       ← full element list including below-fold elements
+  3. find_elements          ← confirm visible elements before acting (optional)
+  4. find_and_click / find_click_and_type
 
-🚫 WHEN NOT TO USE:
-- You want to click a button — use find_and_click directly, do NOT scan first.
-- Need to see visual layout or non-text icons → use take_screenshot.
+🎯 WHEN TO USE WITHOUT LEARNING MODE:
+- find_and_click failed — call this to see what OCR actually detected.
+- You need center_x/center_y coordinates for click_at.
+- Auditing what text is visible in a specific screen region.
 
-DIAGNOSTIC WORKFLOW (when find_and_click fails):
-1. find_and_click fails → call find_elements to see what OCR detected.
-2. Examine results to identify the true visible label text.
-3. If text is a partial match, retry find_and_click with the exact string. If no text exists, use click_at with center_x/center_y from step 2.
+⚠️ LIMITATIONS:
+- Detects TEXT ONLY — not icons or images.
+- Only shows what is CURRENTLY VISIBLE (use learn_screen to see below-fold).
+- Colored buttons (white on dark) may require grayscale=false.
+
+🚫 DO NOT USE to look up a button before clicking — call find_and_click directly.
 
 EXAMPLE USAGE:
 // Find all elements in button area (faster than full screen)
@@ -211,10 +226,37 @@ EXAMPLE USAGE:
 
 TIPS:
 - Use region parameters to scan specific areas (10x faster than full screen)
-- Elements filtered by confidence (min 50%) and size (min 20x10px)
+- Elements filtered by confidence (min 40%) and size (min 15x8px)
 - center_x/center_y are ready to use with click_at or move_mouse
 - All coordinates use logical pixels
-- width/height help identify element type (wide+short = likely button)`),
+- FILTER BY TYPE: Use type field to find specific elements:
+  - type=button for buttons
+  - type=input for text input fields
+  - type=checkbox for checkboxes
+  - type=radio for radio buttons
+  - type=dropdown for dropdown menus
+  - type=toggle for on/off switches
+  - type=slider for sliders/range controls
+  - type=label for field labels
+- Element types: button, input, checkbox, radio, dropdown, toggle, slider, label, heading, link, value, text
+- width/height help identify element type (wide+short = likely button)
+
+EXAMPLE: Find form elements:
+// Response includes type field for each element:
+{
+  "elements": [
+    {"text": "Email:", "type": "label", "center_x": 100, "center_y": 100},
+    {"text": "Enter your email", "type": "input", "center_x": 250, "center_y": 100},
+    {"text": "☑ I agree", "type": "checkbox", "center_x": 150, "center_y": 150},
+    {"text": "Volume 50%", "type": "slider", "center_x": 200, "center_y": 200},
+    {"text": "Submit", "type": "button", "center_x": 200, "center_y": 250}
+  ]
+}
+// Then interact:
+// - Click checkbox: {"tool": "click_at", "arguments": {"x": 150, "y": 150}}
+// - Type in input: {"tool": "find_click_and_type", "arguments": {"text": "Email:", "type_text": "user@example.com"}}
+// - Adjust slider: {"tool": "click_at", "arguments": {"x": 200, "y": 200}} (then drag)
+// - Click button: {"tool": "find_and_click", "arguments": {"text": "Submit"}}`),
 		mcp.WithNumber("x", mcp.Description("X coordinate of region to scan (default: 0 = full screen).")),
 		mcp.WithNumber("y", mcp.Description("Y coordinate of region to scan (default: 0 = full screen).")),
 		mcp.WithNumber("width", mcp.Description("Width of region to scan (default: full screen width).")),

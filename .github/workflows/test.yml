@@ -81,7 +81,7 @@ jobs:
         # Attempt to download the pre-built Tesseract + Leptonica bundle from
         # the GitHub Release created by the build-deps-windows workflow.
         # If the release does not exist yet, fall through to the vcpkg build below.
-        gh release download deps-windows-v1 `
+        gh release download deps-windows-v2 `
           --repo $env:GITHUB_REPOSITORY `
           --pattern "deps-windows-x64-mingw-dynamic.zip" `
           --dir "$env:RUNNER_TEMP" `
@@ -104,7 +104,7 @@ jobs:
       uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
       with:
         path: ~/AppData/Local/vcpkg/archives
-        key: vcpkg-x64-mingw-tesseract-leptonica-v1
+        key: vcpkg-x64-mingw-tesseract-leptonica-v2
         restore-keys: vcpkg-x64-mingw-tesseract-leptonica-
 
     - name: Build Windows deps via vcpkg (fallback if no release bundle)

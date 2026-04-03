@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ghost-mcp/internal/learner"
 	"github.com/ghost-mcp/internal/logging"
 	"github.com/ghost-mcp/internal/ocr"
 	"github.com/ghost-mcp/internal/validate"
@@ -21,10 +22,12 @@ import (
 
 var (
 	prepareParallelOCRImageSet = ocr.PrepareParallelImageSet
-	readPreparedOCRImage       = ocr.ReadPreparedBytes
-	findTextWithScrolling      = scrollSearchForText
-	waitForTextCaptureImage    = func(x, y, width, height int) (image.Image, error) { return robotgo.CaptureImg(x, y, width, height) }
-	waitForTextSleep           = time.Sleep
+	readPreparedOCRImage       = func(imgBytes []byte, scaleFactor int) (*ocr.Result, error) {
+		return ocr.ReadPreparedBytes(imgBytes, scaleFactor, ocr.Options{})
+	}
+	findTextWithScrolling   = scrollSearchForText
+	waitForTextCaptureImage = func(x, y, width, height int) (image.Image, error) { return robotgo.CaptureImg(x, y, width, height) }
+	waitForTextSleep        = time.Sleep
 )
 
 const (
@@ -430,6 +433,38 @@ func handleFindAndClick(ctx context.Context, request mcp.CallToolRequest) (*mcp.
 		return findAndClickMultiPage(ctx, request, searchText, button, nth, nextPageKeys, maxPages, screenW, screenH)
 	}
 
+	// Learning-mode fast path: if a learned view exists and no custom region was
+	// specified, use the view to narrow the scan to the element's known location.
+	// When the element was found on a non-zero scroll page, navigate there first.
+	if !userSpecifiedRegion && cachedRegion == "" {
+		autoLearnIfNeeded()
+
+		// Check if learned view is stale (>60 seconds old) - auto-clear it
+		if globalLearner.IsEnabled() && globalLearner.HasView() {
+			view := globalLearner.GetView()
+			if view != nil && time.Since(view.CapturedAt) > 60*time.Second {
+				logging.Info("find_and_click: learned view is stale (%v old), auto-clearing", time.Since(view.CapturedAt))
+				globalLearner.ClearView()
+				autoLearnIfNeeded()
+			}
+		}
+
+		if lx, ly, lw, lh, scrollsNeeded, ok := learnerRegionHint(searchText, screenW, screenH); ok {
+			if scrollsNeeded > 0 {
+				logging.Info("find_and_click: learned view — element on scroll page, scrolling down %d ticks then using region (%d,%d) %dx%d",
+					scrollsNeeded, lx, ly, lw, lh)
+				uiScrollDir(scrollsNeeded, "down")
+				time.Sleep(300 * time.Millisecond)
+				if err := uiCheckFailsafe(); err != nil {
+					return mcp.NewToolResultError(err.Error()), nil
+				}
+			}
+			regionX, regionY, regionW, regionH = lx, ly, lw, lh
+			logging.Info("find_and_click: learned view region (%d,%d) %dx%d for %q (scroll_page=%d)",
+				regionX, regionY, regionW, regionH, searchText, scrollsNeeded)
+		}
+	}
+
 	if cachedRegion != "" {
 		logging.Info("find_and_click: using %s, scanning region (%d,%d) %dx%d for text %q", cachedRegion, regionX, regionY, regionW, regionH, searchText)
 	} else {
@@ -467,6 +502,11 @@ func handleFindAndClick(ctx context.Context, request mcp.CallToolRequest) (*mcp.
 		remainingWarning := ""
 		if failStats.RemainingCalls <= 5 {
 			remainingWarning = fmt.Sprintf(` WARNING: Only %d tool calls remaining before forced stop.`, failStats.RemainingCalls)
+		}
+
+		// Try text variations before giving up (punctuation removal, word splits)
+		if variationResult, found := tryTextVariations(ctx, request, searchText, nth, regionX, regionY, regionW, regionH, screenW, screenH); found {
+			return variationResult, nil
 		}
 
 		// Check if there are partial matches that might be off-screen
@@ -1274,6 +1314,15 @@ func formatFindTextFailureMessage(searchText string, nth int, regionX, regionY, 
 	// Add specific actionable suggestions
 	msg += ` TRY THESE: (a) Search for LABEL text like "Text Input:" or "Email:" (not placeholder). (b) Use find_elements to see visible text. (c) Use scroll_until_text for off-screen content. (d) Try a SHORTER substring - if "CLICK ME!" fails, try "Click" (OCR may split spaced text).`
 
+	// Add learning mode suggestion if not already using it
+	if globalLearner.IsEnabled() && globalLearner.HasView() {
+		msg += ` ⚡ LEARNING MODE ACTIVE: Using cached view. If screen changed, call clear_learned_view then learn_screen to refresh.`
+	} else if globalLearner.IsEnabled() && !globalLearner.HasView() {
+		msg += ` ⚡ LEARNING MODE ON BUT NO VIEW: Call learn_screen NOW to capture full UI - this will make future searches 10-25x faster and more accurate!`
+	} else {
+		msg += ` ⚡ NOT USING LEARNING MODE: Call set_learning_mode(enabled=true), then call learn_screen for much better accuracy!`
+	}
+
 	return msg
 }
 
@@ -1311,7 +1360,92 @@ func buildFindTextFailureMessage(img image.Image, searchText string, nth int, re
 
 	msg += formatFindTextFailureMessage(searchText, nth, regionX, regionY, regionW, regionH, matches)
 
+	// Suggest using find_elements if this is a repeated failure
+	if nth > 1 || strings.Contains(searchText, " ") {
+		msg += ` (e) Use find_elements to see ALL visible text on screen.`
+	}
+
+	// Suggest text variations for common patterns
+	if strings.Contains(searchText, "!") || strings.Contains(searchText, "?") {
+		// Try without punctuation
+		baseText := strings.TrimRight(searchText, "!?")
+		msg += fmt.Sprintf(` (f) Try without punctuation: "%s"`, baseText)
+	}
+	if len(strings.Fields(searchText)) > 1 {
+		// Try shorter substrings
+		words := strings.Fields(searchText)
+		if len(words) >= 2 {
+			msg += fmt.Sprintf(` (g) Try shorter: "%s" or "%s"`, words[0], words[len(words)-1])
+		}
+	}
+
+	// Auto-refresh hint if learning mode is active but view might be stale
+	if globalLearner.IsEnabled() && globalLearner.HasView() {
+		view := globalLearner.GetView()
+		if view != nil && time.Since(view.CapturedAt) > 30*time.Second {
+			msg += ` ⚠️ VIEW STALE (captured >30s ago): Call clear_learned_view + learn_screen NOW to refresh!`
+		}
+	}
+
 	return msg
+}
+
+// tryTextVariations attempts to find text with common variations (punctuation, word splits)
+// Returns (result, found) - if found is true, result contains the success response
+func tryTextVariations(ctx context.Context, request mcp.CallToolRequest, originalText string, nth int, regionX, regionY, regionW, regionH, screenW, screenH int) (*mcp.CallToolResult, bool) {
+	variations := []string{}
+
+	// Try without punctuation
+	if strings.Contains(originalText, "!") || strings.Contains(originalText, "?") || strings.Contains(originalText, ",") || strings.Contains(originalText, ".") {
+		cleanText := strings.TrimRight(originalText, "!?.,")
+		if cleanText != originalText && len(cleanText) > 0 {
+			variations = append(variations, cleanText)
+			logging.Info("tryTextVariations: trying without punctuation: %q", cleanText)
+		}
+	}
+
+	// Try individual words for multi-word text
+	words := strings.Fields(originalText)
+	if len(words) > 1 {
+		for _, word := range words {
+			cleanWord := strings.Trim(word, "!?.,:")
+			if len(cleanWord) > 2 && cleanWord != originalText {
+				variations = append(variations, cleanWord)
+				logging.Info("tryTextVariations: trying word: %q", cleanWord)
+			}
+		}
+	}
+
+	// Get button parameter from request
+	button, _ := getStringParam(request, "button")
+	if button == "" {
+		button = "left"
+	}
+
+	// Try each variation
+	for _, variation := range variations {
+		foundX, foundY, foundW, foundH, found, _ := parallelFindText(ctx, nil, variation, nth, true)
+		if found {
+			logging.Info("tryTextVariations: FOUND with variation %q at (%d,%d)", variation, foundX, foundY)
+			// Update cache with original text but found variation's bounds
+			normalizedOriginal := normalizeText(originalText)
+			regionCache.Put(normalizedOriginal, foundX, foundY, foundW, foundH, screenW, screenH)
+
+			// Click on the found element
+			clickX := foundX + foundW/2
+			clickY := foundY + foundH/2
+			robotgo.Move(clickX, clickY)
+			time.Sleep(50 * time.Millisecond)
+			if err := uiCheckFailsafe(); err != nil {
+				return mcp.NewToolResultError(err.Error()), true
+			}
+			robotgo.Click(button, false)
+			logging.Info("ACTION: Clicked %q (variation of %q) at (%d,%d)", variation, originalText, clickX, clickY)
+			return mcp.NewToolResultText(fmt.Sprintf(`{"success":true,"text":%q,"x":%d,"y":%d,"variation":%q}`, originalText, clickX, clickY, variation)), true
+		}
+	}
+
+	return nil, false
 }
 
 // findAndClickWord removed in favor of direct clickFoundBounds logic
@@ -1326,18 +1460,29 @@ func handleFindElements(ctx context.Context, request mcp.CallToolRequest) (*mcp.
 	// Optional region parameters
 	regionX, regionY := 0, 0
 	regionW, regionH := screenW, screenH
+	userSpecifiedRegion := false
 	if x, err := getIntParam(request, "x"); err == nil {
 		regionX = x
+		userSpecifiedRegion = true
 	}
 	if y, err := getIntParam(request, "y"); err == nil {
 		regionY = y
+		userSpecifiedRegion = true
 	}
 	if w, err := getIntParam(request, "width"); err == nil {
 		regionW = w
+		userSpecifiedRegion = true
 	}
 	if h, err := getIntParam(request, "height"); err == nil {
 		regionH = h
+		userSpecifiedRegion = true
 	}
+
+	// Auto-learn if learning mode is on and no view exists yet.
+	if !userSpecifiedRegion {
+		autoLearnIfNeeded()
+	}
+	_ = userSpecifiedRegion // used above, suppress unused warning
 
 	// Capture the region
 	img, captureErr := robotgo.CaptureImg(regionX, regionY, regionW, regionH)
@@ -1367,6 +1512,9 @@ func handleFindElements(ctx context.Context, request mcp.CallToolRequest) (*mcp.
 			continue // Skip tiny text (likely noise) - lowered thresholds for labels
 		}
 
+		// Infer element type to help AI identify buttons vs labels vs headings
+		elementType := learner.InferElementType(w.Text, w.Width, w.Height)
+
 		elements = append(elements, map[string]interface{}{
 			"text":       w.Text,
 			"x":          regionX + w.X,
@@ -1376,6 +1524,7 @@ func handleFindElements(ctx context.Context, request mcp.CallToolRequest) (*mcp.
 			"center_x":   regionX + w.X + w.Width/2,
 			"center_y":   regionY + w.Y + w.Height/2,
 			"confidence": w.Confidence,
+			"type":       elementType, // button, label, heading, link, value, text
 		})
 	}
 
@@ -1405,7 +1554,34 @@ func handleFindElements(ctx context.Context, request mcp.CallToolRequest) (*mcp.
 	}
 	labelsJSON += "]"
 
+	// If learning mode is on, append elements from non-visible scroll pages.
+	offPageNote := ""
+	offPageElements := "[]"
+	if globalLearner.IsEnabled() && globalLearner.HasView() {
+		view := globalLearner.GetView()
+		var offPage []string
+		for _, e := range view.Elements {
+			if e.PageIndex > 0 {
+				offPage = append(offPage, fmt.Sprintf(
+					`{"text":%q,"x":%d,"y":%d,"width":%d,"height":%d,"center_x":%d,"center_y":%d,"confidence":%.1f,"page_index":%d}`,
+					e.Text, e.X, e.Y, e.Width, e.Height, e.X+e.Width/2, e.Y+e.Height/2, e.Confidence, e.PageIndex,
+				))
+			}
+		}
+		if len(offPage) > 0 {
+			offPageElements = "[" + strings.Join(offPage, ",") + "]"
+			offPageNote = fmt.Sprintf("(+%d elements from %d scroll page(s) in learned view)", len(offPage), view.PageCount-1)
+			logging.Info("find_elements: appending %d off-page elements from learned view", len(offPage))
+		}
+	}
+
 	// Build JSON response - put labels FIRST so agent sees them immediately
+	if offPageNote != "" {
+		return mcp.NewToolResultText(fmt.Sprintf(
+			`{"success":true,"labels":%s,"label_note":"FIELD LABELS VISIBLE ON SCREEN - search for these exact texts!","element_count":%d,"region":{"x":%d,"y":%d,"width":%d,"height":%d},"elements":%s,"learned_off_page_note":%q,"learned_off_page_elements":%s}`,
+			labelsJSON, len(elements), regionX, regionY, regionW, regionH, elementsJSON, offPageNote, offPageElements,
+		)), nil
+	}
 	return mcp.NewToolResultText(fmt.Sprintf(
 		`{"success":true,"labels":%s,"label_note":"FIELD LABELS VISIBLE ON SCREEN - search for these exact texts!","element_count":%d,"region":{"x":%d,"y":%d,"width":%d,"height":%d},"elements":%s}`,
 		labelsJSON, len(elements), regionX, regionY, regionW, regionH, elementsJSON,

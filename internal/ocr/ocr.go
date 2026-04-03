@@ -62,11 +62,57 @@ type Options struct {
 	// when grayscale, inverted, and colour passes all fail. Ignored when Color
 	// or Inverted is true.
 	BrightText bool
+
+	// CharacterSet restricts OCR to specific characters for improved accuracy.
+	// Use for specific contexts:
+	// - Buttons: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+	// - Numeric: "0123456789.$€£¥%"
+	// - Email: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789@._-"
+	// Empty = all characters (default)
+	CharacterSet string
+
+	// Language specifies the OCR language pack(s) to use.
+	// Default: "eng" (English)
+	// Multiple languages: "eng+fra+deu" (English + French + German)
+	// Requires corresponding .traineddata files in TESSDATA_PREFIX
+	Language string
+
+	// PageSegMode controls text layout analysis.
+	// Default: PSM_SPARSE_TEXT (11) - finds text anywhere without layout assumptions
+	// Other options:
+	// - PSM_SINGLE_LINE (13) - Treat image as single text line (status bars)
+	// - PSM_SINGLE_WORD (12) - Find single word (icon labels)
+	// - PSM_RAW_LINE (14) - Single line, no layout analysis
+	PageSegMode int
 }
 
 // MinConfidence is the minimum word confidence (0–100) to include in results.
 // Words below this are OCR noise and should be discarded.
-const MinConfidence = 30.0
+// Lowered from 50 to 35 to catch more UI elements at the cost of some noise.
+const MinConfidence = 35.0
+
+// Common character sets for specific OCR contexts
+const (
+	// CharSetButtons - Alphanumeric only, best for button text
+	CharSetButtons = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+
+	// CharSetNumeric - Digits and common numeric symbols
+	CharSetNumeric = "0123456789.$€£¥%+-"
+
+	// CharSetEmail - Email address characters
+	CharSetEmail = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789@._-+"
+
+	// CharSetAll - All characters (default, no restriction)
+	CharSetAll = ""
+)
+
+// Page Segmentation Mode constants (from gosseract)
+const (
+	PSM_SPARSE_TEXT = 11 // Default - find text anywhere without layout assumptions
+	PSM_SINGLE_WORD = 12 // Treat image as a single word
+	PSM_SINGLE_LINE = 13 // Treat image as a single text line
+	PSM_RAW_LINE    = 14 // Treat image as a single line, no layout analysis
+)
 
 var (
 	cacheMu     sync.RWMutex
@@ -118,6 +164,8 @@ type ocrClient interface {
 	SetImage(string) error
 	SetImageFromBytes([]byte) error
 	SetPageSegMode(gosseract.PageSegMode) error
+	SetVariable(gosseract.SettableVariable, string) error
+	SetLanguage(...string) error
 	GetBoundingBoxes(gosseract.PageIteratorLevel) ([]gosseract.BoundingBox, error)
 	Close() error
 }
@@ -250,7 +298,7 @@ func ReadImage(img image.Image, opts Options) (*Result, error) {
 		return nil, err
 	}
 
-	res, err := ReadPreparedBytes(prepared.Normal, ScaleFactor)
+	res, err := ReadPreparedBytes(prepared.Normal, ScaleFactor, opts)
 	if err == nil {
 		SetCachedResult(h, res)
 	}
@@ -332,7 +380,7 @@ func PrepareParallelImageSet(img image.Image, grayscale bool) (*PreparedImageSet
 }
 
 // ReadPreparedBytes runs OCR on already-preprocessed image bytes.
-func ReadPreparedBytes(imgBytes []byte, scaleFactor int) (*Result, error) {
+func ReadPreparedBytes(imgBytes []byte, scaleFactor int, opts Options) (*Result, error) {
 	client := getPooledClient()
 	defer putPooledClient(client)
 
@@ -340,7 +388,28 @@ func ReadPreparedBytes(imgBytes []byte, scaleFactor int) (*Result, error) {
 		return nil, fmt.Errorf("set image from bytes: %w", err)
 	}
 
+	// Apply OCR options
+	applyOCROptions(client, opts)
+
 	return readClientResult(client, scaleFactor)
+}
+
+// applyOCROptions configures Tesseract with character whitelist, language, and PSM mode
+func applyOCROptions(client ocrClient, opts Options) {
+	// Apply character whitelist if specified
+	if opts.CharacterSet != "" {
+		client.SetVariable(gosseract.TESSEDIT_CHAR_WHITELIST, opts.CharacterSet)
+	}
+
+	// Apply language if specified
+	if opts.Language != "" && opts.Language != "eng" {
+		client.SetLanguage(opts.Language)
+	}
+
+	// Apply page segmentation mode if different from default
+	if opts.PageSegMode != 0 && opts.PageSegMode != 11 { // 11 = PSM_SPARSE_TEXT (default)
+		client.SetPageSegMode(gosseract.PageSegMode(opts.PageSegMode))
+	}
 }
 
 func readClientResult(client ocrClient, scaleFactor int) (*Result, error) {

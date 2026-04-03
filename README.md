@@ -51,6 +51,7 @@ Ghost MCP allows AI assistants like Claude to control your computer's mouse, key
 | `find_and_click_all` ⭐ | Click multiple buttons in ONE atomic operation. | `texts` (array), `button`, `delay_ms` |
 | `wait_for_text` ⭐ | Wait for text to appear or disappear. Verify UI changes. | `text`, `visible`, `timeout_ms`, `x`, `y`, `width`, `height` |
 | `click_until_text_appears` 🆕🛡️ | Click coordinates and wait for text to appear. Auto-retries if text doesn't appear. **Prevents infinite click loops.** | `x`, `y`, `wait_for_text`, `button`, `timeout_ms`, `max_clicks` |
+| `execute_workflow` 🆕🚀 | Execute multi-step automation with learning mode. Learn ONCE, execute MANY steps (3-6x faster!). | `steps` (array), `clear_view_after` |
 | `get_region_cache_stats` | Get cache statistics (hits, misses, hit rate). Monitor optimization effectiveness. | None |
 | `clear_region_cache` | Clear all cached regions. Use after screen resolution changes or UI layout updates. | None |
 
@@ -63,6 +64,7 @@ Ghost MCP allows AI assistants like Claude to control your computer's mouse, key
 - **`find_elements`** - Discover all clickable elements 10x faster than taking screenshots
 - **`scroll_until_text`** - Search long pages with one bounded tool call instead of repeated scroll + OCR loops
 - **`click_until_text_appears`** 🆕 - Click and wait for confirmation text. Auto-retries up to 3 times. Prevents infinite loops.
+- **`execute_workflow`** 🆕🚀 - **Multi-step automation with learning mode**. Execute forms, wizards, complex workflows in ONE call. Learn screen ONCE, execute MANY steps (3-6x faster!). See [`docs/WORKFLOW_TOOL.md`](docs/WORKFLOW_TOOL.md) for examples.
 
 ### 🛡️ Safety Features & Loop Protection
 
