@@ -921,6 +921,7 @@ func createServer(token string, al *audit.Logger) *server.MCPServer {
 		server.WithHooks(hooks),
 	)
 	registerTools(mcpServer)
+	registerPrompts(mcpServer)
 	return mcpServer
 }
 
