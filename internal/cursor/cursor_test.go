@@ -10,21 +10,21 @@ func TestDrawCircle(t *testing.T) {
 	// Test that DrawCircle completes without panic
 	// Note: This test requires robotgo which may not work in all environments
 	t.Skip("Skipping test that requires robotgo - manual testing required")
-	
+
 	// Would test:
 	// DrawCircle(100, 100, 20, 100*time.Millisecond)
 }
 
 func TestFlashCursor(t *testing.T) {
 	t.Skip("Skipping test that requires robotgo - manual testing required")
-	
+
 	// Would test:
 	// FlashCursor(100, 100, 20, color.RGBA{255, 0, 0, 255}, 100*time.Millisecond)
 }
 
 func TestPulseCursor(t *testing.T) {
 	t.Skip("Skipping test that requires robotgo - manual testing required")
-	
+
 	// Would test:
 	// PulseCursor(100, 100)
 }
@@ -35,7 +35,7 @@ func TestDrawCircleParameters(t *testing.T) {
 	var x, y int = 100, 200
 	var radius int = 30
 	var duration time.Duration = 500 * time.Millisecond
-	
+
 	// Just verify the types are correct
 	if x != 100 || y != 200 {
 		t.Errorf("unexpected coordinates: %d, %d", x, y)
@@ -54,7 +54,7 @@ func TestFlashCursorParameters(t *testing.T) {
 	var radius int = 25
 	var c color.RGBA = color.RGBA{R: 255, G: 128, B: 64, A: 255}
 	var duration time.Duration = 200 * time.Millisecond
-	
+
 	if x != 150 || y != 250 {
 		t.Errorf("unexpected coordinates: %d, %d", x, y)
 	}
@@ -72,7 +72,7 @@ func TestFlashCursorParameters(t *testing.T) {
 func TestPulseCursorParameters(t *testing.T) {
 	// Verify PulseCursor accepts expected parameter types
 	var x, y int = 200, 300
-	
+
 	if x != 200 || y != 200 && x != 300 {
 		// Just checking types compile
 	}

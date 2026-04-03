@@ -55,8 +55,8 @@ func TestHandleLearnScreenWithScrollParams(t *testing.T) {
 	req := mcp.CallToolRequest{
 		Params: mcp.CallToolParams{
 			Arguments: map[string]interface{}{
-				"max_pages":     float64(5),
-				"scroll_amount": float64(3),
+				"max_pages":        float64(5),
+				"scroll_amount":    float64(3),
 				"scroll_direction": "up",
 			},
 		},

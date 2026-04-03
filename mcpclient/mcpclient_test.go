@@ -187,7 +187,7 @@ func TestNewClientEmptyConfig(t *testing.T) {
 	// Test with empty config - should use defaults
 	// This will fail to start the server, but tests the config logic
 	config := Config{}
-	
+
 	// Verify defaults would be set
 	if config.BinaryPath == "" {
 		// Would default to "./ghost-mcp.exe" or "./ghost-mcp"
@@ -205,10 +205,10 @@ func TestClientCloseMethod(t *testing.T) {
 	client := &Client{
 		closed: false,
 	}
-	
+
 	// First close
 	client.closed = true
-	
+
 	// Second close should be safe
 	if !client.closed {
 		t.Error("expected client to be closed")
@@ -253,16 +253,16 @@ func TestCallToolStringErrorResult(t *testing.T) {
 func TestGetScreenSizeParsing(t *testing.T) {
 	// Test screen size result parsing
 	resultStr := `{"width":1920,"height":1080}`
-	
+
 	var dims struct {
 		Width  int `json:"width"`
 		Height int `json:"height"`
 	}
-	
+
 	if err := json.Unmarshal([]byte(resultStr), &dims); err != nil {
 		t.Fatalf("failed to parse: %v", err)
 	}
-	
+
 	if dims.Width != 1920 {
 		t.Errorf("expected width 1920, got %d", dims.Width)
 	}
@@ -280,16 +280,16 @@ func TestFindElementsParsing(t *testing.T) {
 			{"text": "Label", "x": 300, "y": 400, "width": 60, "height": 20}
 		]
 	}`
-	
+
 	var data struct {
 		Success  bool                     `json:"success"`
 		Elements []map[string]interface{} `json:"elements"`
 	}
-	
+
 	if err := json.Unmarshal([]byte(resultStr), &data); err != nil {
 		t.Fatalf("failed to parse: %v", err)
 	}
-	
+
 	if !data.Success {
 		t.Error("expected success true")
 	}
@@ -306,18 +306,18 @@ func TestTakeScreenshotParsing(t *testing.T) {
 		"width": 1920,
 		"height": 1080
 	}`
-	
+
 	var data struct {
 		Filepath string `json:"filepath"`
 		Base64   string `json:"base64"`
 		Width    int    `json:"width"`
 		Height   int    `json:"height"`
 	}
-	
+
 	if err := json.Unmarshal([]byte(resultStr), &data); err != nil {
 		t.Fatalf("failed to parse: %v", err)
 	}
-	
+
 	if data.Filepath != "/tmp/screenshot.png" {
 		t.Errorf("expected filepath '/tmp/screenshot.png', got %s", data.Filepath)
 	}
@@ -485,7 +485,7 @@ func TestJSONRPCResponseMarshal(t *testing.T) {
 func TestHelperMethodsSignatures(t *testing.T) {
 	// Verify all helper method signatures are correct
 	// This is a compile-time check
-	
+
 	// GetScreenSize(ctx) -> (width, height int, err error)
 	// MoveMouse(ctx, x, y int) -> error
 	// Click(ctx, button string) -> error
@@ -494,7 +494,7 @@ func TestHelperMethodsSignatures(t *testing.T) {
 	// FindElements(ctx, args) -> ([]map[string]interface{}, error)
 	// TakeScreenshot(ctx) -> (filepath, base64 string, width, height int, err error)
 	// FindAndClick(ctx, text, opts) -> (*FindAndClickResult, error)
-	
+
 	t.Log("All helper method signatures verified")
 }
 

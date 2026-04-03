@@ -55,18 +55,18 @@ func TestHandleFindAndClickWithAllParams(t *testing.T) {
 	req := mcp.CallToolRequest{
 		Params: mcp.CallToolParams{
 			Arguments: map[string]interface{}{
-				"text":           "Button",
-				"button":         "left",
-				"nth":            float64(1),
-				"x":              float64(100),
-				"y":              float64(200),
-				"width":          float64(300),
-				"height":         float64(150),
-				"delay_ms":       float64(200),
-				"grayscale":      true,
+				"text":             "Button",
+				"button":           "left",
+				"nth":              float64(1),
+				"x":                float64(100),
+				"y":                float64(200),
+				"width":            float64(300),
+				"height":           float64(150),
+				"delay_ms":         float64(200),
+				"grayscale":        true,
 				"scroll_direction": "down",
-				"max_scrolls":    float64(5),
-				"scroll_amount":  float64(3),
+				"max_scrolls":      float64(5),
+				"scroll_amount":    float64(3),
 			},
 		},
 	}
@@ -298,8 +298,8 @@ func TestHandleFindClickAndTypeMissingParams(t *testing.T) {
 			},
 		},
 		{
-			name:   "missing both",
-			args:   map[string]interface{}{},
+			name: "missing both",
+			args: map[string]interface{}{},
 		},
 	}
 
@@ -331,23 +331,23 @@ func TestHandleFindClickAndTypeWithAllParams(t *testing.T) {
 	req := mcp.CallToolRequest{
 		Params: mcp.CallToolParams{
 			Arguments: map[string]interface{}{
-				"text":            "Email:",
-				"type_text":       "test@example.com",
-				"x_offset":        float64(100),
-				"y_offset":        float64(5),
-				"press_enter":     true,
-				"delay_ms":        float64(150),
-				"nth":             float64(1),
-				"x":               float64(50),
-				"y":               float64(100),
-				"width":           float64(400),
-				"height":          float64(200),
+				"text":             "Email:",
+				"type_text":        "test@example.com",
+				"x_offset":         float64(100),
+				"y_offset":         float64(5),
+				"press_enter":      true,
+				"delay_ms":         float64(150),
+				"nth":              float64(1),
+				"x":                float64(50),
+				"y":                float64(100),
+				"width":            float64(400),
+				"height":           float64(200),
 				"scroll_direction": "down",
-				"scroll_amount":   float64(5),
-				"max_scrolls":     float64(8),
-				"scroll_x":        float64(960),
-				"scroll_y":        float64(540),
-				"grayscale":       true,
+				"scroll_amount":    float64(5),
+				"max_scrolls":      float64(8),
+				"scroll_x":         float64(960),
+				"scroll_y":         float64(540),
+				"grayscale":        true,
 			},
 		},
 	}
@@ -424,8 +424,8 @@ func TestHandleClickUntilTextAppearsMissingParams(t *testing.T) {
 			},
 		},
 		{
-			name:   "missing all",
-			args:   map[string]interface{}{},
+			name: "missing all",
+			args: map[string]interface{}{},
 		},
 	}
 
@@ -480,7 +480,7 @@ func TestOCRToolRegistration(t *testing.T) {
 	// This test verifies that OCR tools are registered correctly
 	// We can't test the actual registration without a server instance
 	// but we can verify the tool names exist
-	
+
 	expectedTools := []string{
 		"find_and_click",
 		"find_and_click_all",

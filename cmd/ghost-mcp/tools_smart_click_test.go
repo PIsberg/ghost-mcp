@@ -153,7 +153,7 @@ func TestHashImageFastSampling(t *testing.T) {
 func TestSmartClickRequestStructure(t *testing.T) {
 	// Verify that smart_click creates proper request structure
 	text := "TestButton"
-	
+
 	clickRequest := mcp.CallToolRequest{
 		Params: mcp.CallToolParams{
 			Arguments: map[string]interface{}{
