@@ -50,14 +50,16 @@ together, and when to invest in Learning Mode for complex sessions.
 | What you need to do | Best tool |
 |---|---|
 | Click a button or link by its visible label | ` + "`find_and_click`" + ` |
-| Click several buttons in one call | ` + "`find_and_click_all`" + ` |
+| Click multiple distinct elements atomically | ` + "`find_and_click_all`" + ` |
 | Click a field and type into it | ` + "`find_click_and_type`" + ` |
 | Read every visible text element + coordinates | ` + "`find_elements`" + ` |
 | Wait for a UI change before proceeding | ` + "`wait_for_text`" + ` |
-| Click, wait for confirmation, retry if needed | ` + "`click_until_text_appears`" + ` |
-| Run a multi-step form or wizard in one call | ` + "`execute_workflow`" + ` |
+| Click coordinates and wait for confirmation text | ` + "`click_until_text_appears`" + ` |
+| Run multiple sequential steps on one screen | ` + "`execute_workflow`" + ` |
 | Map a scrollable or complex interface first | ` + "`learn_screen`" + ` |
 | Automate many steps after mapping the screen | ` + "`learn_screen`" + ` → cached ` + "`find_and_click`" + ` |
+| Learn screen + click in one convenience call | ` + "`smart_click`" + ` |
+| Inspect what learn_screen found / debug misses | ` + "`get_learned_view`" + ` |
 | Type at the current cursor position | ` + "`type_text`" + ` |
 | Press a keyboard shortcut | ` + "`press_key`" + ` |
 | Scroll and search for text | ` + "`scroll_until_text`" + ` |
@@ -87,7 +89,7 @@ find_click_and_type("Password", "hunter2")
 find_and_click("Sign in")
 wait_for_text("Dashboard", visible=true, timeout_ms=8000)
 ` + "```" + `
-Or in one call:
+Or in one call using execute_workflow (all steps share one learned screen map):
 ` + "```" + `
 execute_workflow(steps=[
   {action:"find_click_and_type", text:"Username", type_text:"alice@example.com"},
@@ -97,10 +99,12 @@ execute_workflow(steps=[
 ])
 ` + "```" + `
 
-### Scenario C — Multiple instructions given at once (batch)
-When prompted with a list of things to do ("click Accept, then fill in the form,
-then submit"), prefer a single ` + "`execute_workflow`" + ` call over many individual calls.
-This is 3–6× faster because the screen is learned once and reused for all steps.
+### Scenario C — Multiple instructions given at once (batch, same screen)
+When given several things to do on the same screen, prefer ` + "`execute_workflow`" + `
+over many individual calls. The screen is learned once and all steps reuse that
+cached map — 3–6× faster than a full-screen OCR scan per step.
+Only use this when all steps are on the same screen. If steps span multiple pages,
+use individual calls and call ` + "`clear_learned_view`" + ` between pages.
 ` + "```" + `
 execute_workflow(steps=[
   {action:"find_and_click",      text:"Accept"},
@@ -109,11 +113,16 @@ execute_workflow(steps=[
 ])
 ` + "```" + `
 
-### Scenario D — Dismiss a dialog / confirm a prompt
+### Scenario D — Click multiple distinct elements atomically
+` + "`find_and_click_all`" + ` clicks every element in the list in a single call.
+Use it when you need to click several known, distinct targets that are all
+present on screen — for example, checking three checkboxes or clicking a
+sequence of toolbar buttons. Do NOT use it to try alternative labels for one
+target; use ` + "`find_and_click`" + ` with ` + "`select_best=true`" + ` for fuzzy matching instead.
 ` + "```" + `
-find_and_click_all(["OK", "Accept", "Confirm"])   // tries each label
+find_and_click_all(["Enable logging", "Enable metrics", "Enable tracing"])
 ` + "```" + `
-Or if only one label applies:
+To dismiss a dialog where you know only one label will match:
 ` + "```" + `
 find_and_click("OK")
 ` + "```" + `
@@ -122,7 +131,7 @@ find_and_click("OK")
 ` + "```" + `
 scroll_until_text("Privacy Policy", scroll_direction="down", max_scrolls=10)
 ` + "```" + `
-Or use ` + "`find_and_click`" + ` with scroll parameters:
+Or use ` + "`find_and_click`" + ` with scroll parameters when you also want to click it:
 ` + "```" + `
 find_and_click("Privacy Policy", scroll_direction="down", max_scrolls=10)
 ` + "```" + `
@@ -139,19 +148,35 @@ wait_for_text("Deleted", visible=true, timeout_ms=5000)
 ### Scenario G — Complex app with many elements / deep scrolling
 Invest in learning once; all subsequent find operations use the cached map:
 ` + "```" + `
-learn_screen(max_pages=5)                         // scan full interface
-get_learned_view()                                // inspect what was found (optional)
-find_and_click("Settings")                        // fast — uses cache
-find_click_and_type("API Key", "abc123")          // fast — uses cache
+learn_screen(max_pages=5)       // scan full interface across scroll positions
+get_learned_view()              // call this if find_and_click misses elements —
+                                // inspect the element list to verify OCR found them
+find_and_click("Settings")      // fast — narrows OCR to cached bounding box
+find_click_and_type("API Key", "abc123")
 find_and_click("Save")
-clear_learned_view()                              // discard after navigation
+clear_learned_view()            // discard after navigation to avoid stale positions
 ` + "```" + `
 
 ### Scenario H — Unknown interface (first time seeing it)
+Start by reading the screen, then choose the right tool based on what's there:
 ` + "```" + `
-find_elements()                  // read all visible text with coordinates
-                                 // then decide which tool fits the task
+find_elements()                 // returns all visible text with coordinates and types
 ` + "```" + `
+Use the result to understand the layout:
+- If you see the target element → use ` + "`find_and_click`" + ` or ` + "`find_click_and_type`" + ` directly
+- If the interface is large or scrollable → call ` + "`learn_screen`" + ` before acting
+- If elements are missing or text is hard to read → call ` + "`take_screenshot`" + ` to visually inspect
+- If you need to act on many elements → switch to ` + "`execute_workflow`" + ` or ` + "`learn_screen`" + ` path
+
+### Scenario I — One-off click on a new screen (convenience)
+` + "`smart_click`" + ` combines ` + "`learn_screen`" + ` + ` + "`find_and_click`" + ` in a single call.
+Use it when you need one click on an unfamiliar screen and don't want to manage
+the learn/act/clear lifecycle manually:
+` + "```" + `
+smart_click("Submit")
+` + "```" + `
+For more than one action on the same screen, use ` + "`learn_screen`" + ` explicitly so
+you control when ` + "`clear_learned_view`" + ` is called.
 
 ---
 
@@ -177,6 +202,11 @@ clear_learned_view()    // after navigation or significant UI change
 **Performance:** After ` + "`learn_screen`" + `, each ` + "`find_and_click`" + ` narrows its OCR scan
 to a small bounding box — typically 10–25× faster than a full-screen scan.
 
+**Debugging:** If ` + "`find_and_click`" + ` fails to find an element after ` + "`learn_screen`" + `,
+call ` + "`get_learned_view`" + ` to see the full element list. If the target is missing,
+OCR did not detect it — try ` + "`take_screenshot`" + ` to check visibility, or re-run
+` + "`learn_screen`" + ` with a higher ` + "`max_pages`" + ` value.
+
 ---
 
 ## 4. Safety and Verification Rules
@@ -189,32 +219,4 @@ to a small bounding box — typically 10–25× faster than a full-screen scan.
    If you are approaching it, switch to ` + "`execute_workflow`" + ` for remaining steps.
 4. **After page navigation:** call ` + "`clear_learned_view`" + ` so stale element
    positions don't cause mis-clicks on the new page.
-
----
-
-## 5. Tool Category Summary
-
-### Core input tools (no OCR needed)
-` + "`click_at`" + `, ` + "`type_text`" + `, ` + "`press_key`" + `, ` + "`scroll`" + `, ` + "`double_click`" + `
-→ Use when you already know exact coordinates or want raw keyboard input.
-
-### OCR-based finding tools (most common)
-` + "`find_and_click`" + `, ` + "`find_elements`" + `, ` + "`find_click_and_type`" + `, ` + "`find_and_click_all`" + `
-→ Use for every "click button by name" or "read what's on screen" task.
-
-### Waiting and verification tools
-` + "`wait_for_text`" + `, ` + "`click_until_text_appears`" + `
-→ Use after every action that triggers a UI change.
-
-### Learning mode tools
-` + "`learn_screen`" + `, ` + "`get_learned_view`" + `, ` + "`clear_learned_view`" + `, ` + "`set_learning_mode`" + `
-→ Use for complex or multi-step sessions to eliminate redundant full-screen OCR.
-
-### Automation tools
-` + "`execute_workflow`" + `
-→ Use when given multiple sequential instructions; bundles learn+act+verify.
-
-### Diagnostic tools
-` + "`take_screenshot`" + `, ` + "`get_screen_size`" + `, ` + "`get_region_cache_stats`" + `
-→ Use sparingly; prefer OCR tools for reading text.
 `
