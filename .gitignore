@@ -34,3 +34,6 @@ Thumbs.db
 go.work
 .qwen/
 .claude/
+
+# Benchmark report (generated output — tracked results are in benchmarks/results/)
+benchmarks/report.html
