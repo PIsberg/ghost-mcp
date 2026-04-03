@@ -270,13 +270,13 @@ jobs:
     - name: Test coverage (Linux only)
       if: matrix.os == 'ubuntu-latest'
       run: |
-        go test -v -short -coverprofile=coverage.out ./cmd/ghost-mcp/...
-        go tool cover -func=coverage.out
+        go test -short -coverprofile=coverage.txt ./cmd/ghost-mcp/... ./internal/...
+        go tool cover -func=coverage.txt
 
     - name: Upload coverage to Codecov
       if: matrix.os == 'ubuntu-latest' && matrix.go-version == '1.25'
       uses: codecov/codecov-action@57e3a136b779b570ffcdbf80b3bdc90e7fab3de2 # v6.0.0
       with:
-        files: ./coverage.out
+        files: ./coverage.txt
         flags: unittests
         name: codecov-umbrella
