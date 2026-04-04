@@ -1,0 +1,916 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ghost MCP Test Fixture</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            min-height: 100vh;
+            padding: 20px;
+            color: #eee;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 10px;
+            color: #00d9ff;
+            text-shadow: 0 0 10px rgba(0, 217, 255, 0.5);
+        }
+
+        .subtitle {
+            text-align: center;
+            margin-bottom: 30px;
+            color: #888;
+            font-size: 14px;
+        }
+
+        .panel {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .panel h2 {
+            color: #00d9ff;
+            margin-bottom: 15px;
+            font-size: 18px;
+            border-bottom: 1px solid rgba(0, 217, 255, 0.3);
+            padding-bottom: 10px;
+        }
+
+        .status-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 15px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .status-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #ff4444;
+            animation: pulse 2s infinite;
+        }
+
+        .status-dot.active {
+            background: #00ff88;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        /* Last Action Display - High contrast for OCR */
+        .last-action {
+            background: #ffffff;
+            color: #000000;
+            padding: 8px 15px;
+            border-radius: 6px;
+            font-family: 'Consolas', 'Courier New', monospace;
+            font-size: 14px;
+            font-weight: bold;
+            min-width: 300px;
+            text-align: center;
+            border: 2px solid #00d9ff;
+        }
+
+        /* Button Test Area */
+        .button-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 10px;
+        }
+
+        .test-btn {
+            padding: 15px 20px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .test-btn.primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .test-btn.success {
+            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+            color: white;
+        }
+
+        .test-btn.warning {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+        }
+
+        .test-btn.info {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            color: white;
+        }
+
+        .test-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.3);
+        }
+
+        .test-btn:active {
+            transform: translateY(0);
+        }
+
+        .test-btn.clicked {
+            animation: clickFlash 0.3s ease;
+        }
+
+        @keyframes clickFlash {
+            0%, 100% { filter: brightness(1); }
+            50% { filter: brightness(1.5); }
+        }
+
+        /* Input Test Area */
+        .input-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+            align-items: center;
+        }
+
+        .input-label {
+            color: #fff;
+            font-weight: 600;
+            font-size: 14px;
+            white-space: nowrap;
+            min-width: 80px;
+        }
+
+        .test-input {
+            flex: 1;
+            padding: 12px 15px;
+            border: 2px solid rgba(0, 217, 255, 0.3);
+            border-radius: 8px;
+            background: rgba(0, 0, 0, 0.3);
+            color: #fff;
+            font-size: 14px;
+        }
+
+        .test-input:focus {
+            outline: none;
+            border-color: #00d9ff;
+            box-shadow: 0 0 10px rgba(0, 217, 255, 0.3);
+        }
+
+        .test-input::placeholder {
+            color: #ffffff; /* White: OCR-detectable by the bright-text pass */
+        }
+
+        .test-textarea {
+            width: 100%;
+            padding: 12px 15px;
+            border: 2px solid rgba(0, 217, 255, 0.3);
+            border-radius: 8px;
+            background: rgba(0, 0, 0, 0.3);
+            color: #fff;
+            font-size: 14px;
+            font-family: inherit;
+            resize: vertical;
+            min-height: 80px;
+        }
+
+        .test-textarea:focus {
+            outline: none;
+            border-color: #00d9ff;
+        }
+
+        /* Checkbox & Radio Area */
+        .checkbox-group, .radio-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+
+        .checkbox-item, .radio-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+        }
+
+        .checkbox-item input, .radio-item input {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+        }
+
+        /* Dropdown */
+        .test-select {
+            padding: 12px 15px;
+            border: 2px solid rgba(0, 217, 255, 0.3);
+            border-radius: 8px;
+            background: rgba(0, 0, 0, 0.3);
+            color: #fff;
+            font-size: 14px;
+            cursor: pointer;
+            min-width: 200px;
+        }
+
+        .test-select:focus {
+            outline: none;
+            border-color: #00d9ff;
+        }
+
+        .test-select option {
+            background: #1a1a2e;
+            color: #fff;
+        }
+
+        /* Event Log */
+        .event-log {
+            background: rgba(0, 0, 0, 0.5);
+            border-radius: 8px;
+            padding: 15px;
+            max-height: 200px;
+            overflow-y: auto;
+            font-family: 'Consolas', 'Courier New', monospace;
+            font-size: 12px;
+        }
+
+        .log-entry {
+            padding: 5px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            display: flex;
+            gap: 10px;
+        }
+
+        .log-entry:last-child {
+            border-bottom: none;
+        }
+
+        .log-time {
+            color: #888;
+            min-width: 80px;
+        }
+
+        .log-event {
+            color: #00d9ff;
+            font-weight: bold;
+        }
+
+        .log-detail {
+            color: #aaa;
+        }
+
+        /* Mouse Position Display */
+        .mouse-position {
+            font-family: 'Consolas', monospace;
+            font-size: 16px;
+            color: #00ff88;
+        }
+
+        /* Click Counter */
+        .click-counter {
+            font-size: 48px;
+            font-weight: bold;
+            color: #00d9ff;
+            text-align: center;
+            text-shadow: 0 0 20px rgba(0, 217, 255, 0.5);
+        }
+
+        .click-counter-label {
+            text-align: center;
+            color: #888;
+            margin-top: 5px;
+        }
+
+        /* Slider */
+        .slider-container {
+            padding: 20px 0;
+        }
+
+        .test-slider {
+            width: 100%;
+            height: 8px;
+            border-radius: 4px;
+            background: rgba(0, 0, 0, 0.3);
+            outline: none;
+            -webkit-appearance: none;
+        }
+
+        .test-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #00d9ff 0%, #00ff88 100%);
+            cursor: pointer;
+            box-shadow: 0 0 10px rgba(0, 217, 255, 0.5);
+        }
+
+        .slider-value {
+            text-align: center;
+            margin-top: 10px;
+            font-size: 24px;
+            color: #00d9ff;
+        }
+
+        /* Color Picker Area */
+        .color-box {
+            width: 100px;
+            height: 100px;
+            border-radius: 12px;
+            border: 3px solid rgba(255, 255, 255, 0.2);
+            transition: all 0.3s ease;
+        }
+
+        .color-controls {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+            flex-wrap: wrap;
+        }
+
+        .color-btn {
+            width: 40px;
+            height: 40px;
+            border-radius: 8px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        .color-btn:hover {
+            transform: scale(1.1);
+        }
+
+        /* Test Results */
+        .test-results {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        .test-result {
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+            background: rgba(0, 0, 0, 0.3);
+        }
+
+        .test-result.pass {
+            border: 2px solid #00ff88;
+        }
+
+        .test-result.fail {
+            border: 2px solid #ff4444;
+        }
+
+        .test-result.pending {
+            border: 2px solid #888;
+        }
+
+        .test-result-label {
+            font-size: 12px;
+            color: #888;
+            margin-bottom: 5px;
+        }
+
+        .test-result-value {
+            font-size: 20px;
+            font-weight: bold;
+        }
+
+        .pass .test-result-value { color: #00ff88; }
+        .fail .test-result-value { color: #ff4444; }
+        .pending .test-result-value { color: #888; }
+
+        /* Hover Zone */
+        .hover-zone {
+            height: 100px;
+            border: 2px dashed rgba(0, 217, 255, 0.3);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+        }
+
+        .hover-zone.hovered {
+            background: rgba(0, 217, 255, 0.2);
+            border-color: #00d9ff;
+            box-shadow: 0 0 20px rgba(0, 217, 255, 0.3);
+        }
+
+        .hover-zone span {
+            color: #666;
+            font-size: 14px;
+        }
+
+        .hover-zone.hovered span {
+            color: #00d9ff;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>👻 Ghost MCP Test Fixture</h1>
+        <p class="subtitle">Interactive GUI for testing MCP UI automation tools</p>
+        <p style="text-align:center;margin-bottom:20px;">
+            <a href="/" style="color:#00d9ff;">Normal page</a> |
+            <a href="/challenge" style="color:#00d9ff;">Challenge page</a>
+        </p>
+        <div class="status-bar">
+            <div class="status-indicator">
+                <div class="status-dot" id="activeDot"></div>
+                <span id="statusText">Waiting for interaction...</span>
+            </div>
+            <div class="mouse-position">
+                Mouse: <span id="mousePos">--, --</span>
+            </div>
+        </div>
+
+        <!-- Last Action Display - High contrast for OCR verification -->
+        <div class="last-action" id="lastAction">
+            Last Action: None
+        </div>
+
+        <!-- Button Test Panel -->
+        <div class="panel">
+            <h2>🔘 Button Click Tests</h2>
+            <div class="button-grid">
+                <button class="test-btn primary" data-btn="primary" onclick="handleButtonClick('primary')">Primary</button>
+                <button class="test-btn success" data-btn="success" onclick="handleButtonClick('success')">Success</button>
+                <button class="test-btn warning" data-btn="warning" onclick="handleButtonClick('warning')">Warning</button>
+                <button class="test-btn info" data-btn="info" onclick="handleButtonClick('info')">Info</button>
+            </div>
+        </div>
+
+        <!-- Input Test Panel -->
+        <div class="panel">
+            <h2>⌨️ Input Tests</h2>
+            <div class="input-group">
+                <label class="input-label" for="textInput">Text Input:</label>
+                <input type="text" class="test-input" id="textInput" placeholder="Type here or use MCP type_text..." oninput="handleInput('text', this.value)">
+                <button class="test-btn info" onclick="clearInput()">Clear</button>
+            </div>
+            <div class="input-group">
+                <label class="input-label" for="textArea">Text Area:</label>
+                <textarea class="test-textarea" id="textArea" placeholder="Multi-line text area..." oninput="handleInput('textarea', this.value)"></textarea>
+            </div>
+        </div>
+
+        <!-- Checkbox & Radio Panel -->
+        <div class="panel">
+            <h2>☑️ Selection Tests</h2>
+            <div style="margin-bottom: 20px;">
+                <strong>Checkboxes:</strong>
+                <div class="checkbox-group" style="margin-top: 10px;">
+                    <label class="checkbox-item">
+                        <input type="checkbox" id="chk1" onchange="handleCheckbox('chk1', this.checked)">
+                        <span>Option 1</span>
+                    </label>
+                    <label class="checkbox-item">
+                        <input type="checkbox" id="chk2" onchange="handleCheckbox('chk2', this.checked)">
+                        <span>Option 2</span>
+                    </label>
+                    <label class="checkbox-item">
+                        <input type="checkbox" id="chk3" onchange="handleCheckbox('chk3', this.checked)">
+                        <span>Option 3</span>
+                    </label>
+                </div>
+            </div>
+            <div>
+                <strong>Radio Buttons:</strong>
+                <div class="radio-group" style="margin-top: 10px;">
+                    <label class="radio-item">
+                        <input type="radio" name="radio" value="a" onchange="handleRadio('a')">
+                        <span>Choice A</span>
+                    </label>
+                    <label class="radio-item">
+                        <input type="radio" name="radio" value="b" onchange="handleRadio('b')">
+                        <span>Choice B</span>
+                    </label>
+                    <label class="radio-item">
+                        <input type="radio" name="radio" value="c" onchange="handleRadio('c')">
+                        <span>Choice C</span>
+                    </label>
+                </div>
+            </div>
+        </div>
+
+        <!-- Dropdown Panel -->
+        <div class="panel">
+            <h2>📋 Dropdown Test</h2>
+            <select class="test-select" id="testSelect" onchange="handleSelect(this.value)">
+                <option value="">-- Select an option --</option>
+                <option value="option1">Option 1</option>
+                <option value="option2">Option 2</option>
+                <option value="option3">Option 3</option>
+                <option value="option4">Option 4</option>
+            </select>
+        </div>
+
+        <!-- Slider Panel -->
+        <div class="panel">
+            <h2>📊 Slider Test</h2>
+            <div class="slider-container">
+                <input type="range" class="test-slider" id="testSlider" min="0" max="100" value="50" oninput="handleSlider(this.value)">
+                <div class="slider-value"><span id="sliderValue">50</span>%</div>
+            </div>
+        </div>
+
+        <!-- Color Picker Panel -->
+        <div class="panel">
+            <h2>🎨 Color Picker Test</h2>
+            <div style="display: flex; align-items: center; gap: 20px; flex-wrap: wrap;">
+                <div class="color-box" id="colorBox" style="background: #00d9ff;"></div>
+                <div class="color-controls">
+                    <button class="color-btn" style="background: #ff4444;" onclick="changeColor('#ff4444')"></button>
+                    <button class="color-btn" style="background: #00ff88;" onclick="changeColor('#00ff88')"></button>
+                    <button class="color-btn" style="background: #ffff00;" onclick="changeColor('#ffff00')"></button>
+                    <button class="color-btn" style="background: #ff00ff;" onclick="changeColor('#ff00ff')"></button>
+                    <button class="color-btn" style="background: #00d9ff;" onclick="changeColor('#00d9ff')"></button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Click Counter Panel -->
+        <div class="panel">
+            <h2>🖱️ Click Counter</h2>
+            <div class="click-counter" id="clickCounter">0</div>
+            <div class="click-counter-label">Total clicks on this button</div>
+            <button class="test-btn primary" style="margin-top: 15px; width: 100%;" onclick="incrementCounter()">Click Me!</button>
+        </div>
+
+        <!-- Hover Zone Panel -->
+        <div class="panel">
+            <h2>👆 Hover Detection Zone</h2>
+            <div class="hover-zone" id="hoverZone" onmouseenter="handleHover(true)" onmouseleave="handleHover(false)">
+                <span>Move mouse over this area...</span>
+            </div>
+        </div>
+
+        <!-- Keyboard Test Panel -->
+        <div class="panel">
+            <h2>⌨️ Keyboard Test</h2>
+            <p style="color: #888; margin-bottom: 10px;">Press any key to test keyboard input:</p>
+            <input type="text" class="test-input" id="keyTestInput" placeholder="Focus here and press keys..." 
+                   onkeydown="handleKeyDown(event)" style="width: 100%;">
+            <div class="test-results" id="keyResults"></div>
+        </div>
+
+        <!-- Event Log Panel -->
+        <div class="panel">
+            <h2>📜 Event Log</h2>
+            <div class="event-log" id="eventLog">
+                <div class="log-entry">
+                    <span class="log-time">--:--:--</span>
+                    <span class="log-event">System</span>
+                    <span class="log-detail">Test fixture initialized. Waiting for interaction...</span>
+                </div>
+            </div>
+            <button class="test-btn warning" style="margin-top: 10px;" onclick="clearLog()">Clear Log</button>
+        </div>
+
+        <!-- Test Results Summary -->
+        <div class="panel">
+            <h2>✅ Test Results Summary</h2>
+            <div class="test-results">
+                <div class="test-result pending" id="resultButtons">
+                    <div class="test-result-label">Buttons Clicked</div>
+                    <div class="test-result-value">-</div>
+                </div>
+                <div class="test-result pending" id="resultInput">
+                    <div class="test-result-label">Input Typed</div>
+                    <div class="test-result-value">-</div>
+                </div>
+                <div class="test-result pending" id="resultCheckbox">
+                    <div class="test-result-label">Checkbox Toggled</div>
+                    <div class="test-result-value">-</div>
+                </div>
+                <div class="test-result pending" id="resultSelect">
+                    <div class="test-result-label">Dropdown Changed</div>
+                    <div class="test-result-value">-</div>
+                </div>
+                <div class="test-result pending" id="resultSlider">
+                    <div class="test-result-label">Slider Adjusted</div>
+                    <div class="test-result-value">-</div>
+                </div>
+                <div class="test-result pending" id="resultKeys">
+                    <div class="test-result-label">Keys Pressed</div>
+                    <div class="test-result-value">-</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- OCR Test Panel -->
+        <div class="panel" id="ocr-panel">
+            <h2>OCR Text Recognition</h2>
+            <p style="color:#aaa;margin-bottom:15px;font-size:13px;">
+                This panel contains readable text for testing the <code>find_elements</code> tool.
+            </p>
+            <div id="ocr-target" style="
+                background: white;
+                color: black;
+                padding: 20px;
+                border-radius: 8px;
+                font-family: Arial, sans-serif;
+                font-size: 18px;
+                line-height: 1.8;
+            ">
+                <div style="font-size:22px;font-weight:bold;margin-bottom:10px;">OCR Test Area</div>
+                <div>Hello World</div>
+                <div>Ghost MCP Automation</div>
+                <div>Click Submit to Continue</div>
+                <div style="margin-top:10px;">
+                    <span style="margin-right:30px;">File</span>
+                    <span style="margin-right:30px;">Edit</span>
+                    <span style="margin-right:30px;">View</span>
+                    <span>Help</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // State tracking
+        const state = {
+            buttonsClicked: [],
+            inputTyped: false,
+            checkboxesToggled: [],
+            radioSelected: null,
+            dropdownChanged: false,
+            sliderAdjusted: false,
+            keysPressed: [],
+            totalClicks: 0,
+            hoverActive: false
+        };
+
+        // Log an event
+        function logEvent(event, detail) {
+            const log = document.getElementById('eventLog');
+            const now = new Date();
+            const time = now.toLocaleTimeString('en-US', { hour12: false });
+            
+            const entry = document.createElement('div');
+            entry.className = 'log-entry';
+            entry.innerHTML = `
+                <span class="log-time">${time}</span>
+                <span class="log-event">${event}</span>
+                <span class="log-detail">${detail}</span>
+            `;
+            
+            log.insertBefore(entry, log.firstChild);
+            
+            // Keep only last 50 entries
+            while (log.children.length > 50) {
+                log.removeChild(log.lastChild);
+            }
+            
+            updateStatus(`${event}: ${detail}`, true);
+        }
+
+        // Update status bar
+        function updateStatus(text, active = false) {
+            document.getElementById('statusText').textContent = text;
+            document.getElementById('activeDot').classList.toggle('active', active);
+        }
+
+        // Update last action display (high contrast for OCR)
+        function updateLastAction(action) {
+            document.getElementById('lastAction').textContent = `Last Action: ${action}`;
+        }
+
+        // Update test results
+        function updateResult(id, passed, value) {
+            const el = document.getElementById(id);
+            el.className = 'test-result ' + (passed ? 'pass' : 'fail');
+            el.querySelector('.test-result-value').textContent = value || (passed ? '✓' : '✗');
+        }
+
+        // Button click handler
+        function handleButtonClick(btn) {
+            state.buttonsClicked.push(btn);
+            const button = document.querySelector(`[data-btn="${btn}"]`);
+            button.classList.add('clicked');
+            setTimeout(() => button.classList.remove('clicked'), 300);
+
+            logEvent('BUTTON_CLICK', `Button "${btn}" clicked`);
+            updateLastAction(`Clicked ${btn.toUpperCase()} button`);
+            updateResult('resultButtons', true, `${state.buttonsClicked.length} clicks`);
+        }
+
+        // Input handler
+        function handleInput(type, value) {
+            state.inputTyped = true;
+            logEvent('INPUT', `${type}: "${value.substring(0, 30)}${value.length > 30 ? '...' : ''}"`);
+            updateLastAction(`Typed ${value.length} chars in ${type}`);
+            updateResult('resultInput', true, `${value.length} chars`);
+        }
+
+        function clearInput() {
+            document.getElementById('textInput').value = '';
+            document.getElementById('textArea').value = '';
+            logEvent('INPUT_CLEARED', 'All inputs cleared');
+            updateLastAction('Cleared all inputs');
+        }
+
+        // Checkbox handler
+        function handleCheckbox(id, checked) {
+            state.checkboxesToggled.push({ id, checked, time: Date.now() });
+            logEvent('CHECKBOX', `${id}: ${checked ? 'checked' : 'unchecked'}`);
+            updateLastAction(`${id} ${checked ? 'checked' : 'unchecked'}`);
+            updateResult('resultCheckbox', true, `${state.checkboxesToggled.filter(c => c.checked).length} checked`);
+        }
+
+        // Radio handler
+        function handleRadio(value) {
+            state.radioSelected = value;
+            logEvent('RADIO', `Selected: ${value}`);
+            updateLastAction(`Selected radio ${value}`);
+        }
+
+        // Select handler
+        function handleSelect(value) {
+            state.dropdownChanged = true;
+            logEvent('DROPDOWN', `Selected: ${value || '(none)'}`);
+            updateLastAction(`Dropdown: ${value || 'none'}`);
+            updateResult('resultSelect', true, value || 'none');
+        }
+
+        // Slider handler
+        function handleSlider(value) {
+            state.sliderAdjusted = true;
+            document.getElementById('sliderValue').textContent = value;
+            logEvent('SLIDER', `Value: ${value}%`);
+            updateLastAction(`Slider: ${value}%`);
+            updateResult('resultSlider', true, `${value}%`);
+        }
+
+        // Color handler
+        function changeColor(color) {
+            document.getElementById('colorBox').style.background = color;
+            logEvent('COLOR_CHANGE', `Changed to: ${color}`);
+            updateLastAction(`Color: ${color}`);
+        }
+
+        // Counter handler
+        function incrementCounter() {
+            state.totalClicks++;
+            document.getElementById('clickCounter').textContent = state.totalClicks;
+            logEvent('COUNTER', `Click count: ${state.totalClicks}`);
+            updateLastAction(`Counter: ${state.totalClicks} clicks`);
+        }
+
+        // Hover handler
+        function handleHover(entered) {
+            state.hoverActive = entered;
+            const zone = document.getElementById('hoverZone');
+            zone.classList.toggle('hovered', entered);
+            logEvent('HOVER', entered ? 'Mouse entered zone' : 'Mouse left zone');
+            updateLastAction(entered ? 'Mouse in hover zone' : 'Mouse left hover zone');
+        }
+
+        // Key handler
+        function handleKeyDown(event) {
+            state.keysPressed.push({ key: event.key, time: Date.now() });
+            const results = document.getElementById('keyResults');
+            
+            // Show last 5 keys
+            const recent = state.keysPressed.slice(-5);
+            results.innerHTML = recent.map(k => `
+                <div class="test-result pass">
+                    <div class="test-result-label">Key</div>
+                    <div class="test-result-value">${escapeHtml(k.key)}</div>
+                </div>
+            `).join('');
+            
+            logEvent('KEY_PRESS', `Key: "${event.key}"`);
+            updateResult('resultKeys', true, `${state.keysPressed.length} keys`);
+        }
+
+        // Clear log
+        function clearLog() {
+            const log = document.getElementById('eventLog');
+            log.innerHTML = `
+                <div class="log-entry">
+                    <span class="log-time">${new Date().toLocaleTimeString()}</span>
+                    <span class="log-event">System</span>
+                    <span class="log-detail">Log cleared</span>
+                </div>
+            `;
+        }
+
+        // Mouse position tracker
+        document.addEventListener('mousemove', (e) => {
+            document.getElementById('mousePos').textContent = `${e.clientX}, ${e.clientY}`;
+        });
+
+        // Utility: Escape HTML
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // Export state for testing
+        window.getFixtureState = function() {
+            return { ...state };
+        };
+
+        // Initialize
+        logEvent('INIT', 'Test fixture ready for MCP automation');
+    </script>
+</body>
+</html>
+
+<!-- LEARNING MODE SCROLL SECTION (below the main content) -->
+<!-- This section is intentionally placed below the fold so learning mode tests
+     can verify that scroll-based discovery finds elements not visible on first load. -->
+<div id="learning-scroll-section" style="
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+    padding: 40px 20px;
+    min-height: 800px;
+">
+    <div style="max-width: 900px; margin: 0 auto;">
+        <h2 id="learning-section-header" style="color:#ff9800; margin-bottom: 20px;">
+            Learning Mode Test Section
+        </h2>
+        <p style="color:#aaa; margin-bottom:30px;">
+            This section is below the fold. Learning mode should discover these elements by scrolling.
+        </p>
+
+        <div style="background:rgba(255,255,255,0.05); border-radius:12px; padding:20px; margin-bottom:20px;">
+            <h3 style="color:#00d9ff; margin-bottom:15px;">Scroll-Discovered Buttons</h3>
+            <button id="btn-scroll-alpha"
+                    onclick="document.getElementById('scroll-click-result').textContent='Alpha clicked'"
+                    style="background:#4caf50;color:white;padding:10px 20px;border:none;border-radius:6px;cursor:pointer;margin:6px;font-size:14px;">
+                Scroll Alpha
+            </button>
+            <button id="btn-scroll-beta"
+                    onclick="document.getElementById('scroll-click-result').textContent='Beta clicked'"
+                    style="background:#2196f3;color:white;padding:10px 20px;border:none;border-radius:6px;cursor:pointer;margin:6px;font-size:14px;">
+                Scroll Beta
+            </button>
+            <button id="btn-scroll-gamma"
+                    onclick="document.getElementById('scroll-click-result').textContent='Gamma clicked'"
+                    style="background:#9c27b0;color:white;padding:10px 20px;border:none;border-radius:6px;cursor:pointer;margin:6px;font-size:14px;">
+                Scroll Gamma
+            </button>
+            <div id="scroll-click-result" style="color:#00ff88;margin-top:12px;min-height:20px;font-size:13px;"></div>
+        </div>
+
+        <div style="background:rgba(255,255,255,0.05); border-radius:12px; padding:20px; margin-bottom:20px;">
+            <h3 style="color:#00d9ff; margin-bottom:15px;">Scroll-Discovered Input Fields</h3>
+            <label for="scroll-email" style="color:#eee;display:block;margin-bottom:6px;">Scroll Email:</label>
+            <input id="scroll-email" type="email" placeholder="Enter scroll email"
+                   style="width:100%;padding:10px;border-radius:6px;border:1px solid #444;background:#2a2a4a;color:#eee;font-size:14px;margin-bottom:14px;box-sizing:border-box;">
+            <label for="scroll-notes" style="color:#eee;display:block;margin-bottom:6px;">Scroll Notes:</label>
+            <textarea id="scroll-notes" rows="3" placeholder="Enter scroll notes"
+                      style="width:100%;padding:10px;border-radius:6px;border:1px solid #444;background:#2a2a4a;color:#eee;font-size:14px;box-sizing:border-box;resize:vertical;"></textarea>
+        </div>
+
+        <div style="background:rgba(255,255,255,0.05); border-radius:12px; padding:20px;">
+            <h3 style="color:#00d9ff; margin-bottom:15px;">Unique Learning Marker</h3>
+            <p id="learning-unique-text" style="color:#ff9800;font-size:16px;font-weight:bold;">
+                GHOST_MCP_LEARNING_MARKER_42
+            </p>
+            <p style="color:#888;font-size:13px;">
+                This unique text is only visible after scrolling. Its presence in a learned view
+                confirms that the scroll-discovery algorithm works correctly.
+            </p>
+        </div>
+    </div>
+</div>

@@ -1,7 +1,11 @@
 // fixture_server.go - Simple HTTP server for the test fixture
 //
-// This server hosts the test fixture HTML page so it can be
+// This server hosts the test fixture HTML pages so they can be
 // accessed and controlled via the MCP UI automation tools.
+//
+// Routes:
+//   /          - Normal fixture (light theme, standard buttons)
+//   /challenge - Challenge fixture (dark theme, gradient buttons)
 package main
 
 import (
@@ -15,7 +19,7 @@ import (
 	"time"
 )
 
-//go:embed index.html
+//go:embed index.html challenge.html
 var content embed.FS
 
 func main() {
@@ -25,7 +29,14 @@ func main() {
 	}
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		data, err := content.ReadFile("index.html")
+		var page string
+		switch r.URL.Path {
+		case "/challenge":
+			page = "challenge.html"
+		default:
+			page = "index.html"
+		}
+		data, err := content.ReadFile(page)
 		if err != nil {
 			http.Error(w, "File not found", http.StatusNotFound)
 			return
