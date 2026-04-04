@@ -1220,7 +1220,7 @@ func TestHandleScrollUntilText_FindsTextAfterScrolling(t *testing.T) {
 	}
 
 	var findCalls int
-	uiFindText = func(ctx context.Context, img image.Image, searchText string, nth int, grayscale bool) (int, int, int, int, bool, string) {
+	uiFindText = func(ctx context.Context, img image.Image, searchText string, nth int, grayscale bool, elementTypeFilter string) (int, int, int, int, bool, string) {
 		findCalls++
 		if findCalls == 3 {
 			return 10, 20, 110, 60, true, "color"
@@ -1306,7 +1306,7 @@ func TestHandleScrollUntilText_StopsWhenViewportRepeats(t *testing.T) {
 		readCalls++
 		return &ocr.Result{Text: text}, nil
 	}
-	uiFindText = func(context.Context, image.Image, string, int, bool) (int, int, int, int, bool, string) {
+	uiFindText = func(context.Context, image.Image, string, int, bool, string) (int, int, int, int, bool, string) {
 		return 0, 0, 0, 0, false, ""
 	}
 	var scrollCalls int
@@ -1374,7 +1374,7 @@ func TestHandleScrollUntilText_ReturnsMaxScrollsError(t *testing.T) {
 		readCalls++
 		return &ocr.Result{Text: text}, nil
 	}
-	uiFindText = func(context.Context, image.Image, string, int, bool) (int, int, int, int, bool, string) {
+	uiFindText = func(context.Context, image.Image, string, int, bool, string) (int, int, int, int, bool, string) {
 		return 0, 0, 0, 0, false, ""
 	}
 	var scrollCalls int

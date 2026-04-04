@@ -26,7 +26,7 @@ Ghost MCP allows AI assistants like Claude to control your computer's mouse, key
 
 ## Available Tools
 
-> **AI routing guide:** Before automating a UI, read [`docs/routing_prompt.md`](docs/routing_prompt.md) for decision tables, optimal tool sequences, and when to use learning mode. The server also delivers this guide automatically to AI clients via the `ghost_mcp_guide` MCP prompt on connect.
+> **AI routing guide:** Before automating a UI, read [`docs/routing_prompt.md`](docs/routing_prompt.md) for critical safety rules, decision tables, optimal tool sequences, and when to use learning mode. The server also delivers this guide automatically to AI clients via the `ghost_mcp_guide` MCP prompt on connect.
 
 | Tool | Description | Parameters | OCR |
 |------|-------------|------------|-----|
@@ -40,12 +40,12 @@ Ghost MCP allows AI assistants like Claude to control your computer's mouse, key
 | `click_and_type` | Move mouse, click, and type text in one atomic operation. | `x`, `y`, `type_text`, `button`, `delay_ms`, `press_enter` | — |
 | `press_key` | Press a single key or shortcut (e.g. Enter, Tab, Ctrl+C). | `key` | — |
 | `take_screenshot` | Capture screen as base64 PNG. Use for visual inspection only — prefer `find_elements` to read text. | `x`, `y`, `width`, `height`, `quality` | — |
-| `scroll_until_text` | Scroll in one bounded call until OCR finds the target text or `max_scrolls` is reached. | `text`, `direction`, `amount`, `max_scrolls`, `scroll_x`, `scroll_y`, `x`, `y`, `width`, `height`, `nth`, `grayscale` | ✓ |
-| `find_elements` | Read all visible text elements with coordinates and types. Fast alternative to screenshots for understanding screen content. | `x`, `y`, `width`, `height` | ✓ |
-| `find_and_click` | Find text on screen and click its center. Smart matching, auto-cached regions (10–25× faster on repeat), loop protection (max 25 calls/session). | `text`, `button`, `nth`, `x`, `y`, `width`, `height`, `scroll_direction`, `max_scrolls`, `next_page_keys`, `max_pages`, `select_best` | ✓ |
-| `find_click_and_type` | Find a label or placeholder, click the associated input field, and type immediately. | `text`, `type_text`, `x_offset`, `y_offset`, `press_enter`, `delay_ms`, `scroll_direction`, `scroll_amount`, `max_scrolls`, `scroll_x`, `scroll_y` | ✓ |
-| `find_and_click_all` | Click multiple distinct elements atomically in one call. Use for checking several checkboxes or clicking a sequence of known buttons — not for trying alternative labels. | `texts` (array), `button`, `delay_ms` | ✓ |
-| `wait_for_text` | Wait for text to appear or disappear. Always use this after actions that trigger a UI change instead of fixed delays. | `text`, `visible`, `timeout_ms`, `x`, `y`, `width`, `height` | ✓ |
+| `scroll_until_text` | Scroll in one bounded call until OCR finds the target text or `max_scrolls` is reached. | `text`, `direction`, `amount`, `max_scrolls`, `scroll_x`, `scroll_y`, `x`, `y`, `width`, `height`, `nth`, `grayscale`, `element_type` | ✓ |
+| `find_elements` | Read all visible text elements with coordinates and types. Fast alternative to screenshots for understanding screen content. | `x`, `y`, `width`, `height`, `element_type` | ✓ |
+| `find_and_click` | Find text on screen and click its center. Smart matching, auto-cached regions (10–25× faster on repeat), loop protection (max 25 calls/session). | `text`, `button`, `nth`, `x`, `y`, `width`, `height`, `element_type`, `scroll_direction`, `max_scrolls`, `next_page_keys`, `max_pages`, `select_best` | ✓ |
+| `find_click_and_type` | Find a label or placeholder, click the associated input field, and type immediately. | `text`, `type_text`, `x_offset`, `y_offset`, `press_enter`, `delay_ms`, `scroll_direction`, `scroll_amount`, `max_scrolls`, `scroll_x`, `scroll_y`, `element_type` | ✓ |
+| `find_and_click_all` | Click multiple distinct elements atomically in one call. Use for checking several checkboxes or clicking a sequence of known buttons — not for trying alternative labels. | `texts` (array), `button`, `delay_ms`, `element_type` | ✓ |
+| `wait_for_text` | Wait for text to appear or disappear. Always use this after actions that trigger a UI change instead of fixed delays. | `text`, `visible`, `timeout_ms`, `x`, `y`, `width`, `height`, `element_type` | ✓ |
 | `click_until_text_appears` | Click coordinates and retry until confirmation text appears or `max_clicks` is reached. Prevents infinite click loops. | `x`, `y`, `wait_for_text`, `button`, `timeout_ms`, `max_clicks` | ✓ |
 | `execute_workflow` | Execute multiple sequential steps sharing one learned screen map. 3–6× faster than individual calls when all steps are on the same screen. | `steps` (array), `clear_view_after` | ✓ |
 | `learn_screen` | Scan the full interface across scroll positions, run OCR, and cache the element map. Required before fast cached lookups. | `x`, `y`, `width`, `height`, `max_pages`, `scroll_amount` | ✓ |
@@ -179,6 +179,78 @@ Ghost MCP automatically optimizes repeated UI interactions using **region cachin
 - Auto-invalidates on screen resolution change
 - 24-hour expiration for stale entries
 - Thread-safe with RWMutex protection
+
+### 🎯 Element Type Filtering
+
+Ghost MCP supports **element type filtering** to target specific UI component types in search operations. This allows you to narrow results to only the type of element you're looking for, improving accuracy and reducing false matches.
+
+**Supported element types:**
+
+| Type | Description | Example Use Case |
+|------|-------------|------------------|
+| `button` | Clickable action elements | "Submit", "Save", "Cancel" buttons |
+| `input` | Text input fields | Form fields, search boxes |
+| `checkbox` | Checkboxes (☐ ☑ ✓) | Agreement checkboxes, toggles |
+| `radio` | Radio buttons (○ ● ◉) | Single-selection option groups |
+| `dropdown` | Dropdown menus (▼) | Select menus, comboboxes |
+| `toggle` | Toggle switches (ON/OFF) | Settings toggles, switches |
+| `slider` | Sliders/range controls | Volume sliders, range inputs |
+| `label` | Field labels (usually ending with ":") | "Email:", "Name:" labels |
+| `heading` | Section/page headings | Page titles, section headers |
+| `link` | Hyperlinks | Navigation links, anchor text |
+| `value` | Numeric or status values | Prices, scores, counters |
+| `text` | General body text | Paragraphs, descriptions |
+
+**Usage examples:**
+
+```json
+// Find only buttons, ignoring labels and headings that contain the same text
+{
+  "tool": "find_and_click",
+  "arguments": {
+    "text": "Save",
+    "element_type": "button"
+  }
+}
+
+// Get all input fields on a form
+{
+  "tool": "find_elements",
+  "arguments": {
+    "element_type": "input"
+  }
+}
+
+// Wait for a specific label to appear
+{
+  "tool": "wait_for_text",
+  "arguments": {
+    "text": "Success:",
+    "element_type": "label"
+  }
+}
+
+// Find and type into an input field
+{
+  "tool": "find_click_and_type",
+  "arguments": {
+    "text": "Email:",
+    "type_text": "user@example.com",
+    "element_type": "input"
+  }
+}
+```
+
+**How it works:**
+- Element types are inferred from text patterns, dimensions, and context
+- Filtering happens during OCR processing — only matching elements are returned
+- Works with all search features: scrolling, multi-page, and caching
+- If no element of the specified type is found, returns "not found" error
+
+**When to use:**
+- Multiple elements share the same text but have different types (e.g., "Submit" as both a button and a label)
+- You want to target only specific UI components
+- You need to discover all form fields, buttons, or other specific element types
 
 ## Prerequisites
 
@@ -383,6 +455,7 @@ Add this to your MCP client configuration to connect to Ghost MCP:
 | `GHOST_MCP_TRANSPORT` | Transport mode: `stdio` or `http` | `stdio` |
 | `GHOST_MCP_HTTP_ADDR` | Listen address for HTTP/SSE mode | `localhost:8080` |
 | `GHOST_MCP_HTTP_BASE_URL` | Public base URL advertised to SSE clients | `http://<addr>` |
+| `GHOST_MCP_LEARNING` | Learning mode (`0` = off, `1` = on). When on, the first OCR call auto-scans the screen and all subsequent calls use the cached element map (10–25× faster). | `1` (on by default; set `0` to disable) |
 
 > **Security note:** `GHOST_MCP_TOKEN` must be set to a random secret. Generate one with:
 > ```bash

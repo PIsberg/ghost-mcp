@@ -13,10 +13,10 @@
 
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            background: #f5f5f5;
             min-height: 100vh;
             padding: 20px;
-            color: #eee;
+            color: #333;
         }
 
         .container {
@@ -26,42 +26,58 @@
 
         h1 {
             text-align: center;
-            margin-bottom: 10px;
-            color: #00d9ff;
-            text-shadow: 0 0 10px rgba(0, 217, 255, 0.5);
+            margin-bottom: 5px;
+            color: #333;
         }
 
         .subtitle {
             text-align: center;
-            margin-bottom: 30px;
-            color: #888;
+            margin-bottom: 20px;
+            color: #666;
             font-size: 14px;
         }
 
-        .panel {
-            background: rgba(255, 255, 255, 0.05);
-            border-radius: 12px;
-            padding: 20px;
+        .nav-links {
+            text-align: center;
             margin-bottom: 20px;
-            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .nav-links a {
+            color: #1a73e8;
+            text-decoration: none;
+            margin: 0 10px;
+        }
+
+        .nav-links a:hover {
+            text-decoration: underline;
+        }
+
+        .panel {
+            background: #fff;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 16px;
+            border: 1px solid #ddd;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.08);
         }
 
         .panel h2 {
-            color: #00d9ff;
-            margin-bottom: 15px;
+            color: #333;
+            margin-bottom: 12px;
             font-size: 18px;
-            border-bottom: 1px solid rgba(0, 217, 255, 0.3);
-            padding-bottom: 10px;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 8px;
         }
 
+        /* Status bar */
         .status-bar {
             display: flex;
             justify-content: space-between;
             align-items: center;
             padding: 10px 15px;
-            background: rgba(0, 0, 0, 0.3);
-            border-radius: 8px;
-            margin-bottom: 20px;
+            background: #eee;
+            border-radius: 6px;
+            margin-bottom: 16px;
         }
 
         .status-indicator {
@@ -79,7 +95,7 @@
         }
 
         .status-dot.active {
-            background: #00ff88;
+            background: #00cc44;
         }
 
         @keyframes pulse {
@@ -87,10 +103,10 @@
             50% { opacity: 0.5; }
         }
 
-        /* Last Action Display - High contrast for OCR */
+        /* Last Action - high contrast for OCR */
         .last-action {
-            background: #ffffff;
-            color: #000000;
+            background: #fff;
+            color: #000;
             padding: 8px 15px;
             border-radius: 6px;
             font-family: 'Consolas', 'Courier New', monospace;
@@ -98,10 +114,10 @@
             font-weight: bold;
             min-width: 300px;
             text-align: center;
-            border: 2px solid #00d9ff;
+            border: 2px solid #333;
         }
 
-        /* Button Test Area */
+        /* Buttons - standard gray with colored accents */
         .button-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
@@ -109,167 +125,187 @@
         }
 
         .test-btn {
-            padding: 15px 20px;
-            border: none;
-            border-radius: 8px;
+            padding: 12px 20px;
+            border: 1px solid #bbb;
+            border-radius: 6px;
             font-size: 14px;
             font-weight: bold;
             cursor: pointer;
-            transition: all 0.3s ease;
+            transition: all 0.15s ease;
+            color: #fff;
             text-transform: uppercase;
-            letter-spacing: 1px;
-        }
-
-        .test-btn.primary {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-        }
-
-        .test-btn.success {
-            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
-            color: white;
-        }
-
-        .test-btn.warning {
-            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-            color: white;
-        }
-
-        .test-btn.info {
-            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
-            color: white;
+            letter-spacing: 0.5px;
         }
 
         .test-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.3);
+            opacity: 0.9;
+            transform: translateY(-1px);
         }
 
-        .test-btn:active {
-            transform: translateY(0);
+        .test-btn.primary {
+            background: #667eea;
+            border-color: #5a6fd6;
         }
 
-        .test-btn.clicked {
-            animation: clickFlash 0.3s ease;
+        .test-btn.success {
+            background: #28a745;
+            border-color: #218838;
         }
 
-        @keyframes clickFlash {
-            0%, 100% { filter: brightness(1); }
-            50% { filter: brightness(1.5); }
+        .test-btn.warning {
+            background: #f0ad4e;
+            border-color: #ec971f;
+            color: #333;
         }
 
-        /* Input Test Area */
+        .test-btn.info {
+            background: #17a2b8;
+            border-color: #138496;
+        }
+
+        /* Input fields */
         .input-group {
             display: flex;
             gap: 10px;
-            margin-bottom: 15px;
+            margin-bottom: 12px;
             align-items: center;
         }
 
         .input-label {
-            color: #fff;
+            color: #333;
             font-weight: 600;
             font-size: 14px;
             white-space: nowrap;
             min-width: 80px;
         }
 
-        .test-input {
-            flex: 1;
-            padding: 12px 15px;
-            border: 2px solid rgba(0, 217, 255, 0.3);
-            border-radius: 8px;
-            background: rgba(0, 0, 0, 0.3);
-            color: #fff;
+        .test-input, .test-textarea, .test-select {
+            padding: 10px 12px;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            background: #fff;
+            color: #333;
             font-size: 14px;
         }
 
-        .test-input:focus {
-            outline: none;
-            border-color: #00d9ff;
-            box-shadow: 0 0 10px rgba(0, 217, 255, 0.3);
+        .test-input {
+            flex: 1;
         }
 
-        .test-input::placeholder {
-            color: #ffffff; /* White: OCR-detectable by the bright-text pass */
+        .test-input:focus, .test-textarea:focus, .test-select:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.2);
         }
 
         .test-textarea {
             width: 100%;
-            padding: 12px 15px;
-            border: 2px solid rgba(0, 217, 255, 0.3);
-            border-radius: 8px;
-            background: rgba(0, 0, 0, 0.3);
-            color: #fff;
-            font-size: 14px;
             font-family: inherit;
             resize: vertical;
-            min-height: 80px;
+            min-height: 60px;
         }
 
-        .test-textarea:focus {
-            outline: none;
-            border-color: #00d9ff;
+        .test-select {
+            min-width: 200px;
         }
 
-        /* Checkbox & Radio Area */
+        /* Checkboxes and radios */
         .checkbox-group, .radio-group {
             display: flex;
             flex-wrap: wrap;
-            gap: 15px;
+            gap: 16px;
         }
 
         .checkbox-item, .radio-item {
             display: flex;
             align-items: center;
-            gap: 8px;
+            gap: 6px;
             cursor: pointer;
         }
 
         .checkbox-item input, .radio-item input {
-            width: 18px;
-            height: 18px;
+            width: 16px;
+            height: 16px;
             cursor: pointer;
         }
 
-        /* Dropdown */
-        .test-select {
-            padding: 12px 15px;
-            border: 2px solid rgba(0, 217, 255, 0.3);
-            border-radius: 8px;
-            background: rgba(0, 0, 0, 0.3);
-            color: #fff;
-            font-size: 14px;
-            cursor: pointer;
-            min-width: 200px;
+        /* Slider */
+        .slider-container {
+            padding: 16px 0;
         }
 
-        .test-select:focus {
+        .test-slider {
+            width: 100%;
+            height: 6px;
+            border-radius: 3px;
+            background: #ddd;
             outline: none;
-            border-color: #00d9ff;
+            -webkit-appearance: none;
         }
 
-        .test-select option {
-            background: #1a1a2e;
-            color: #fff;
+        .test-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #667eea;
+            cursor: pointer;
+            border: 2px solid #fff;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.3);
         }
 
-        /* Event Log */
-        .event-log {
-            background: rgba(0, 0, 0, 0.5);
+        .slider-value {
+            text-align: center;
+            margin-top: 8px;
+            font-size: 20px;
+            color: #333;
+        }
+
+        /* Color picker */
+        .color-box {
+            width: 80px;
+            height: 80px;
             border-radius: 8px;
-            padding: 15px;
-            max-height: 200px;
+            border: 2px solid #ccc;
+            transition: background 0.3s;
+        }
+
+        .color-controls {
+            display: flex;
+            gap: 8px;
+            margin-top: 12px;
+            flex-wrap: wrap;
+        }
+
+        .color-btn {
+            width: 36px;
+            height: 36px;
+            border-radius: 6px;
+            border: 2px solid #ccc;
+            cursor: pointer;
+            transition: transform 0.15s;
+        }
+
+        .color-btn:hover {
+            transform: scale(1.1);
+        }
+
+        /* Event log */
+        .event-log {
+            background: #f8f8f8;
+            border-radius: 6px;
+            padding: 12px;
+            max-height: 150px;
             overflow-y: auto;
             font-family: 'Consolas', 'Courier New', monospace;
             font-size: 12px;
         }
 
         .log-entry {
-            padding: 5px 0;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 4px 0;
+            border-bottom: 1px solid #eee;
             display: flex;
-            gap: 10px;
+            gap: 8px;
         }
 
         .log-entry:last-child {
@@ -278,174 +314,120 @@
 
         .log-time {
             color: #888;
-            min-width: 80px;
+            min-width: 75px;
         }
 
         .log-event {
-            color: #00d9ff;
+            color: #1a73e8;
             font-weight: bold;
         }
 
         .log-detail {
-            color: #aaa;
+            color: #555;
         }
 
-        /* Mouse Position Display */
+        /* Mouse position */
         .mouse-position {
             font-family: 'Consolas', monospace;
-            font-size: 16px;
-            color: #00ff88;
+            font-size: 14px;
+            color: #333;
         }
 
-        /* Click Counter */
+        /* Click counter */
         .click-counter {
-            font-size: 48px;
+            font-size: 40px;
             font-weight: bold;
-            color: #00d9ff;
+            color: #333;
             text-align: center;
-            text-shadow: 0 0 20px rgba(0, 217, 255, 0.5);
         }
 
         .click-counter-label {
             text-align: center;
             color: #888;
-            margin-top: 5px;
+            margin-top: 4px;
         }
 
-        /* Slider */
-        .slider-container {
-            padding: 20px 0;
-        }
-
-        .test-slider {
-            width: 100%;
-            height: 8px;
-            border-radius: 4px;
-            background: rgba(0, 0, 0, 0.3);
-            outline: none;
-            -webkit-appearance: none;
-        }
-
-        .test-slider::-webkit-slider-thumb {
-            -webkit-appearance: none;
-            width: 24px;
-            height: 24px;
-            border-radius: 50%;
-            background: linear-gradient(135deg, #00d9ff 0%, #00ff88 100%);
-            cursor: pointer;
-            box-shadow: 0 0 10px rgba(0, 217, 255, 0.5);
-        }
-
-        .slider-value {
-            text-align: center;
-            margin-top: 10px;
-            font-size: 24px;
-            color: #00d9ff;
-        }
-
-        /* Color Picker Area */
-        .color-box {
-            width: 100px;
-            height: 100px;
-            border-radius: 12px;
-            border: 3px solid rgba(255, 255, 255, 0.2);
-            transition: all 0.3s ease;
-        }
-
-        .color-controls {
-            display: flex;
-            gap: 10px;
-            margin-top: 15px;
-            flex-wrap: wrap;
-        }
-
-        .color-btn {
-            width: 40px;
-            height: 40px;
-            border-radius: 8px;
-            border: 2px solid rgba(255, 255, 255, 0.3);
-            cursor: pointer;
-            transition: transform 0.2s;
-        }
-
-        .color-btn:hover {
-            transform: scale(1.1);
-        }
-
-        /* Test Results */
+        /* Test results */
         .test-results {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-            gap: 10px;
-            margin-top: 15px;
+            grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+            gap: 8px;
+            margin-top: 12px;
         }
 
         .test-result {
-            padding: 15px;
-            border-radius: 8px;
+            padding: 12px;
+            border-radius: 6px;
             text-align: center;
-            background: rgba(0, 0, 0, 0.3);
+            background: #f8f8f8;
         }
 
-        .test-result.pass {
-            border: 2px solid #00ff88;
-        }
-
-        .test-result.fail {
-            border: 2px solid #ff4444;
-        }
-
-        .test-result.pending {
-            border: 2px solid #888;
-        }
+        .test-result.pass { border: 2px solid #28a745; }
+        .test-result.fail { border: 2px solid #dc3545; }
+        .test-result.pending { border: 2px solid #aaa; }
 
         .test-result-label {
-            font-size: 12px;
+            font-size: 11px;
             color: #888;
-            margin-bottom: 5px;
+            margin-bottom: 4px;
         }
 
         .test-result-value {
-            font-size: 20px;
+            font-size: 18px;
             font-weight: bold;
         }
 
-        .pass .test-result-value { color: #00ff88; }
-        .fail .test-result-value { color: #ff4444; }
+        .pass .test-result-value { color: #28a745; }
+        .fail .test-result-value { color: #dc3545; }
         .pending .test-result-value { color: #888; }
 
-        /* Hover Zone */
+        /* Hover zone */
         .hover-zone {
-            height: 100px;
-            border: 2px dashed rgba(0, 217, 255, 0.3);
-            border-radius: 8px;
+            height: 80px;
+            border: 2px dashed #ccc;
+            border-radius: 6px;
             display: flex;
             align-items: center;
             justify-content: center;
-            transition: all 0.3s ease;
+            transition: all 0.2s;
         }
 
         .hover-zone.hovered {
-            background: rgba(0, 217, 255, 0.2);
-            border-color: #00d9ff;
-            box-shadow: 0 0 20px rgba(0, 217, 255, 0.3);
+            background: rgba(26, 115, 232, 0.1);
+            border-color: #1a73e8;
         }
 
         .hover-zone span {
-            color: #666;
+            color: #999;
             font-size: 14px;
         }
 
         .hover-zone.hovered span {
-            color: #00d9ff;
+            color: #1a73e8;
             font-weight: bold;
+        }
+
+        /* OCR panel - high contrast for testing */
+        .ocr-target {
+            background: #fff;
+            color: #000;
+            padding: 16px;
+            border-radius: 6px;
+            font-family: Arial, sans-serif;
+            font-size: 16px;
+            line-height: 1.6;
+            border: 1px solid #ccc;
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>👻 Ghost MCP Test Fixture</h1>
+        <h1>Ghost MCP Test Fixture</h1>
         <p class="subtitle">Interactive GUI for testing MCP UI automation tools</p>
+        <div class="nav-links">
+            <a href="/">Normal page</a> |
+            <a href="/challenge">Challenge page</a>
+        </div>
 
         <!-- Status Bar -->
         <div class="status-bar">
@@ -465,7 +447,7 @@
 
         <!-- Button Test Panel -->
         <div class="panel">
-            <h2>🔘 Button Click Tests</h2>
+            <h2>Button Click Tests</h2>
             <div class="button-grid">
                 <button class="test-btn primary" data-btn="primary" onclick="handleButtonClick('primary')">Primary</button>
                 <button class="test-btn success" data-btn="success" onclick="handleButtonClick('success')">Success</button>
@@ -476,7 +458,7 @@
 
         <!-- Input Test Panel -->
         <div class="panel">
-            <h2>⌨️ Input Tests</h2>
+            <h2>Input Tests</h2>
             <div class="input-group">
                 <label class="input-label" for="textInput">Text Input:</label>
                 <input type="text" class="test-input" id="textInput" placeholder="Type here or use MCP type_text..." oninput="handleInput('text', this.value)">
@@ -490,10 +472,10 @@
 
         <!-- Checkbox & Radio Panel -->
         <div class="panel">
-            <h2>☑️ Selection Tests</h2>
-            <div style="margin-bottom: 20px;">
+            <h2>Selection Tests</h2>
+            <div style="margin-bottom: 16px;">
                 <strong>Checkboxes:</strong>
-                <div class="checkbox-group" style="margin-top: 10px;">
+                <div class="checkbox-group" style="margin-top: 8px;">
                     <label class="checkbox-item">
                         <input type="checkbox" id="chk1" onchange="handleCheckbox('chk1', this.checked)">
                         <span>Option 1</span>
@@ -510,7 +492,7 @@
             </div>
             <div>
                 <strong>Radio Buttons:</strong>
-                <div class="radio-group" style="margin-top: 10px;">
+                <div class="radio-group" style="margin-top: 8px;">
                     <label class="radio-item">
                         <input type="radio" name="radio" value="a" onchange="handleRadio('a')">
                         <span>Choice A</span>
@@ -529,7 +511,7 @@
 
         <!-- Dropdown Panel -->
         <div class="panel">
-            <h2>📋 Dropdown Test</h2>
+            <h2>Dropdown Test</h2>
             <select class="test-select" id="testSelect" onchange="handleSelect(this.value)">
                 <option value="">-- Select an option --</option>
                 <option value="option1">Option 1</option>
@@ -541,7 +523,7 @@
 
         <!-- Slider Panel -->
         <div class="panel">
-            <h2>📊 Slider Test</h2>
+            <h2>Slider Test</h2>
             <div class="slider-container">
                 <input type="range" class="test-slider" id="testSlider" min="0" max="100" value="50" oninput="handleSlider(this.value)">
                 <div class="slider-value"><span id="sliderValue">50</span>%</div>
@@ -550,30 +532,30 @@
 
         <!-- Color Picker Panel -->
         <div class="panel">
-            <h2>🎨 Color Picker Test</h2>
-            <div style="display: flex; align-items: center; gap: 20px; flex-wrap: wrap;">
-                <div class="color-box" id="colorBox" style="background: #00d9ff;"></div>
+            <h2>Color Picker Test</h2>
+            <div style="display: flex; align-items: center; gap: 16px; flex-wrap: wrap;">
+                <div class="color-box" id="colorBox" style="background: #17a2b8;"></div>
                 <div class="color-controls">
                     <button class="color-btn" style="background: #ff4444;" onclick="changeColor('#ff4444')"></button>
                     <button class="color-btn" style="background: #00ff88;" onclick="changeColor('#00ff88')"></button>
                     <button class="color-btn" style="background: #ffff00;" onclick="changeColor('#ffff00')"></button>
                     <button class="color-btn" style="background: #ff00ff;" onclick="changeColor('#ff00ff')"></button>
-                    <button class="color-btn" style="background: #00d9ff;" onclick="changeColor('#00d9ff')"></button>
+                    <button class="color-btn" style="background: #17a2b8;" onclick="changeColor('#17a2b8')"></button>
                 </div>
             </div>
         </div>
 
         <!-- Click Counter Panel -->
         <div class="panel">
-            <h2>🖱️ Click Counter</h2>
+            <h2>Click Counter</h2>
             <div class="click-counter" id="clickCounter">0</div>
             <div class="click-counter-label">Total clicks on this button</div>
-            <button class="test-btn primary" style="margin-top: 15px; width: 100%;" onclick="incrementCounter()">Click Me!</button>
+            <button class="test-btn primary" style="margin-top: 12px; width: 100%;" onclick="incrementCounter()">Click Me!</button>
         </div>
 
         <!-- Hover Zone Panel -->
         <div class="panel">
-            <h2>👆 Hover Detection Zone</h2>
+            <h2>Hover Detection Zone</h2>
             <div class="hover-zone" id="hoverZone" onmouseenter="handleHover(true)" onmouseleave="handleHover(false)">
                 <span>Move mouse over this area...</span>
             </div>
@@ -581,16 +563,16 @@
 
         <!-- Keyboard Test Panel -->
         <div class="panel">
-            <h2>⌨️ Keyboard Test</h2>
-            <p style="color: #888; margin-bottom: 10px;">Press any key to test keyboard input:</p>
-            <input type="text" class="test-input" id="keyTestInput" placeholder="Focus here and press keys..." 
+            <h2>Keyboard Test</h2>
+            <p style="color: #666; margin-bottom: 8px;">Press any key to test keyboard input:</p>
+            <input type="text" class="test-input" id="keyTestInput" placeholder="Focus here and press keys..."
                    onkeydown="handleKeyDown(event)" style="width: 100%;">
             <div class="test-results" id="keyResults"></div>
         </div>
 
         <!-- Event Log Panel -->
         <div class="panel">
-            <h2>📜 Event Log</h2>
+            <h2>Event Log</h2>
             <div class="event-log" id="eventLog">
                 <div class="log-entry">
                     <span class="log-time">--:--:--</span>
@@ -598,12 +580,12 @@
                     <span class="log-detail">Test fixture initialized. Waiting for interaction...</span>
                 </div>
             </div>
-            <button class="test-btn warning" style="margin-top: 10px;" onclick="clearLog()">Clear Log</button>
+            <button class="test-btn warning" style="margin-top: 8px;" onclick="clearLog()">Clear Log</button>
         </div>
 
         <!-- Test Results Summary -->
         <div class="panel">
-            <h2>✅ Test Results Summary</h2>
+            <h2>Test Results Summary</h2>
             <div class="test-results">
                 <div class="test-result pending" id="resultButtons">
                     <div class="test-result-label">Buttons Clicked</div>
@@ -635,26 +617,18 @@
         <!-- OCR Test Panel -->
         <div class="panel" id="ocr-panel">
             <h2>OCR Text Recognition</h2>
-            <p style="color:#aaa;margin-bottom:15px;font-size:13px;">
+            <p style="color:#666;margin-bottom:12px;font-size:13px;">
                 This panel contains readable text for testing the <code>find_elements</code> tool.
             </p>
-            <div id="ocr-target" style="
-                background: white;
-                color: black;
-                padding: 20px;
-                border-radius: 8px;
-                font-family: Arial, sans-serif;
-                font-size: 18px;
-                line-height: 1.8;
-            ">
-                <div style="font-size:22px;font-weight:bold;margin-bottom:10px;">OCR Test Area</div>
+            <div id="ocr-target" class="ocr-target">
+                <div style="font-size:20px;font-weight:bold;margin-bottom:8px;">OCR Test Area</div>
                 <div>Hello World</div>
                 <div>Ghost MCP Automation</div>
                 <div>Click Submit to Continue</div>
-                <div style="margin-top:10px;">
-                    <span style="margin-right:30px;">File</span>
-                    <span style="margin-right:30px;">Edit</span>
-                    <span style="margin-right:30px;">View</span>
+                <div style="margin-top:8px;">
+                    <span style="margin-right:24px;">File</span>
+                    <span style="margin-right:24px;">Edit</span>
+                    <span style="margin-right:24px;">View</span>
                     <span>Help</span>
                 </div>
             </div>
@@ -680,61 +654,61 @@
             const log = document.getElementById('eventLog');
             const now = new Date();
             const time = now.toLocaleTimeString('en-US', { hour12: false });
-            
+
             const entry = document.createElement('div');
             entry.className = 'log-entry';
-            entry.innerHTML = `
-                <span class="log-time">${time}</span>
-                <span class="log-event">${event}</span>
-                <span class="log-detail">${detail}</span>
-            `;
-            
+            entry.innerHTML =
+                '<span class="log-time">' + time + '</span>' +
+                '<span class="log-event">' + event + '</span>' +
+                '<span class="log-detail">' + detail + '</span>';
+
             log.insertBefore(entry, log.firstChild);
-            
+
             // Keep only last 50 entries
             while (log.children.length > 50) {
                 log.removeChild(log.lastChild);
             }
-            
-            updateStatus(`${event}: ${detail}`, true);
+
+            updateStatus(event + ': ' + detail, true);
         }
 
         // Update status bar
-        function updateStatus(text, active = false) {
+        function updateStatus(text, active) {
             document.getElementById('statusText').textContent = text;
             document.getElementById('activeDot').classList.toggle('active', active);
         }
 
         // Update last action display (high contrast for OCR)
         function updateLastAction(action) {
-            document.getElementById('lastAction').textContent = `Last Action: ${action}`;
+            document.getElementById('lastAction').textContent = 'Last Action: ' + action;
         }
 
         // Update test results
         function updateResult(id, passed, value) {
-            const el = document.getElementById(id);
+            var el = document.getElementById(id);
             el.className = 'test-result ' + (passed ? 'pass' : 'fail');
-            el.querySelector('.test-result-value').textContent = value || (passed ? '✓' : '✗');
+            el.querySelector('.test-result-value').textContent = value || (passed ? '\u2713' : '\u2717');
         }
 
         // Button click handler
         function handleButtonClick(btn) {
             state.buttonsClicked.push(btn);
-            const button = document.querySelector(`[data-btn="${btn}"]`);
+            var button = document.querySelector('[data-btn="' + btn + '"]');
             button.classList.add('clicked');
-            setTimeout(() => button.classList.remove('clicked'), 300);
+            setTimeout(function() { button.classList.remove('clicked'); }, 200);
 
-            logEvent('BUTTON_CLICK', `Button "${btn}" clicked`);
-            updateLastAction(`Clicked ${btn.toUpperCase()} button`);
-            updateResult('resultButtons', true, `${state.buttonsClicked.length} clicks`);
+            logEvent('BUTTON_CLICK', 'Button "' + btn + '" clicked');
+            updateLastAction('Clicked ' + btn.toUpperCase() + ' button');
+            updateResult('resultButtons', true, state.buttonsClicked.length + ' clicks');
         }
 
         // Input handler
         function handleInput(type, value) {
             state.inputTyped = true;
-            logEvent('INPUT', `${type}: "${value.substring(0, 30)}${value.length > 30 ? '...' : ''}"`);
-            updateLastAction(`Typed ${value.length} chars in ${type}`);
-            updateResult('resultInput', true, `${value.length} chars`);
+            var short = value.length > 30 ? value.substring(0, 30) + '...' : value;
+            logEvent('INPUT', type + ': "' + short + '"');
+            updateLastAction('Typed ' + value.length + ' chars in ' + type);
+            updateResult('resultInput', true, value.length + ' chars');
         }
 
         function clearInput() {
@@ -746,169 +720,98 @@
 
         // Checkbox handler
         function handleCheckbox(id, checked) {
-            state.checkboxesToggled.push({ id, checked, time: Date.now() });
-            logEvent('CHECKBOX', `${id}: ${checked ? 'checked' : 'unchecked'}`);
-            updateLastAction(`${id} ${checked ? 'checked' : 'unchecked'}`);
-            updateResult('resultCheckbox', true, `${state.checkboxesToggled.filter(c => c.checked).length} checked`);
+            state.checkboxesToggled.push({ id: id, checked: checked, time: Date.now() });
+            logEvent('CHECKBOX', id + ': ' + (checked ? 'checked' : 'unchecked'));
+            updateLastAction(id + ' ' + (checked ? 'checked' : 'unchecked'));
+            updateResult('resultCheckbox', true, state.checkboxesToggled.length + ' toggled');
         }
 
         // Radio handler
         function handleRadio(value) {
             state.radioSelected = value;
-            logEvent('RADIO', `Selected: ${value}`);
-            updateLastAction(`Selected radio ${value}`);
+            logEvent('RADIO', 'Selected: ' + value);
+            updateLastAction('Radio selected: ' + value);
         }
 
         // Select handler
         function handleSelect(value) {
             state.dropdownChanged = true;
-            logEvent('DROPDOWN', `Selected: ${value || '(none)'}`);
-            updateLastAction(`Dropdown: ${value || 'none'}`);
-            updateResult('resultSelect', true, value || 'none');
+            logEvent('SELECT', 'Selected: ' + value);
+            updateLastAction('Dropdown: ' + value);
+            updateResult('resultSelect', true, value);
         }
 
         // Slider handler
         function handleSlider(value) {
             state.sliderAdjusted = true;
             document.getElementById('sliderValue').textContent = value;
-            logEvent('SLIDER', `Value: ${value}%`);
-            updateLastAction(`Slider: ${value}%`);
-            updateResult('resultSlider', true, `${value}%`);
+            updateLastAction('Slider: ' + value + '%');
+            updateResult('resultSlider', true, value + '%');
         }
 
-        // Color handler
+        // Color picker
         function changeColor(color) {
             document.getElementById('colorBox').style.background = color;
-            logEvent('COLOR_CHANGE', `Changed to: ${color}`);
-            updateLastAction(`Color: ${color}`);
+            logEvent('COLOR', 'Changed to ' + color);
+            updateLastAction('Color: ' + color);
         }
 
-        // Counter handler
+        // Click counter
         function incrementCounter() {
             state.totalClicks++;
             document.getElementById('clickCounter').textContent = state.totalClicks;
-            logEvent('COUNTER', `Click count: ${state.totalClicks}`);
-            updateLastAction(`Counter: ${state.totalClicks} clicks`);
+            logEvent('COUNTER', 'Click #' + state.totalClicks);
+            updateLastAction('Counter: ' + state.totalClicks);
         }
 
         // Hover handler
-        function handleHover(entered) {
-            state.hoverActive = entered;
-            const zone = document.getElementById('hoverZone');
-            zone.classList.toggle('hovered', entered);
-            logEvent('HOVER', entered ? 'Mouse entered zone' : 'Mouse left zone');
-            updateLastAction(entered ? 'Mouse in hover zone' : 'Mouse left hover zone');
+        function handleHover(active) {
+            state.hoverActive = active;
+            document.getElementById('hoverZone').classList.toggle('hovered', active);
+            if (active) {
+                logEvent('HOVER', 'Mouse entered hover zone');
+                updateLastAction('Hover: entered');
+            } else {
+                logEvent('HOVER', 'Mouse left hover zone');
+                updateLastAction('Hover: exited');
+            }
         }
 
-        // Key handler
+        // Mouse tracking
+        document.addEventListener('mousemove', function(e) {
+            document.getElementById('mousePos').textContent = e.clientX + ', ' + e.clientY;
+        });
+
+        // Keyboard handler
         function handleKeyDown(event) {
+            event.preventDefault();
             state.keysPressed.push({ key: event.key, time: Date.now() });
-            const results = document.getElementById('keyResults');
-            
-            // Show last 5 keys
-            const recent = state.keysPressed.slice(-5);
-            results.innerHTML = recent.map(k => `
-                <div class="test-result pass">
-                    <div class="test-result-label">Key</div>
-                    <div class="test-result-value">${escapeHtml(k.key)}</div>
-                </div>
-            `).join('');
-            
-            logEvent('KEY_PRESS', `Key: "${event.key}"`);
-            updateResult('resultKeys', true, `${state.keysPressed.length} keys`);
+            logEvent('KEY', 'Pressed: ' + event.key);
+            updateLastAction('Key: ' + event.key);
+            updateResult('resultKeys', true, state.keysPressed.length + ' keys');
         }
 
         // Clear log
         function clearLog() {
-            const log = document.getElementById('eventLog');
-            log.innerHTML = `
-                <div class="log-entry">
-                    <span class="log-time">${new Date().toLocaleTimeString()}</span>
-                    <span class="log-event">System</span>
-                    <span class="log-detail">Log cleared</span>
-                </div>
-            `;
+            document.getElementById('eventLog').innerHTML =
+                '<div class="log-entry"><span class="log-time">--:--:--</span>' +
+                '<span class="log-event">System</span>' +
+                '<span class="log-detail">Test fixture initialized. Waiting for interaction...</span></div>';
+            updateStatus('Log cleared', false);
+            updateLastAction('Log cleared');
         }
-
-        // Mouse position tracker
-        document.addEventListener('mousemove', (e) => {
-            document.getElementById('mousePos').textContent = `${e.clientX}, ${e.clientY}`;
-        });
-
-        // Utility: Escape HTML
-        function escapeHtml(text) {
-            const div = document.createElement('div');
-            div.textContent = text;
-            return div.innerHTML;
-        }
-
-        // Export state for testing
-        window.getFixtureState = function() {
-            return { ...state };
-        };
 
         // Initialize
+        window.getFixtureState = function() {
+            return state;
+        };
+
+        document.addEventListener('mousemove', function(e) {
+            document.getElementById('mousePos').textContent = e.clientX + ', ' + e.clientY;
+        });
+
         logEvent('INIT', 'Test fixture ready for MCP automation');
+        updateStatus('Ready', false);
     </script>
 </body>
 </html>
-
-<!-- LEARNING MODE SCROLL SECTION (below the main content) -->
-<!-- This section is intentionally placed below the fold so learning mode tests
-     can verify that scroll-based discovery finds elements not visible on first load. -->
-<div id="learning-scroll-section" style="
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-    padding: 40px 20px;
-    min-height: 800px;
-">
-    <div style="max-width: 900px; margin: 0 auto;">
-        <h2 id="learning-section-header" style="color:#ff9800; margin-bottom: 20px;">
-            Learning Mode Test Section
-        </h2>
-        <p style="color:#aaa; margin-bottom:30px;">
-            This section is below the fold. Learning mode should discover these elements by scrolling.
-        </p>
-
-        <div style="background:rgba(255,255,255,0.05); border-radius:12px; padding:20px; margin-bottom:20px;">
-            <h3 style="color:#00d9ff; margin-bottom:15px;">Scroll-Discovered Buttons</h3>
-            <button id="btn-scroll-alpha"
-                    onclick="document.getElementById('scroll-click-result').textContent='Alpha clicked'"
-                    style="background:#4caf50;color:white;padding:10px 20px;border:none;border-radius:6px;cursor:pointer;margin:6px;font-size:14px;">
-                Scroll Alpha
-            </button>
-            <button id="btn-scroll-beta"
-                    onclick="document.getElementById('scroll-click-result').textContent='Beta clicked'"
-                    style="background:#2196f3;color:white;padding:10px 20px;border:none;border-radius:6px;cursor:pointer;margin:6px;font-size:14px;">
-                Scroll Beta
-            </button>
-            <button id="btn-scroll-gamma"
-                    onclick="document.getElementById('scroll-click-result').textContent='Gamma clicked'"
-                    style="background:#9c27b0;color:white;padding:10px 20px;border:none;border-radius:6px;cursor:pointer;margin:6px;font-size:14px;">
-                Scroll Gamma
-            </button>
-            <div id="scroll-click-result" style="color:#00ff88;margin-top:12px;min-height:20px;font-size:13px;"></div>
-        </div>
-
-        <div style="background:rgba(255,255,255,0.05); border-radius:12px; padding:20px; margin-bottom:20px;">
-            <h3 style="color:#00d9ff; margin-bottom:15px;">Scroll-Discovered Input Fields</h3>
-            <label for="scroll-email" style="color:#eee;display:block;margin-bottom:6px;">Scroll Email:</label>
-            <input id="scroll-email" type="email" placeholder="Enter scroll email"
-                   style="width:100%;padding:10px;border-radius:6px;border:1px solid #444;background:#2a2a4a;color:#eee;font-size:14px;margin-bottom:14px;box-sizing:border-box;">
-            <label for="scroll-notes" style="color:#eee;display:block;margin-bottom:6px;">Scroll Notes:</label>
-            <textarea id="scroll-notes" rows="3" placeholder="Enter scroll notes"
-                      style="width:100%;padding:10px;border-radius:6px;border:1px solid #444;background:#2a2a4a;color:#eee;font-size:14px;box-sizing:border-box;resize:vertical;"></textarea>
-        </div>
-
-        <div style="background:rgba(255,255,255,0.05); border-radius:12px; padding:20px;">
-            <h3 style="color:#00d9ff; margin-bottom:15px;">Unique Learning Marker</h3>
-            <p id="learning-unique-text" style="color:#ff9800;font-size:16px;font-weight:bold;">
-                GHOST_MCP_LEARNING_MARKER_42
-            </p>
-            <p style="color:#888;font-size:13px;">
-                This unique text is only visible after scrolling. Its presence in a learned view
-                confirms that the scroll-discovery algorithm works correctly.
-            </p>
-        </div>
-    </div>
-</div>

@@ -27,12 +27,15 @@ import (
 // globalLearner is the singleton learner for this server process.
 var globalLearner = learner.New()
 
-// initLearningMode enables learning mode when GHOST_MCP_LEARNING=1.
+// initLearningMode enables learning mode by default.
+// Set GHOST_MCP_LEARNING=0 to opt out.
 func initLearningMode() {
-	if os.Getenv("GHOST_MCP_LEARNING") == "1" {
-		globalLearner.Enable()
-		logging.Info("Learning mode enabled (GHOST_MCP_LEARNING=1)")
+	if os.Getenv("GHOST_MCP_LEARNING") == "0" {
+		logging.Info("Learning mode disabled (GHOST_MCP_LEARNING=0)")
+		return
 	}
+	globalLearner.Enable()
+	logging.Info("Learning mode enabled (default; set GHOST_MCP_LEARNING=0 to disable)")
 }
 
 // =============================================================================
@@ -546,4 +549,25 @@ func autoLearnIfNeeded() {
 	globalLearner.SetView(view)
 	sw, sh := uiGetScreenSize()
 	robotgo.Move(sw/2, sh/2)
+}
+
+// autoLearnWithPages performs a multi-page learning scan and returns the
+// combined view. Unlike autoLearnIfNeeded, it respects the caller's
+// scan_pages request and always runs a fresh scan (it does not reuse a
+// stale view). The caller is responsible for storing the view via
+// globalLearner.SetView if desired.
+func autoLearnWithPages(scanPages int) (*learner.View, error) {
+	if scanPages < 2 {
+		return nil, fmt.Errorf("scan_pages must be >= 2, got %d", scanPages)
+	}
+	logging.Info("autoLearnWithPages: scanning %d pages", scanPages)
+	view, err := learnScreen(learnCfg{
+		MaxPages: scanPages,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("autoLearnWithPages: learnScreen failed: %w", err)
+	}
+	sw, sh := uiGetScreenSize()
+	robotgo.Move(sw/2, sh/2)
+	return view, nil
 }

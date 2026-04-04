@@ -13,64 +13,62 @@ import (
 // registerWorkflowTool registers the workflow tool for multi-step automation.
 func registerWorkflowTool(mcpServer *server.MCPServer) {
 	mcpServer.AddTool(mcp.NewTool("execute_workflow",
-		mcp.WithDescription(`🚀 MULTI-STEP AUTOMATION WITH LEARNING MODE - DO ALL STEPS IN ONE CALL!
+		mcp.WithDescription(`Execute multiple sequential steps on one screen using a single learned view.
 
-PERFECT FOR: Forms, wizards, multi-page tasks, complex workflows
+Calls learn_screen once at the start, then executes all steps against the cached element map
+(10–25× faster than individual calls). Use this whenever you have multiple actions on the same screen.
+Constraint: all steps must be on the same page. If steps span multiple pages, use individual tool
+calls and call clear_learned_view between pages.
 
-WHAT IT DOES:
-1. Calls learn_screen ONCE at the start (captures full UI)
-2. Executes ALL your steps using the learned view (10-25x faster per step!)
-3. Returns results for all steps
-4. Optionally clears learned view when done
+SUPPORTED ACTIONS (use these exact strings in the "action" field):
+- "click"        — find text on screen and click it.  Required: "text"
+- "type"         — find label, click its input, type.  Required: "text", "value"
+- "wait"         — pause for N milliseconds.           Required: "delay_ms"
+- "scroll"       — scroll the page.                   Required: "amount", "direction"
+- "refresh_view" — clear and re-learn the screen.     No extra fields needed
 
-WHY USE THIS:
-- Learn screen ONCE, execute MANY steps (huge time savings!)
-- All steps benefit from cached element locations
-- No need to call learn_screen before each step
-- Automatic error handling with clear failure points
-- 10-25x faster than calling tools individually
+NOTE: execute_workflow has no built-in wait_for_text step. If you need to verify a UI change
+after the workflow (e.g., check that a page loaded), call wait_for_text separately afterward.
 
-EXAMPLE WORKFLOWS:
+EXAMPLE — fill a login form:
+{
+  "tool": "execute_workflow",
+  "arguments": {
+    "steps": [
+      {"action": "type",  "text": "Email:",    "value": "user@example.com"},
+      {"action": "type",  "text": "Password:", "value": "secret123"},
+      {"action": "click", "text": "Sign In"}
+    ]
+  }
+}
 
-1. Fill a form:
-   {
-     "steps": [
-       {"action": "click", "text": "Email:"},
-       {"action": "type", "text": "Email:", "value": "user@example.com"},
-       {"action": "type", "text": "Password:", "value": "secret123"},
-       {"action": "click", "text": "Sign In"}
-     ]
-   }
+EXAMPLE — multi-page wizard (keep the view between pages):
+{
+  "tool": "execute_workflow",
+  "arguments": {
+    "clear_view_after": false,
+    "steps": [
+      {"action": "click", "text": "Next"},
+      {"action": "click", "text": "Continue"},
+      {"action": "click", "text": "Finish"}
+    ]
+  }
+}
 
-2. Multi-page wizard:
-   {
-     "steps": [
-       {"action": "click", "text": "Next"},
-       {"action": "click", "text": "Continue"},
-       {"action": "click", "text": "Finish"}
-     ],
-     "clear_view_after": false
-   }
-
-3. Complex workflow with delays:
-   {
-     "steps": [
-       {"action": "click", "text": "Settings"},
-       {"action": "wait", "delay_ms": 1000},
-       {"action": "click", "text": "Advanced"},
-       {"action": "type", "text": "Timeout:", "value": "30"},
-       {"action": "click", "text": "Save"}
-     ]
-   }
-
-SUPPORTED ACTIONS:
-- click: Click a button/link by text
-- type: Click then type text (for inputs)
-- wait: Wait for specified milliseconds
-- scroll: Scroll by amount in direction
-- refresh_view: Clear and re-learn screen (use after page changes)
-
-CALL: execute_workflow({steps: [...]})
+EXAMPLE — workflow with a wait and a page refresh:
+{
+  "tool": "execute_workflow",
+  "arguments": {
+    "steps": [
+      {"action": "click",        "text": "Settings"},
+      {"action": "wait",         "delay_ms": 1000},
+      {"action": "click",        "text": "Advanced"},
+      {"action": "type",         "text": "Timeout:", "value": "30"},
+      {"action": "refresh_view"},
+      {"action": "click",        "text": "Save"}
+    ]
+  }
+}
 `),
 		mcp.WithArray("steps", mcp.Description("Array of workflow steps to execute."), mcp.Required()),
 		mcp.WithBoolean("clear_view_after", mcp.Description("Clear learned view after workflow? Default: true")),

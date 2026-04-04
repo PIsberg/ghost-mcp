@@ -260,11 +260,19 @@ jobs:
 
     - name: Run format check
       run: |
-        if [ "$(gofmt -l . 2>/dev/null | wc -l)" -gt 0 ]; then
-          echo "Go files are not formatted:"
-          gofmt -d .
+        # Apply gofmt and check if anything changed
+        # This is more robust than -l alone, which can behave differently across platforms
+        gofmt -w .
+        if [ -n "$(git diff --name-only -- '*.go')" ]; then
+          echo "::error::Go files are not formatted. Run 'gofmt -w .' before committing."
+          echo "Unformatted files:"
+          git diff --name-only -- '*.go'
+          echo ""
+          echo "Diff:"
+          git diff -- '*.go'
           exit 1
         fi
+        echo "✅ All Go files are properly formatted"
       shell: bash
 
     - name: Test coverage (Linux only)

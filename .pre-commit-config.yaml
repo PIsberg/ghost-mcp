@@ -7,10 +7,9 @@ repos:
   hooks:
   - id: gofmt
     name: gofmt
-    entry: gofmt
+    entry: bash -c 'gofmt -w "$@" && gofmt -l "$@" | { read && { echo "ERROR: gofmt could not format some files. Check for syntax errors."; exit 1; } || true; }' --
     language: system
     types: [go]
-    args: ["-w"]
     pass_filenames: true
 - repo: https://github.com/golangci/golangci-lint
   rev: v1.52.2
