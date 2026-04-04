@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -726,5 +727,49 @@ func BenchmarkAssociateLabels(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		learner.AssociateLabels(elems)
+	}
+}
+
+// =============================================================================
+// autoLearnWithPages
+// =============================================================================
+
+func TestAutoLearnWithPages_RejectsLessThanTwo(t *testing.T) {
+	_, err := autoLearnWithPages(1)
+	if err == nil {
+		t.Fatal("expected error for scan_pages=1, got nil")
+	}
+	if !strings.Contains(err.Error(), "must be >= 2") {
+		t.Fatalf("expected 'must be >= 2' error, got: %v", err)
+	}
+}
+
+func TestAutoLearnWithPages_RejectsZero(t *testing.T) {
+	_, err := autoLearnWithPages(0)
+	if err == nil {
+		t.Fatal("expected error for scan_pages=0, got nil")
+	}
+	if !strings.Contains(err.Error(), "must be >= 2") {
+		t.Fatalf("expected 'must be >= 2' error, got: %v", err)
+	}
+}
+
+// TestAutoLearnWithPages_ReturnsViewStructure verifies that autoLearnWithPages
+// calls learnScreen and returns a properly structured View. Since learnScreen
+// requires a real display, this test is skipped in CI.
+func TestAutoLearnWithPages_ReturnsViewStructure(t *testing.T) {
+	if os.Getenv("CI") != "" || os.Getenv("GITHUB_ACTIONS") != "" {
+		t.Skip("skipping: requires real desktop screen")
+	}
+
+	view, err := autoLearnWithPages(2)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if view == nil {
+		t.Fatal("expected non-nil view")
+	}
+	if view.PageCount < 1 {
+		t.Errorf("expected at least 1 page, got %d", view.PageCount)
 	}
 }

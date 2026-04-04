@@ -111,9 +111,15 @@ RESPONSE: {success, text, visible, waited_ms} or {error: "timeout..."}`),
 		mcp.WithDescription(`READ ALL VISIBLE TEXT ON SCREEN with coordinates, types, and bounding boxes.
 
 EXPLORATION HIERARCHY — use tools in this order when encountering an unknown screen:
-  1. find_elements   ← PRIMARY: fast text dump, always try this first
-  2. take_screenshot ← SECONDARY: only if find_elements misses icon-only elements
-  3. learn_screen    ← TERTIARY: only if the page scrolls and you need below-fold content
+  1. find_elements            ← PRIMARY: fast text dump, always try this first
+  2. take_screenshot          ← SECONDARY: only if find_elements misses icon-only elements
+  3. learn_screen             ← TERTIARY: only if the page scrolls and you need below-fold content
+  4. find_elements(scan_pages=5) ← SINGLE-CALL FULL-PAGE: replaces learn_screen → get_learned_view
+
+FULL-PAGE SCAN (scan_pages > 1): automatically scrolls and discovers all elements
+across N pages in one call. Elements from scroll pages include page_index so you
+know how far down they are. This eliminates the blind scroll loop — one call
+replaces 10+ individual scroll operations.
 
 RESPONSE STRUCTURE:
 - actionable_elements: buttons, inputs, checkboxes, links, etc. sorted by confidence.
@@ -122,34 +128,34 @@ RESPONSE STRUCTURE:
 - labels: field label text (words ending with ":") for use as find_click_and_type targets.
 - learned_off_page_elements: elements from scroll pages below the viewport (when learning
   mode is on and a multi-page view exists).
+- scan_pages_info: when scan_pages > 1, includes pages_scanned and total_elements.
 
 WHEN TO USE:
 - First tool to call on any unknown screen.
 - find_and_click failed — check here to see what OCR actually detected.
 - You need center_x/center_y coordinates for click_at.
+- Use scan_pages=5 for a complete page inventory instead of blind scrolling.
 
 LIMITATIONS:
 - Detects TEXT ONLY — not icons or images without text labels.
-- Only shows what is CURRENTLY VISIBLE (use learn_screen to see below-fold).
+- Only shows what is CURRENTLY VISIBLE (use scan_pages or learn_screen to see below-fold).
 
 DO NOT use to look up a button before clicking — call find_and_click directly.
 
-EXAMPLE USAGE:
-// Find all elements in button area (faster than full screen)
-{"x": 0, "y": 600, "width": 800, "height": 200}
+EXAMPLE: Full-page exploration (replaces learn_screen + get_learned_view):
+{"scan_pages": 5}
 
-// Response includes ready-to-use coordinates:
+// Response includes all elements from all pages:
 {
   "success": true,
-  "element_count": 5,
+  "element_count": 15,
+  "scan_pages_info": {"pages_scanned": 5, "total_elements": 45, "viewport_elements": 15, "off_page_elements": 30},
   "elements": [
-    {"text": "Primary", "center_x": 174, "center_y": 770, "confidence": 95.2, "width": 80, "height": 35},
-    {"text": "Success", "center_x": 425, "center_y": 770, "confidence": 94.8, "width": 80, "height": 35}
+    {"text": "Primary", "type": "button", "center_x": 174, "center_y": 770, "page_index": 0},
+    {"text": "Success", "type": "button", "center_x": 425, "center_y": 770, "page_index": 0},
+    {"text": "Click Me", "type": "button", "center_x": 200, "center_y": 1200, "page_index": 2}
   ]
 }
-
-// Verify before clicking (optional but recommended for unknown UI):
-{"tool": "take_screenshot", "arguments": {"x": 150, "y": 750, "width": 120, "height": 50}}
 
 TIPS:
 - Use region parameters to scan specific areas (10x faster than full screen)
@@ -188,6 +194,7 @@ EXAMPLE: Find form elements:
 		mcp.WithNumber("y", mcp.Description("Y coordinate of region to scan (default: 0 = full screen).")),
 		mcp.WithNumber("width", mcp.Description("Width of region to scan (default: full screen width).")),
 		mcp.WithNumber("height", mcp.Description("Height of region to scan (default: full screen height).")),
+		mcp.WithNumber("scan_pages", mcp.Description("Number of scroll pages to scan (default: 1 = current viewport only). Set >1 to auto-scroll and discover elements across multiple pages. Each page scrolls the default ScrollAmount (5) ticks. Elements from non-zero pages include page_index in the response.")),
 	), handleFindElements)
 
 	mcpServer.AddTool(mcp.NewTool("find_click_and_type",

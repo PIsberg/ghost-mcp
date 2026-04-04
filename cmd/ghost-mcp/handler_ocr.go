@@ -1341,6 +1341,159 @@ func findLabelCandidates(ocrResult *ocr.Result, limit int) []string {
 	return labels
 }
 
+const defaultScanPages = 5
+
+// ── Failure message helpers (C, E, F) ─────────────────────────────────────
+
+// detectBrowserChrome checks if the top ~20% of the screen contains
+// browser UI patterns like URL-like text, tab indicators, or navigation elements.
+func detectBrowserChrome(ocrResult *ocr.Result, screenH int) bool {
+	if ocrResult == nil || screenH == 0 {
+		return false
+	}
+	threshold := screenH / 5 // top 20%
+
+	urlPatterns := []string{"localhost", "http", "www", ".com", ".org", ".io", "://", "github", "chrome", "edge", "firefox"}
+	navPatterns := []string{"pull", "issues", "pull request", "back", "forward", "refresh"}
+
+	for _, w := range ocrResult.Words {
+		if w.Y+w.Height > threshold {
+			continue // only check top portion
+		}
+		lower := strings.ToLower(w.Text)
+		for _, pat := range urlPatterns {
+			if strings.Contains(lower, pat) {
+				return true
+			}
+		}
+		for _, pat := range navPatterns {
+			if strings.Contains(lower, pat) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// screenHFromImage returns the height of the image. If the image interface
+// doesn't support Bounds(), returns 0 (caller handles gracefully).
+func screenHFromImage(img image.Image) int {
+	if img == nil {
+		return 0
+	}
+	b := img.Bounds()
+	return b.Max.Y - b.Min.Y
+}
+
+// findClosestLearnedElements returns the N elements from the learned view
+// whose text is most similar to searchText (case-insensitive substring or
+// Levenshtein proximity). Used to suggest alternatives in failure messages.
+func findClosestLearnedElements(searchText string, elements []learner.Element, n int) []string {
+	if len(elements) == 0 {
+		return nil
+	}
+	needle := strings.ToLower(strings.TrimSpace(searchText))
+	if needle == "" {
+		return nil
+	}
+
+	type scored struct {
+		text  string
+		score int
+	}
+	var scoredElems []scored
+	seen := make(map[string]bool)
+
+	for _, e := range elements {
+		lower := strings.ToLower(strings.TrimSpace(e.Text))
+		if lower == "" || seen[lower] {
+			continue
+		}
+		seen[lower] = true
+
+		// Prefer actionable element types (buttons, inputs, etc.)
+		bonus := 0
+		if isActionableElementType(e.Type) {
+			bonus = 2
+		}
+
+		dist := levenshteinDistance(needle, lower)
+		// Check for substring match
+		if strings.Contains(lower, needle) || strings.Contains(needle, lower) {
+			dist -= 4
+		}
+		// Check first word match
+		words := strings.Fields(lower)
+		needleWords := strings.Fields(needle)
+		if len(words) > 0 && len(needleWords) > 0 && words[0] == needleWords[0] {
+			dist -= 2
+		}
+		scoredElems = append(scoredElems, scored{text: e.Text, score: dist - bonus})
+	}
+
+	sort.Slice(scoredElems, func(i, j int) bool {
+		return scoredElems[i].score < scoredElems[j].score
+	})
+
+	result := make([]string, 0, n)
+	for i, s := range scoredElems {
+		if i >= n {
+			break
+		}
+		result = append(result, fmt.Sprintf("%q (score %d)", s.text, s.score))
+	}
+	return result
+}
+
+// findButtonLikeElements scans OCR results for words that look like button
+// labels (short text with reasonable size and confidence). Returns up to n.
+func findButtonLikeElements(ocrResult *ocr.Result, n int) []string {
+	if ocrResult == nil || n <= 0 {
+		return nil
+	}
+
+	var buttons []string
+	seen := make(map[string]bool)
+
+	for _, w := range ocrResult.Words {
+		if w.Confidence < 50 {
+			continue
+		}
+		text := strings.TrimSpace(w.Text)
+		if len(text) < 2 || len(text) > 30 {
+			continue
+		}
+		// Skip very small text (likely body text) and very tall text (headings)
+		if w.Height < 10 || w.Height > 60 {
+			continue
+		}
+		// Skip words that look like URLs, numbers-only, or special chars
+		if strings.HasPrefix(text, "http") || strings.HasPrefix(text, "www") {
+			continue
+		}
+		if strings.TrimSpace(strings.Trim(text, "0123456789.,%$€£¥")) == "" {
+			continue
+		}
+
+		lower := strings.ToLower(text)
+		if seen[lower] {
+			continue
+		}
+		seen[lower] = true
+
+		inferredType := learner.InferElementType(text, w.Width, w.Height)
+		if inferredType == learner.ElementTypeButton ||
+			inferredType == learner.ElementTypeLink ||
+			(w.Width >= 30 && w.Width <= 200) { // reasonable button width
+			buttons = append(buttons, text)
+			if len(buttons) >= n {
+				break
+			}
+		}
+	}
+	return buttons
+}
+
 func buildFindTextFailureMessage(img image.Image, searchText string, nth int, regionX, regionY, regionW, regionH int, grayscale bool) string {
 	ocrResult, err := ocr.ReadImage(img, ocr.Options{Color: !grayscale})
 	if err != nil || ocrResult == nil {
@@ -1352,6 +1505,32 @@ func buildFindTextFailureMessage(img image.Image, searchText string, nth int, re
 	// Find label candidates (words ending with ":")
 	labels := findLabelCandidates(ocrResult, 5)
 
+	// ── Browser chrome detection (F) ──────────────────────────────────────
+	browserChromeDetected := detectBrowserChrome(ocrResult, screenHFromImage(img))
+	chromeHint := ""
+	if browserChromeDetected {
+		chromeHint = fmt.Sprintf(` 🌐 BROWSER CHROME DETECTED: The top ~20%% of the screen contains browser UI (tabs, URL bar). Only ~80%% of the viewport shows page content. Use find_elements(scan_pages=%d) for full-page discovery instead of relying on a single viewport.`, defaultScanPages)
+	}
+
+	// ── Learned view closest matches (E) ──────────────────────────────────
+	learnedHint := ""
+	if globalLearner.IsEnabled() && globalLearner.HasView() {
+		view := globalLearner.GetView()
+		if view != nil {
+			closest := findClosestLearnedElements(searchText, view.Elements, 3)
+			if len(closest) > 0 {
+				learnedHint = fmt.Sprintf(` 🔍 CLOSEST MATCHES IN LEARNED VIEW: %v. If your target isn't listed, it may not be on this page.`, closest)
+			}
+		}
+	}
+
+	// ── Detected button-like elements (C) ─────────────────────────────────
+	buttonHint := ""
+	buttonLikeElements := findButtonLikeElements(ocrResult, 5)
+	if len(buttonLikeElements) > 0 {
+		buttonHint = fmt.Sprintf(` 🔘 BUTTON-LIKE ELEMENTS DETECTED: %v. If your target isn't listed, it may use colors/styles that OCR cannot read in the current pass.`, buttonLikeElements)
+	}
+
 	// Start with detected labels - make them IMPOSSIBLE TO MISS
 	msg := ""
 	if len(labels) > 0 {
@@ -1359,6 +1538,11 @@ func buildFindTextFailureMessage(img image.Image, searchText string, nth int, re
 	}
 
 	msg += formatFindTextFailureMessage(searchText, nth, regionX, regionY, regionW, regionH, matches)
+
+	// Append actionable hints
+	msg += learnedHint
+	msg += buttonHint
+	msg += chromeHint
 
 	// Suggest using find_elements if this is a repeated failure
 	if nth > 1 || strings.Contains(searchText, " ") {
@@ -1476,6 +1660,16 @@ func handleFindElements(ctx context.Context, request mcp.CallToolRequest) (*mcp.
 	if h, err := getIntParam(request, "height"); err == nil {
 		regionH = h
 		userSpecifiedRegion = true
+	}
+
+	// ── scan_pages: single-call multi-page exploration ────────────────────
+	scanPages := 1
+	if n, err := getIntParam(request, "scan_pages"); err == nil && n > 1 {
+		scanPages = n
+	}
+
+	if scanPages > 1 {
+		return handleFindElementsScanPages(ctx, request, scanPages)
 	}
 
 	// Auto-learn if learning mode is on and no view exists yet.
@@ -1615,6 +1809,118 @@ func handleFindElements(ctx context.Context, request mcp.CallToolRequest) (*mcp.
 	return mcp.NewToolResultText(fmt.Sprintf(
 		`{"success":true,"actionable_count":%d,"actionable_elements":%s,"labels":%s,"element_count":%d,"region":{"x":%d,"y":%d,"width":%d,"height":%d},"elements":%s}`,
 		len(actionable), actionableJSON, labelsJSON, len(elements), regionX, regionY, regionW, regionH, elementsJSON,
+	)), nil
+}
+
+// handleFindElementsScanPages performs a multi-page scan via learnScreen,
+// merges all discovered elements from every scroll page, and returns them
+// in a single response with page_index on each element.
+func handleFindElementsScanPages(_ context.Context, request mcp.CallToolRequest, scanPages int) (*mcp.CallToolResult, error) {
+	logging.Info("find_elements(scan_pages=%d): running multi-page scan", scanPages)
+
+	view, err := autoLearnWithPages(scanPages)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("scan_pages: multi-page scan failed: %v", err)), nil
+	}
+
+	// Store the view so subsequent learning-mode lookups can use it.
+	globalLearner.SetView(view)
+
+	// Collect all elements, tagging page_index.
+	allElements := make([]map[string]interface{}, 0, len(view.Elements))
+	for _, e := range view.Elements {
+		allElements = append(allElements, map[string]interface{}{
+			"text":       e.Text,
+			"x":          e.X,
+			"y":          e.Y,
+			"width":      e.Width,
+			"height":     e.Height,
+			"center_x":   e.X + e.Width/2,
+			"center_y":   e.Y + e.Height/2,
+			"confidence": e.Confidence,
+			"type":       e.Type,
+			"page_index": e.PageIndex,
+		})
+	}
+
+	// Separate viewport (page 0) from off-page elements.
+	viewportElements := make([]map[string]interface{}, 0)
+	offPageElements := make([]map[string]interface{}, 0)
+	for _, e := range allElements {
+		pi := e["page_index"].(int)
+		if pi == 0 {
+			viewportElements = append(viewportElements, e)
+		} else {
+			offPageElements = append(offPageElements, e)
+		}
+	}
+
+	// Build actionable elements (from viewport only for fast targeting).
+	actionable := make([]map[string]interface{}, 0)
+	for _, e := range viewportElements {
+		if isActionableElementType(e["type"].(learner.ElementType)) {
+			actionable = append(actionable, e)
+		}
+	}
+	sort.Slice(actionable, func(i, j int) bool {
+		ci, _ := actionable[i]["confidence"].(float64)
+		cj, _ := actionable[j]["confidence"].(float64)
+		return ci > cj
+	})
+
+	// Serialize arrays.
+	serializeElements := func(elems []map[string]interface{}) string {
+		json := "["
+		for i, e := range elems {
+			if i > 0 {
+				json += ","
+			}
+			json += fmt.Sprintf(
+				`{"text":%q,"type":%q,"x":%d,"y":%d,"width":%d,"height":%d,"center_x":%d,"center_y":%d,"confidence":%.1f,"page_index":%d}`,
+				e["text"], e["type"], e["x"], e["y"], e["width"], e["height"], e["center_x"], e["center_y"], e["confidence"], e["page_index"],
+			)
+		}
+		json += "]"
+		return json
+	}
+
+	allElementsJSON := serializeElements(allElements)
+	actionableJSON := serializeElements(actionable)
+	offPageJSON := serializeElements(offPageElements)
+
+	// Extract labels from viewport.
+	labels := make([]string, 0)
+	for _, e := range viewportElements {
+		text := e["text"].(string)
+		trimmed := strings.TrimSpace(text)
+		if strings.HasSuffix(trimmed, ":") {
+			labels = append(labels, trimmed)
+		}
+	}
+	if len(labels) > 10 {
+		labels = labels[:10]
+	}
+	labelsJSON := "["
+	for i, label := range labels {
+		if i > 0 {
+			labelsJSON += ","
+		}
+		labelsJSON += fmt.Sprintf(`%q`, label)
+	}
+	labelsJSON += "]"
+
+	// Build scan_pages_info.
+	scanPagesInfo := fmt.Sprintf(
+		`{"pages_scanned":%d,"total_elements":%d,"viewport_elements":%d,"off_page_elements":%d}`,
+		view.PageCount, len(allElements), len(viewportElements), len(offPageElements),
+	)
+
+	logging.Info("find_elements(scan_pages=%d): complete — %d total elements (%d viewport, %d off-page)",
+		scanPages, len(allElements), len(viewportElements), len(offPageElements))
+
+	return mcp.NewToolResultText(fmt.Sprintf(
+		`{"success":true,"actionable_count":%d,"actionable_elements":%s,"labels":%s,"element_count":%d,"scan_pages_info":%s,"elements":%s,"learned_off_page_elements":%s}`,
+		len(actionable), actionableJSON, labelsJSON, len(allElements), scanPagesInfo, allElementsJSON, offPageJSON,
 	)), nil
 }
 
