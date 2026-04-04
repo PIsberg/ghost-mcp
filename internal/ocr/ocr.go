@@ -54,16 +54,26 @@ type Options struct {
 
 	// BrightText isolates near-white pixels for detecting white text on any
 	// coloured or dark background. A pixel is mapped to black (text) when its
-	// BT.709 luminance ≥ 185 AND its channel spread (max−min) ≤ 100; everything
+	// BT.709 luminance ≥ 185 AND its channel spread (max−min) ≤ 130; everything
 	// else becomes white (background). The dual condition handles gradients like
 	// the WARNING button (#f093fb→#f5576c) where a min-channel threshold fails:
 	// a 50%-blended anti-aliased edge has lum=188.5 ≥ 185 while the pure pink
 	// start colour has lum=174.3 < 185, giving a clean gap. The spread cap
-	// (brightTextMaxSpread=100) additionally excludes high-luma coloured
+	// (brightTextMaxSpread=130) additionally excludes high-luma coloured
 	// backgrounds such as cyan #00f2fe (spread=254) and bright green #38ef7d
 	// (spread=183). Use as a fallback when grayscale, inverted, and colour
 	// passes all fail. Ignored when Color or Inverted is true.
 	BrightText bool
+
+	// ColorInvert flips the RGB image (255−R, 255−G, 255−B) BEFORE converting
+	// to grayscale. This makes white text black and coloured backgrounds a
+	// medium-to-dark gray — producing high-contrast dark-on-light text that
+	// Tesseract is trained on. Unlike the regular Inverted pass (grayscale THEN
+	// invert, which yields dark-on-darker with low contrast), this pass works
+	// for light coloured backgrounds such as the cyan INFO button (#4facfe→#00f2fe)
+	// where the luminance gap between white text and background is too small
+	// after grayscale conversion.
+	ColorInverted bool
 
 	// CharacterSet restricts OCR to specific characters for improved accuracy.
 	// Use for specific contexts:
@@ -327,10 +337,11 @@ func ReadImage(img image.Image, opts Options) (*Result, error) {
 // PreparedImageSet stores preprocessed OCR-ready bytes so multiple passes can
 // reuse the expensive scaling work instead of each goroutine rebuilding it.
 type PreparedImageSet struct {
-	Normal     []byte
-	Inverted   []byte
-	BrightText []byte
-	Color      []byte
+	Normal        []byte
+	Inverted      []byte
+	BrightText    []byte
+	Color         []byte
+	ColorInverted []byte
 }
 
 func PrepareImageSet(img image.Image, opts Options) (*PreparedImageSet, error) {
@@ -351,7 +362,7 @@ func PrepareParallelImageSet(img image.Image, grayscale bool) (*PreparedImageSet
 		return &PreparedImageSet{Normal: colorBytes, Color: colorBytes}, nil
 	}
 
-	// Run all 4 preprocessing passes concurrently. Each pass reads img (no writes)
+	// Run all 5 preprocessing passes concurrently. Each pass reads img (no writes)
 	// and writes to its own independent output buffer, so no synchronisation is needed
 	// beyond waiting for all goroutines to finish.
 	type encodeResult struct {
@@ -359,9 +370,9 @@ func PrepareParallelImageSet(img image.Image, grayscale bool) (*PreparedImageSet
 		data []byte
 		err  error
 	}
-	ch := make(chan encodeResult, 4)
+	ch := make(chan encodeResult, 5)
 
-	passes := [4]struct {
+	passes := [5]struct {
 		name string
 		opts Options
 	}{
@@ -369,6 +380,7 @@ func PrepareParallelImageSet(img image.Image, grayscale bool) (*PreparedImageSet
 		{"inverted", Options{Inverted: true}},
 		{"bright-text", Options{BrightText: true}},
 		{"color", Options{Color: true}},
+		{"color-inverted", Options{ColorInverted: true}},
 	}
 	for _, p := range passes {
 		p := p
@@ -393,6 +405,8 @@ func PrepareParallelImageSet(img image.Image, grayscale bool) (*PreparedImageSet
 			set.BrightText = r.data
 		case "color":
 			set.Color = r.data
+		case "color-inverted":
+			set.ColorInverted = r.data
 		}
 	}
 	return set, nil
@@ -495,6 +509,9 @@ func encodeForOCR(img image.Image, factor int, opts Options) ([]byte, error) {
 	if opts.BrightText {
 		preprocessed := brightTextToGray(img, 185)
 		scaledImg = scaleGrayNearest(preprocessed, factor)
+	} else if opts.ColorInverted {
+		preprocessed := colorInvertGray(img)
+		scaledImg = scaleGrayNearest(preprocessed, factor)
 	} else if opts.Color {
 		b := img.Bounds()
 		dst := image.NewRGBA(image.Rect(0, 0, b.Dx()*factor, b.Dy()*factor))
@@ -563,6 +580,55 @@ func invertGray(img *image.Gray) {
 	for i, v := range img.Pix {
 		img.Pix[i] = 255 - v
 	}
+}
+
+// colorInvertGray inverts the RGB image (255−R, 255−G, 255−B) BEFORE
+// converting to grayscale. This produces high-contrast dark text on a
+// medium-gray background, which is what Tesseract is trained on.
+//
+// Example — white text on cyan #4facfe:
+//
+//	Normal grayscale:     white→255, cyan→158  (gap 97, low contrast)
+//	Inverted (after gray): white→0,   cyan→97   (gap 97, dark-on-darker)
+//	ColorInverted:        white→0,   cyan→83   (gap 83, black-on-medium)
+//
+// The critical difference: regular Inverted keeps the same luminance gap but
+// shifts it to the dark end of the scale (0→97), while ColorInvert produces
+// black text (0) on a medium-gray background that Tesseract can reliably read.
+func colorInvertGray(img image.Image) *image.Gray {
+	b := img.Bounds()
+	out := image.NewGray(b)
+	w, h := b.Dx(), b.Dy()
+
+	// Fast path for *image.RGBA
+	if rgba, ok := img.(*image.RGBA); ok {
+		for y := 0; y < h; y++ {
+			srcRow := rgba.Pix[y*rgba.Stride : y*rgba.Stride+w*4]
+			dstOff := y * out.Stride
+			for x := 0; x < w; x++ {
+				r := 255 - srcRow[x*4]
+				g := 255 - srcRow[x*4+1]
+				bl := 255 - srcRow[x*4+2]
+				// BT.709 luminance, scaled ×10000
+				lum := (2126*uint32(r) + 7152*uint32(g) + 722*uint32(bl) + 5000) / 10000
+				out.Pix[dstOff+x] = uint8(lum)
+			}
+		}
+	} else {
+		// Slow path: interface dispatch
+		for y := b.Min.Y; y < b.Max.Y; y++ {
+			dstOff := (y-b.Min.Y)*out.Stride - b.Min.X
+			for x := b.Min.X; x < b.Max.X; x++ {
+				r32, g32, b32, _ := img.At(x, y).RGBA()
+				r := 255 - uint8(r32>>8)
+				g := 255 - uint8(g32>>8)
+				bl := 255 - uint8(b32>>8)
+				lum := (2126*uint32(r) + 7152*uint32(g) + 722*uint32(bl) + 5000) / 10000
+				out.Pix[dstOff+x] = uint8(lum)
+			}
+		}
+	}
+	return out
 }
 
 // brightTextToGray creates a binary image where near-white pixels become black

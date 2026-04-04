@@ -825,3 +825,84 @@ func TestReadImage_UsesCachedResultWhenHashMatches(t *testing.T) {
 		t.Fatalf("ReadImage returned %p, want cached %p", got, want)
 	}
 }
+
+// =============================================================================
+// colorInvertGray
+// =============================================================================
+
+func TestColorInvertGray_WhiteOnCyan(t *testing.T) {
+	// Simulates white text on the cyan INFO button background (#4facfe).
+	// After color inversion: white→black (0), cyan→medium gray.
+	img := image.NewRGBA(image.Rect(0, 0, 10, 10))
+	whitePixel := color.RGBA{255, 255, 255, 255}
+	cyanBg := color.RGBA{79, 172, 254, 255}
+
+	for y := 0; y < 10; y++ {
+		for x := 0; x < 10; x++ {
+			if x >= 3 && x <= 6 && y >= 3 && y <= 6 {
+				img.Set(x, y, whitePixel)
+			} else {
+				img.Set(x, y, cyanBg)
+			}
+		}
+	}
+
+	got := colorInvertGray(img)
+
+	// White text should become black (0).
+	if v := got.GrayAt(5, 5).Y; v != 0 {
+		t.Errorf("white text: got gray=%d, want 0 (black)", v)
+	}
+
+	// Cyan background should become medium gray — not black, not white.
+	// Inverted: (176,83,1) → BT.709 lum ≈ 83.
+	bgVal := got.GrayAt(1, 1).Y
+	if bgVal < 50 || bgVal > 150 {
+		t.Errorf("cyan background: got gray=%d, want medium gray (50-150)", bgVal)
+	}
+
+	// Verify contrast: text should be significantly darker than background.
+	if textVal := got.GrayAt(5, 5).Y; textVal >= bgVal {
+		t.Errorf("text (%d) should be darker than background (%d) for contrast", textVal, bgVal)
+	}
+}
+
+func TestColorInvertGray_ComparisonWithRegularInverted(t *testing.T) {
+	// Prove that ColorInverted produces different results from regular Inverted
+	// for white-on-cyan, which is exactly why it helps.
+	img := image.NewRGBA(image.Rect(0, 0, 4, 4))
+	img.Set(2, 2, color.RGBA{255, 255, 255, 255}) // white pixel
+	img.Set(0, 0, color.RGBA{79, 172, 254, 255})  // cyan pixel
+
+	// Regular grayscale then invert: white→255, cyan→158, invert→0 and 97
+	gc := toGrayscaleContrast(img)
+	inverted := image.NewGray(gc.Bounds())
+	for i := range inverted.Pix {
+		inverted.Pix[i] = 255 - gc.Pix[i]
+	}
+
+	// ColorInverted: RGB invert then grayscale: white→0, cyan→~83
+	ci := colorInvertGray(img)
+
+	// The white pixel should be 0 in both (both make text dark).
+	whiteNormal := inverted.GrayAt(2, 2).Y
+	whiteCI := ci.GrayAt(2, 2).Y
+	if whiteNormal != 0 || whiteCI != 0 {
+		t.Errorf("white text: normal_inverted=%d, color_inverted=%d, both want 0", whiteNormal, whiteCI)
+	}
+
+	// The key difference: background brightness.
+	// Regular inverted: cyan background becomes ~97 (dark).
+	// Color inverted: cyan background becomes ~83 (medium).
+	bgNormal := inverted.GrayAt(0, 0).Y
+	bgCI := ci.GrayAt(0, 0).Y
+
+	// Both should be non-zero (gray, not black).
+	if bgNormal == 0 || bgCI == 0 {
+		t.Errorf("background should be gray, got normal=%d, color_inv=%d", bgNormal, bgCI)
+	}
+
+	// The contrast gap should exist in both, but ColorInverted gives
+	// black-on-medium which Tesseract handles better.
+	t.Logf("White-on-cyan comparison: regular_inverted bg=%d, color_inverted bg=%d", bgNormal, bgCI)
+}

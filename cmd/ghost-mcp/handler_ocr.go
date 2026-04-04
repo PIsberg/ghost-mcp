@@ -2551,8 +2551,9 @@ func saveScreenshotIfKept(img image.Image, prefix string) {
 	}
 }
 
-// parallelFindText concurrently executes up to 4 OCR passes (Normal, Inverted, BrightText, Color)
-// against the provided image and races them to find the first matching bounding box.
+// parallelFindText concurrently executes up to 5 OCR passes (Normal, Inverted,
+// BrightText, Color, ColorInverted) against the provided image and races them
+// to find the first matching bounding box.
 func parallelFindText(ctx context.Context, img image.Image, searchText string, nth int, grayscale bool) (int, int, int, int, bool, string) {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -2574,7 +2575,7 @@ func parallelFindPreparedText(ctx context.Context, prepared *ocr.PreparedImageSe
 		minX, minY, maxX, maxY int
 		pass                   string
 	}
-	matches := make(chan match, 4)
+	matches := make(chan match, 5)
 	var wg sync.WaitGroup
 
 	runPass := func(imgBytes []byte, name string) {
@@ -2602,10 +2603,11 @@ func parallelFindPreparedText(ctx context.Context, prepared *ocr.PreparedImageSe
 	go runPass(prepared.Normal, "normal")
 
 	if grayscale {
-		wg.Add(3)
+		wg.Add(4)
 		go runPass(prepared.Inverted, "inverted")
 		go runPass(prepared.BrightText, "bright-text")
 		go runPass(prepared.Color, "color")
+		go runPass(prepared.ColorInverted, "color-inverted")
 	}
 
 	go func() {
