@@ -248,3 +248,61 @@ to a small bounding box — typically 10–25× faster than a full-screen scan.
 call `get_learned_view` to see the full element list. If the target is missing,
 OCR did not detect it — try `take_screenshot` to check visibility, or re-run
 `learn_screen` with a higher `max_pages` value.
+
+---
+
+## 4. Troubleshooting & Fallbacks
+
+UI agents fail frequently due to dynamic loading, OCR misses, or timing issues.
+When a tool returns an error or unexpected result, follow these recovery paths:
+
+### `wait_for_text` times out
+
+Do NOT blindly retry. First assess the actual UI state:
+
+```json
+{"tool": "find_elements", "arguments": {}}
+```
+
+Or take a screenshot to visually inspect:
+
+```json
+{"tool": "take_screenshot", "arguments": {}}
+```
+
+Only retry after confirming what is actually on screen.
+
+### `find_and_click` fails (element not found)
+
+The error response includes `candidates` (what OCR actually parsed) and a `suggestion` field:
+
+- `"scroll_may_help"` → add `scroll_direction: "down"` to the same call
+- `"try_different_search_term"` → call `find_elements` to see the real OCR text, then use the
+  exact string it returned
+- `"no_matches_found"` → the element may not be on screen; check with `take_screenshot`
+
+Do NOT retry the exact same text. Try a shorter or different term, or use `find_elements` first:
+
+```json
+{"tool": "find_elements", "arguments": {}}
+```
+
+If still failing after two attempts with different terms, re-run `learn_screen` to rebuild
+the cached view.
+
+### Action succeeds but the UI does not change
+
+The button may be disabled or the click may have missed. Steps:
+
+1. Call `wait_for_text` with a short timeout to see if a delayed response arrives.
+2. Call `find_elements` to confirm the button exists and check its label exactly.
+3. If the button appears disabled, look for an enabling condition (required field, checkbox).
+
+### `find_and_click` returns stale coordinates (mis-click)
+
+The learned view is out of date. Call `clear_learned_view` then `learn_screen` before retrying:
+
+```json
+{"tool": "clear_learned_view", "arguments": {}}
+{"tool": "learn_screen",       "arguments": {}}
+```
