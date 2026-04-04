@@ -51,59 +51,31 @@ The tool scrolls DOWN during scanning and automatically scrolls BACK UP when don
 	), handleLearnScreen)
 
 	mcpServer.AddTool(mcp.NewTool("get_learned_view",
-		mcp.WithDescription(`STEP 2 — Read the full element map after learn_screen.
+		mcp.WithDescription(`Return the full element map from the last learn_screen call.
 
-Returns every text element found by learn_screen: label, coordinates, size, confidence, and the scroll page it was on. Call this immediately after learn_screen to understand the complete interface before deciding which elements to interact with. This is much faster than calling find_elements repeatedly.
+Each element includes: text (use this exact string in find_and_click), x/y coordinates,
+width/height, page_index (0=top, 1+=requires scrolling), and confidence (prefer >60).
 
-Each element in the response has:
-  • text        — the OCR-detected label (use this exact string in find_and_click)
-  • x, y        — screen coordinates (top-left of the text bounding box)
-  • width/height — size of the element
-  • page_index  — 0 = top of screen, 1+ = required scroll position to see it
-  • confidence  — OCR confidence 0–100 (prefer elements > 60)
-
-USE THIS TO:
-  • Decide which element to click — pick the exact label text shown here.
-  • Discover elements below the fold (page_index > 0).
-  • Verify the page loaded correctly before acting.
-
-Returns {"learned":false} if learn_screen has not been called yet — call learn_screen first.`),
+Call immediately after learn_screen to inspect the complete interface before acting.
+Returns {"learned":false} if learn_screen has not been called yet.`),
 	), handleGetLearnedView)
 
 	mcpServer.AddTool(mcp.NewTool("clear_learned_view",
 		mcp.WithDescription(`Discard the current learned view so the next learn_screen builds a fresh one.
 
-CALL THIS when the UI has changed substantially and the stored view is stale:
-  • After clicking a link or button that navigates to a new page.
-  • After a dialog or modal opens or closes.
-  • After a single-page-app route change.
-  • Any time find_and_click or find_elements returns surprising results.
-
-TYPICAL PATTERN AFTER NAVIGATION:
-  1. clear_learned_view   ← discard the old page's map
-  2. learn_screen         ← scan the new page
-  3. get_learned_view     ← read the new element list
-  4. find_and_click ...   ← interact`),
+Call after any navigation, dialog open/close, or significant UI change to prevent
+stale element positions from causing mis-clicks. Then call learn_screen to rebuild.`),
 	), handleClearLearnedView)
 
 	mcpServer.AddTool(mcp.NewTool("set_learning_mode",
 		mcp.WithDescription(`Enable or disable learning mode at runtime.
 
-When ENABLED (recommended for all UI automation tasks):
-  • The first call to find_and_click or find_elements automatically triggers
-    a learn_screen scan if no view exists yet — no manual call required.
-  • All subsequent OCR tool calls use the learned view for fast, region-targeted
-    lookups instead of scanning the full screen every time (10–25× faster).
+When enabled: the first call to find_and_click or find_elements automatically triggers
+learn_screen if no view exists, and all subsequent OCR calls use the cached view (10–25× faster).
 
-When DISABLED:
-  • Every find_and_click / find_elements call scans the full screen from scratch.
-  • Use this only if you want to skip learning and always do fresh full-screen OCR.
+When disabled: every OCR call does a fresh full-screen scan.
 
-Learning mode can also be enabled permanently at startup by setting
-GHOST_MCP_LEARNING=1 in the server environment (no tool call needed).
-
-CALL set_learning_mode {enabled:true} at the start of any automation session
-unless GHOST_MCP_LEARNING=1 is already set in the server config.`),
+Learning mode can also be enabled permanently at startup with GHOST_MCP_LEARNING=1.`),
 		mcp.WithBoolean("enabled", mcp.Description("true to enable learning mode, false to disable."), mcp.Required()),
 	), handleSetLearningMode)
 

@@ -10,85 +10,42 @@ import (
 func registerOCRTools(mcpServer *server.MCPServer) {
 
 	mcpServer.AddTool(mcp.NewTool("find_and_click",
-		mcp.WithDescription(`⚠️ CRITICAL: ALWAYS CALL learn_screen FIRST BEFORE THIS TOOL!
+		mcp.WithDescription(`Find text on screen and click its center. Case-insensitive substring match.
 
-This tool works BEST with learning mode enabled. Without learn_screen, this tool
-is SLOWER and LESS ACCURATE. The workflow is:
-  1. learn_screen() ← REQUIRED: captures full UI with 4-pass OCR
-  2. get_learned_view() ← See what elements exist
-  3. find_and_click() ← Uses cached view (10-25x faster, more accurate)
+For best performance, call learn_screen first — subsequent calls use the cached element
+location (10–25× faster). For a single one-off click, find_and_click works without learn_screen.
 
-If you haven't called learn_screen in this session, DO IT NOW before clicking.
+WHEN TO USE:
+- Click a single button, link, or menu item by its visible text label.
+- Text can be partial: "save" matches "Save", "SAVE ALL", "Auto-save".
 
-🎯 WHEN TO USE:
-- You need to click a single button/link/menu item by its text label
-- Works for ALL button styles: colored backgrounds, dark themes, gradients
-- Text can be partial: "save" matches "Save", "SAVE ALL", "Auto-save"
+WHEN NOT TO USE:
+- Multiple buttons in sequence → use find_and_click_all or execute_workflow.
+- Need to verify UI changed → chain with wait_for_text after this call.
+- Screen just changed (new page/dialog) → call clear_learned_view + learn_screen first.
 
-🚫 WHEN NOT TO USE:
-- Multiple buttons in sequence → use find_and_click_all instead
-- Need to verify UI change after click → use find_and_click + wait_for_text
-- Screen just changed (new page/dialog) → call learn_screen FIRST, then this
+SCROLL-AND-SEARCH: If text may be off-screen, set scroll_direction="down". The tool
+scrolls up to max_scrolls times and searches after each scroll.
 
-⚡ AUTOMATIC OPTIMIZATION: After learn_screen, this tool uses cached regions.
-Subsequent calls scan only the cached region (10-25x faster).
+MULTI-PAGE SEARCH: Set next_page_keys="Page_Down" and max_pages=5 to search across pages.
+Add select_best=true to scan all pages first and click the highest-scoring match.
 
-🎯 SMART MATCHING: Uses intelligent scoring to prefer standalone buttons over
-text inside other elements (e.g., prefers "Click" button over "Button Click Tests" header).
-
-SPEED TIP: Supply x/y/width/height to scan only the relevant area (e.g., a dialog or toolbar).
-
-HOW IT WORKS:
-1. If learning mode ON + view exists: Uses cached element location (instant)
-2. Otherwise: Captures screen once, runs 4-pass OCR (normal→inverted→bright→color)
-3. Finds text matching your search (case-insensitive substring)
-4. Clicks the CENTER of the matched button
-5. Returns exact coordinates
-
-📜 SCROLL-AND-SEARCH: If text may be off-screen, add scroll_direction="down" to
-automatically scroll and search. Scrolls up to max_scrolls times.
-
-📄 MULTI-PAGE SEARCH: Add next_page_keys="Page_Down" and max_pages=5 to search
-multiple pages. Tool navigates and searches each page until found.
-
-🎯 SELECT BEST MODE: Add select_best=true to scan ALL pages first, compare scores,
-then click the highest-score match. Slower but more accurate.
-
-IF TEXT NOT FOUND:
-The error response includes helpful guidance:
-
+ON FAILURE — the error response includes:
 {
   "error": "text not found...",
-  "candidates": [
-    {"text": "Click", "score": 100, "x": 50, "y": 50}
-  ],
+  "candidates": [{"text": "Click", "score": 100, "x": 50, "y": 50}],
   "suggestion": "scroll_may_help" | "text_continues_off_screen" | "try_different_search_term" | "no_matches_found"
 }
+Act on the suggestion before retrying:
+- "scroll_may_help" → add scroll_direction:"down"
+- "try_different_search_term" → call find_elements to see actual OCR text
+- "no_matches_found" → element may not be on screen; check with take_screenshot
 
-Based on suggestion:
-- "scroll_may_help" → Add scroll_direction:"down" to search off-screen
-- "text_continues_off_screen" → Text is partially visible, scroll to see rest
-- "try_different_search_term" → Use find_elements to see what text exists
-- "no_matches_found" → Text not on current screen, may need multi-page search
+SMART MATCHING SCORES (candidates array):
+- 1000: exact match  500: prefix  400: suffix  300: standalone word  100: boundary  50: inside word
+Prefer exact or prefix matches; if the best candidate score is 50, use a more specific term.
 
-Use candidates array to see what OCR detected and their confidence scores.
-
-RESPONSE: {success, found, box: {x,y,width,height}, requested_x/y, actual_x/y, button, occurrence, candidates}
-- box is the OCR text bounding box (tight around characters, not the full button background)
-- requested_x/y is the center of that box — where the click is aimed
-- actual_x/y is where the mouse actually landed (verify this matches expected)
-- candidates is an array of all potential matches with scores (see SMART MATCHING below)
-- For standard buttons with symmetric padding the text center == button center, so the click lands correctly
-
-SMART MATCHING SCORES (in candidates array):
-- score:1000 = Exact match ("Click Me!" = "Click Me!") ← BEST
-- score:500 = Prefix match ("Click Me!" starts with "Click")
-- score:400 = Suffix match ("Button Click" ends with "Click")
-- score:300 = Standalone word ("Click" as separate word) ← GOOD
-- score:100 = Substring with boundaries
-- score:50 = Inside another word (avoid) ← AVOID
-
-Use candidates to verify the AI chose the right element. If the clicked element has low score (50-100), consider using a more specific search term.`),
+RESPONSE: {success, found, box, requested_x, requested_y, actual_x, actual_y, button, occurrence, candidates}`),
 		mcp.WithString("text", mcp.Description("Text to search for (case-insensitive substring match). Example: \"save\" matches \"Save\", \"SAVE ALL\"."), mcp.Required()),
 		mcp.WithString("button", mcp.Description("Mouse button: 'left' (default), 'right', or 'middle'.")),
 		mcp.WithNumber("nth", mcp.Description("Which occurrence to click if text appears multiple times (default: 1 = first).")),
@@ -107,70 +64,40 @@ Use candidates to verify the AI chose the right element. If the clicked element 
 	), handleFindAndClick)
 
 	mcpServer.AddTool(mcp.NewTool("find_and_click_all",
-		mcp.WithDescription(`ATOMIC MULTI-CLICK: Finds and clicks multiple text labels in one operation. Use this to click multiple buttons without verification loops between each.
+		mcp.WithDescription(`Find and click multiple text labels in one atomic operation (single OCR scan).
 
-🎯 WHEN TO USE:
-- You need to click multiple buttons in sequence (e.g., "Primary", "Success", "Warning")
-- You want to avoid OCR verification failures between clicks
-- Faster than multiple find_and_click calls (single OCR scan)
+WHEN TO USE:
+- Click several known, distinct targets all present on screen (e.g., check three checkboxes).
+- Do NOT use to try alternative labels for the same target — use find_and_click with select_best=true instead.
+- Do NOT use if you need to verify UI changes between each click — use individual find_and_click + wait_for_text.
 
-🚫 WHEN NOT TO USE:
-- If you need to verify UI changes between each click → use find_and_click + wait_for_text instead
-- If buttons might appear/disappear dynamically → use individual find_and_click calls
+texts must be a JSON-encoded array string: "[\"Button1\", \"Button2\"]"
+List elements in the order you want them clicked. If any is not found, the operation stops.
 
-EXAMPLE USAGE:
-{
-  "tool": "find_and_click_all",
-  "arguments": {
-    "texts": ["Primary", "Success", "Warning"],
-    "delay_ms": 200
-  }
-}
+Use delay_ms=200-500 if the UI needs time to update between clicks.
 
-Returns: {success: true, clicked_count: N, clicks: [{text, box, clicked_x, clicked_y, actual_x, actual_y, button}, ...]}
-
-TIPS:
-- texts must be a JSON array of strings: ["Button1", "Button2"]
-- List buttons in the order you want them clicked (left to right, top to bottom)
-- Use delay_ms=200-500 between clicks if UI needs time to update
-- If any text is not found, the operation stops immediately and returns an error
-- All coordinates use logical pixels (same as get_screen_size)`),
+RESPONSE: {success, clicked_count, clicks: [{text, box, clicked_x, clicked_y, actual_x, actual_y, button}]}`),
 		mcp.WithString("texts", mcp.Description("JSON array of text labels to find and click. Example: [\"Primary\", \"Success\", \"Warning\"] - MUST be a valid JSON array string."), mcp.Required()),
 		mcp.WithString("button", mcp.Description("Mouse button: 'left' (default), 'right', or 'middle'.")),
 		mcp.WithNumber("delay_ms", mcp.Description("Milliseconds to wait after EACH click (default: 100). Use 200-500 for UI updates, 0 for speed. Max: 10000.")),
 	), handleFindAndClickAll)
 
 	mcpServer.AddTool(mcp.NewTool("wait_for_text",
-		mcp.WithDescription(`Wait for text to appear or disappear from the screen. Use this to verify UI state changes after clicking a button.
+		mcp.WithDescription(`Wait for text to appear or disappear. Use after any action that triggers a UI change.
 
-🎯 WHEN TO USE:
-- After clicking "Save" → wait for "Saved successfully" to appear
-- After clicking "Delete" → wait for item text to disappear
-- After navigation → wait for expected page title to appear
-- Before clicking → wait for a button to become visible (e.g., after page load)
+WHEN TO USE:
+- After "Save" → wait for "Saved successfully" to appear.
+- After "Delete" → wait for item text to disappear (visible=false).
+- After navigation → wait for the expected page title to appear.
 
-🚫 WHEN NOT TO USE:
-- For instant UI changes → just proceed to next action
-- For visual changes without text → use take_screenshot instead
+WHEN NOT TO USE:
+- Instant UI changes — just proceed.
+- Visual changes without text labels — use take_screenshot instead.
 
-COMMON PATTERNS:
-  // Wait for success message
-  find_and_click {text: "Submit"}
-  wait_for_text {text: "Success", timeout_ms: 5000}
-  
-  // Wait for item to disappear
-  find_and_click {text: "Delete"}
-  wait_for_text {text: "Item Name", visible: false, timeout_ms: 5000}
+visible=false waits for text to disappear. Default timeout=5000ms, max=30000ms.
+Use region (x,y,width,height) to watch a specific area (faster than full screen).
 
-Returns: {success: true, text: "...", visible: true/false, waited_ms: N}
-On timeout: {error: "timeout waiting for text..."}
-
-TIPS:
-- visible=false waits for text to disappear (default=true waits for appear)
-- Use region (x,y,width,height) to watch specific area (faster than full screen)
-- Default timeout=5000ms, max=30000ms
-- Checks every 500ms for efficiency
-- All coordinates use logical pixels`),
+RESPONSE: {success, text, visible, waited_ms} or {error: "timeout..."}`),
 		mcp.WithString("text", mcp.Description("Text to wait for (case-insensitive substring match)."), mcp.Required()),
 		mcp.WithBoolean("visible", mcp.Description("true (default) = wait for text to appear. false = wait for text to disappear.")),
 		mcp.WithNumber("timeout_ms", mcp.Description("Maximum time to wait in milliseconds (default: 5000, max: 30000).")),
@@ -264,37 +191,12 @@ EXAMPLE: Find form elements:
 	), handleFindElements)
 
 	mcpServer.AddTool(mcp.NewTool("find_click_and_type",
-		mcp.WithDescription(`Combines find_and_click and type_text into a single, highly efficient atomic operation.
-This is the primary tool for filling out forms and interacting with text inputs.
+		mcp.WithDescription(`Find a label by text, click the associated input, and type — all in one atomic call.
+Primary tool for filling form fields.
 
-🎯 HOW IT WORKS:
-1. Performs OCR to find the specified label/text (e.g. "Username").
-2. Calculates the click target, optionally applying x_offset and y_offset to click beside or below the label.
-3. Clicks the calculated coordinate to focus the input field.
-4. Waits for the field to focus (delay_ms).
-5. Types the requested text.
-6. Optionally presses Enter.
-
-SPEED TIP: Use region constraints (x, y, width, height) to scan only the relevant form area.
-MULTI-WORD LABELS: Works with OCR text split across adjacent words, e.g. "Type here or use".
-OFF-SCREEN FIELDS: If the input may be below the fold, set scroll_direction to let the tool scroll and keep searching in one call.
-ON FAILURE: the error now includes closest OCR matches plus the searched region so you can refine the text before falling back to diagnostics.
-
-EXAMPLE: Clicking an input field to the right of a "Name:" label:
-{
-  "text": "Name:",
-  "type_text": "John Doe",
-  "x_offset": 100,
-  "delay_ms": 100
-}
-
-EXAMPLE: Search downward for an off-screen placeholder, then type:
-{
-  "text": "Type here or use",
-  "type_text": "Ghost MCP rocks!",
-  "scroll_direction": "down",
-  "max_scrolls": 8
-}`),
+Use x_offset/y_offset to click beside or below the label (e.g., x_offset=100 clicks the input
+field to the right of a "Name:" label). Use scroll_direction if the field may be below the fold.
+On failure the error includes closest OCR matches so you can refine the search text.`),
 		mcp.WithString("text", mcp.Description("The label or text to search for (e.g. \"Email:\"). Case-insensitive substring match."), mcp.Required()),
 		mcp.WithString("type_text", mcp.Description("The exact text to type after clicking."), mcp.Required()),
 		mcp.WithNumber("x_offset", mcp.Description("Horizontal pixel offset from the center of the found text to click. Use positive for right, negative for left (default: 0).")),
@@ -337,38 +239,16 @@ After clearing, the next find_and_click call will do a full-screen scan and rebu
 	), handleClearRegionCache)
 
 	mcpServer.AddTool(mcp.NewTool("click_until_text_appears",
-		mcp.WithDescription(`CLICK WITH VERIFICATION: Clicks coordinates and waits for text to appear. Use this to verify your click had the expected effect.
+		mcp.WithDescription(`Click at coordinates and retry until confirmation text appears (up to max_clicks times).
 
-🎯 WHEN TO USE:
-- After clicking a button, wait for confirmation text (e.g., "Saved!", "Success")
-- Verify a menu opened by waiting for menu text
-- Confirm navigation by waiting for page title
-- Retry clicking if text doesn't appear (up to max_clicks times)
+WHEN TO USE: You know the coordinates and need to verify the click worked (e.g., confirm a menu
+opened, a save succeeded, or navigation occurred).
 
-🚫 WHEN NOT TO USE:
-- If you don't know the coordinates → use find_and_click instead
-- If there's no text verification → just use click_at
+WHEN NOT TO USE: You don't know the coordinates — use find_and_click instead.
 
-HOW IT WORKS:
-1. Clicks at specified coordinates
-2. Polls screen every 500ms for wait_for_text
-3. If not found and max_clicks not reached, clicks again
-4. Stops when text appears OR timeout/max_clicks reached
+Polls every 500ms. Clicks again if text has not appeared and max_clicks not yet reached.
 
-EXAMPLE: Click "Save" button at (400,300), wait for "Saved!" confirmation:
-{
-  "tool": "click_until_text_appears",
-  "arguments": {
-    "x": 400,
-    "y": 300,
-    "wait_for_text": "Saved!",
-    "timeout_ms": 5000,
-    "max_clicks": 3
-  }
-}
-
-Returns: {success: true/false, text: "...", clicks: N, waited_ms: N, found: true/false}
-On failure: Click may have missed, or expected text is different than actual.`),
+RESPONSE: {success, text, clicks, waited_ms, found}`),
 		mcp.WithNumber("x", mcp.Description("X coordinate to click."), mcp.Required()),
 		mcp.WithNumber("y", mcp.Description("Y coordinate to click."), mcp.Required()),
 		mcp.WithString("wait_for_text", mcp.Description("Text to wait for after clicking."), mcp.Required()),

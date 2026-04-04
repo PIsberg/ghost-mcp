@@ -14,29 +14,13 @@ import (
 // registerSmartClickTool registers the smart_click tool.
 func registerSmartClickTool(mcpServer *server.MCPServer) {
 	mcpServer.AddTool(mcp.NewTool("smart_click",
-		mcp.WithDescription(`🎯 ONE-CLICK SOLUTION: Combines learn_screen + find_and_click automatically.
+		mcp.WithDescription(`Convenience wrapper: runs learn_screen then find_and_click in one call.
 
-USE THIS if you keep forgetting to call learn_screen first!
+Use for a single click on an unfamiliar screen when you don't want to manage the
+learn/act/clear lifecycle manually.
 
-WHAT IT DOES:
-1. Automatically calls learn_screen if no view exists
-2. Uses the learned view to find your element (10-25x faster)
-3. Clicks the element
-4. Returns success/failure
-
-CALL: smart_click({text: "Button Name"})
-
-BENEFITS:
-- No need to remember multi-step workflow
-- Always uses optimal learning mode
-- Automatically refreshes view if stale
-- 10-25x faster than raw find_and_click
-
-EXAMPLE:
-  smart_click({text: "Submit"})  ← That's it!
-
-For advanced workflows, you can still use the manual:
-  learn_screen → get_learned_view → find_and_click
+For more than one action on the same screen, use learn_screen explicitly so you
+control when clear_learned_view is called.
 `),
 		mcp.WithString("text", mcp.Description("Text of the button/link to click."), mcp.Required()),
 	), handleSmartClick)
