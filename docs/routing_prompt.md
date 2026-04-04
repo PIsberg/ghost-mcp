@@ -38,51 +38,61 @@ together, and when to invest in Learning Mode for complex sessions.
 
 ### Scenario A — Click a single button
 
-```
-find_and_click("Save")
+```json
+{"tool": "find_and_click", "arguments": {"text": "Save"}}
 ```
 
-If you are unsure the click succeeded:
+If you are unsure the click succeeded, chain with `wait_for_text`:
 
-```
-find_and_click("Save")
-wait_for_text("Saved successfully", visible=true, timeout_ms=5000)
+```json
+{"tool": "find_and_click", "arguments": {"text": "Save"}}
+{"tool": "wait_for_text", "arguments": {"text": "Saved successfully", "visible": true, "timeout_ms": 5000}}
 ```
 
 ### Scenario B — Fill a simple form
 
-```
-find_click_and_type("Username", "alice@example.com")
-find_click_and_type("Password", "hunter2")
-find_and_click("Sign in")
-wait_for_text("Dashboard", visible=true, timeout_ms=8000)
+```json
+{"tool": "find_click_and_type", "arguments": {"text": "Username", "type_text": "alice@example.com"}}
+{"tool": "find_click_and_type", "arguments": {"text": "Password", "type_text": "hunter2"}}
+{"tool": "find_and_click",      "arguments": {"text": "Sign in"}}
+{"tool": "wait_for_text",       "arguments": {"text": "Dashboard", "visible": true, "timeout_ms": 8000}}
 ```
 
-Or in one call using execute_workflow (all steps share one learned screen map):
+Or in one call using `execute_workflow` (screen is learned once; all steps share that cached map):
 
+```json
+{
+  "tool": "execute_workflow",
+  "arguments": {
+    "steps": [
+      {"action": "type",  "text": "Username", "value": "alice@example.com"},
+      {"action": "type",  "text": "Password", "value": "hunter2"},
+      {"action": "click", "text": "Sign in"}
+    ]
+  }
+}
 ```
-execute_workflow(steps=[
-  {action:"find_click_and_type", text:"Username", type_text:"alice@example.com"},
-  {action:"find_click_and_type", text:"Password", type_text:"hunter2"},
-  {action:"find_and_click",      text:"Sign in"},
-  {action:"wait_for_text",       text:"Dashboard", visible:true}
-])
-```
+
+> `execute_workflow` does not support `wait_for_text`. To verify post-login navigation, call
+> `wait_for_text` as a separate tool call after the workflow completes.
 
 ### Scenario C — Multiple instructions given at once (batch, same screen)
 
-When given several things to do on the same screen, prefer `execute_workflow`
-over many individual calls. The screen is learned once and all steps reuse that
-cached map — 3–6× faster than a full-screen OCR scan per step.
-Only use this when all steps are on the same screen. If steps span multiple pages,
-use individual calls and call `clear_learned_view` between pages.
+Batch Actions (Same Screen): ALWAYS use `execute_workflow`. It caches the screen map once,
+running 3–6× faster than individual calls. Constraint: all steps MUST be on the same page.
+If spanning multiple pages, use individual calls and call `clear_learned_view` between pages.
 
-```
-execute_workflow(steps=[
-  {action:"find_and_click",      text:"Accept"},
-  {action:"find_click_and_type", text:"Name", type_text:"Bob"},
-  {action:"find_and_click",      text:"Submit"}
-])
+```json
+{
+  "tool": "execute_workflow",
+  "arguments": {
+    "steps": [
+      {"action": "click", "text": "Accept"},
+      {"action": "type",  "text": "Name", "value": "Bob"},
+      {"action": "click", "text": "Submit"}
+    ]
+  }
+}
 ```
 
 ### Scenario D — Click multiple distinct elements atomically
@@ -93,65 +103,87 @@ present on screen — for example, checking three checkboxes or clicking a
 sequence of toolbar buttons. Do NOT use it to try alternative labels for one
 target; use `find_and_click` with `select_best=true` for fuzzy matching instead.
 
-```
-find_and_click_all(["Enable logging", "Enable metrics", "Enable tracing"])
+```json
+{
+  "tool": "find_and_click_all",
+  "arguments": {"texts": "[\"Enable logging\", \"Enable metrics\", \"Enable tracing\"]"}
+}
 ```
 
 To dismiss a dialog where you know only one label will match:
 
-```
-find_and_click("OK")
+```json
+{"tool": "find_and_click", "arguments": {"text": "OK"}}
 ```
 
 ### Scenario E — Scroll and find content
 
-```
-scroll_until_text("Privacy Policy", scroll_direction="down", max_scrolls=10)
+```json
+{"tool": "scroll_until_text", "arguments": {"text": "Privacy Policy", "direction": "down", "max_scrolls": 10}}
 ```
 
 Or use `find_and_click` with scroll parameters when you also want to click it:
 
-```
-find_and_click("Privacy Policy", scroll_direction="down", max_scrolls=10)
+```json
+{"tool": "find_and_click", "arguments": {"text": "Privacy Policy", "scroll_direction": "down", "max_scrolls": 10}}
 ```
 
 ### Scenario F — Verify the UI changed before acting
 
 Always use `wait_for_text` rather than a fixed delay:
 
-```
-find_and_click("Delete")
-wait_for_text("Are you sure?", visible=true, timeout_ms=3000)
-find_and_click("Confirm")
-wait_for_text("Deleted", visible=true, timeout_ms=5000)
+```json
+{"tool": "find_and_click", "arguments": {"text": "Delete"}}
+{"tool": "wait_for_text",  "arguments": {"text": "Are you sure?", "visible": true, "timeout_ms": 3000}}
+{"tool": "find_and_click", "arguments": {"text": "Confirm"}}
+{"tool": "wait_for_text",  "arguments": {"text": "Deleted", "visible": true, "timeout_ms": 5000}}
 ```
 
 ### Scenario G — Complex app with many elements / deep scrolling
 
 Invest in learning once; all subsequent find operations use the cached map:
 
+```json
+{"tool": "learn_screen",      "arguments": {"max_pages": 5}}
+{"tool": "get_learned_view",  "arguments": {}}
+{"tool": "find_and_click",    "arguments": {"text": "Settings"}}
+{"tool": "find_click_and_type", "arguments": {"text": "API Key", "type_text": "abc123"}}
+{"tool": "find_and_click",    "arguments": {"text": "Save"}}
+{"tool": "clear_learned_view","arguments": {}}
 ```
-learn_screen(max_pages=5)       // scan full interface across scroll positions
-get_learned_view()              // call this if find_and_click misses elements —
-                                // inspect the element list to verify OCR found them
-find_and_click("Settings")      // fast — narrows OCR to cached bounding box
-find_click_and_type("API Key", "abc123")
-find_and_click("Save")
-clear_learned_view()            // discard after navigation to avoid stale positions
-```
+
+`learn_screen` scans the full interface across scroll positions. `get_learned_view` returns the
+element list — inspect it to verify OCR found the targets. `find_and_click` uses the cached
+bounding box (fast — no full-screen scan). `clear_learned_view` discards after navigation to
+avoid stale positions.
 
 ### Scenario H — Unknown interface (first time seeing it)
 
-Start by reading the screen, then choose the right tool based on what's there:
+Use a strict hierarchy to explore before acting:
 
-```
-find_elements()                 // returns all visible text with coordinates and types
+1. **Primary — fast text dump:** `find_elements` returns all visible text with coordinates and types.
+
+```json
+{"tool": "find_elements", "arguments": {}}
 ```
 
-Use the result to understand the layout:
+2. **Secondary — visual inspection:** Only if `find_elements` misses visual cues (icons without text),
+   use `take_screenshot` to visually inspect.
+
+```json
+{"tool": "take_screenshot", "arguments": {}}
+```
+
+3. **Tertiary — scrollable/long page:** Only if the page scrolls and you need below-fold elements,
+   use `learn_screen`.
+
+```json
+{"tool": "learn_screen", "arguments": {"max_pages": 5}}
+```
+
+After `find_elements` returns results:
 - If you see the target element → use `find_and_click` or `find_click_and_type` directly
-- If the interface is large or scrollable → call `learn_screen` before acting
-- If elements are missing or text is hard to read → call `take_screenshot` to visually inspect
+- If the interface is large or scrollable → proceed to `learn_screen`
 - If you need to act on many elements → switch to `execute_workflow` or `learn_screen` path
 
 ### Scenario I — One-off click on a new screen (convenience)
@@ -160,8 +192,8 @@ Use the result to understand the layout:
 Use it when you need one click on an unfamiliar screen and don't want to manage
 the learn/act/clear lifecycle manually:
 
-```
-smart_click("Submit")
+```json
+{"tool": "smart_click", "arguments": {"text": "Submit"}}
 ```
 
 For more than one action on the same screen, use `learn_screen` explicitly so
@@ -183,10 +215,11 @@ you control when `clear_learned_view` is called.
 
 **Lifecycle:**
 
-```
-learn_screen()          // once per "screen"
-... many find_and_click, find_click_and_type calls (all cached) ...
-clear_learned_view()    // after navigation or significant UI change
+```json
+{"tool": "learn_screen",       "arguments": {}}
+{"tool": "find_and_click",     "arguments": {"text": "..."}}
+{"tool": "find_click_and_type","arguments": {"text": "...", "type_text": "..."}}
+{"tool": "clear_learned_view", "arguments": {}}
 ```
 
 **Performance:** After `learn_screen`, each `find_and_click` narrows its OCR scan
