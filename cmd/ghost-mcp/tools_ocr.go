@@ -108,31 +108,31 @@ RESPONSE: {success, text, visible, waited_ms} or {error: "timeout..."}`),
 	), handleWaitForText)
 
 	mcpServer.AddTool(mcp.NewTool("find_elements",
-		mcp.WithDescription(`READ ALL VISIBLE TEXT ON SCREEN with coordinates and bounding boxes.
+		mcp.WithDescription(`READ ALL VISIBLE TEXT ON SCREEN with coordinates, types, and bounding boxes.
 
 EXPLORATION HIERARCHY — use tools in this order when encountering an unknown screen:
   1. find_elements   ← PRIMARY: fast text dump, always try this first
   2. take_screenshot ← SECONDARY: only if find_elements misses icon-only elements
   3. learn_screen    ← TERTIARY: only if the page scrolls and you need below-fold content
 
-⚡ LEARNING MODE: If learning mode is on and no view exists yet, this call
-automatically triggers learn_screen first. When a multi-page view exists the
-response also includes learned_off_page_elements — all elements found on
-scroll pages below the current viewport — so you can see the FULL UI in one
-call without manually scrolling.
+RESPONSE STRUCTURE:
+- actionable_elements: buttons, inputs, checkboxes, links, etc. sorted by confidence.
+  Start here — this is the short list of what you can actually click or type into.
+- elements: complete list including headings, labels, and body text.
+- labels: field label text (words ending with ":") for use as find_click_and_type targets.
+- learned_off_page_elements: elements from scroll pages below the viewport (when learning
+  mode is on and a multi-page view exists).
 
-🎯 WHEN TO USE:
+WHEN TO USE:
 - First tool to call on any unknown screen.
-- find_and_click failed — call this to see what OCR actually detected.
+- find_and_click failed — check here to see what OCR actually detected.
 - You need center_x/center_y coordinates for click_at.
-- Auditing what text is visible in a specific screen region.
 
-⚠️ LIMITATIONS:
+LIMITATIONS:
 - Detects TEXT ONLY — not icons or images without text labels.
 - Only shows what is CURRENTLY VISIBLE (use learn_screen to see below-fold).
-- Colored buttons (white on dark) may require grayscale=false.
 
-🚫 DO NOT USE to look up a button before clicking — call find_and_click directly.
+DO NOT use to look up a button before clicking — call find_and_click directly.
 
 EXAMPLE USAGE:
 // Find all elements in button area (faster than full screen)

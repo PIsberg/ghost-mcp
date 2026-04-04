@@ -1530,18 +1530,45 @@ func handleFindElements(ctx context.Context, request mcp.CallToolRequest) (*mcp.
 
 	logging.Info("find_elements: found %d elements in region (%d,%d) %dx%d", len(elements), regionX, regionY, regionW, regionH)
 
-	// Build JSON response
+	// Build actionable_elements: interactive types only, sorted by confidence descending.
+	// Use this array for a fast scan of what can be clicked or typed into.
+	actionable := make([]map[string]interface{}, 0)
+	for _, e := range elements {
+		if isActionableElementType(e["type"].(learner.ElementType)) {
+			actionable = append(actionable, e)
+		}
+	}
+	sort.Slice(actionable, func(i, j int) bool {
+		ci, _ := actionable[i]["confidence"].(float64)
+		cj, _ := actionable[j]["confidence"].(float64)
+		return ci > cj
+	})
+
+	// Serialize elements (all) with type field included.
 	elementsJSON := "["
 	for i, e := range elements {
 		if i > 0 {
 			elementsJSON += ","
 		}
 		elementsJSON += fmt.Sprintf(
-			`{"text":%q,"x":%d,"y":%d,"width":%d,"height":%d,"center_x":%d,"center_y":%d,"confidence":%.1f}`,
-			e["text"], e["x"], e["y"], e["width"], e["height"], e["center_x"], e["center_y"], e["confidence"],
+			`{"text":%q,"type":%q,"x":%d,"y":%d,"width":%d,"height":%d,"center_x":%d,"center_y":%d,"confidence":%.1f}`,
+			e["text"], e["type"], e["x"], e["y"], e["width"], e["height"], e["center_x"], e["center_y"], e["confidence"],
 		)
 	}
 	elementsJSON += "]"
+
+	// Serialize actionable_elements.
+	actionableJSON := "["
+	for i, e := range actionable {
+		if i > 0 {
+			actionableJSON += ","
+		}
+		actionableJSON += fmt.Sprintf(
+			`{"text":%q,"type":%q,"center_x":%d,"center_y":%d,"confidence":%.1f}`,
+			e["text"], e["type"], e["center_x"], e["center_y"], e["confidence"],
+		)
+	}
+	actionableJSON += "]"
 
 	// Extract labels (words ending with ":") for easy discovery
 	labels := findLabelCandidates(ocrResult, 10)
@@ -1563,8 +1590,8 @@ func handleFindElements(ctx context.Context, request mcp.CallToolRequest) (*mcp.
 		for _, e := range view.Elements {
 			if e.PageIndex > 0 {
 				offPage = append(offPage, fmt.Sprintf(
-					`{"text":%q,"x":%d,"y":%d,"width":%d,"height":%d,"center_x":%d,"center_y":%d,"confidence":%.1f,"page_index":%d}`,
-					e.Text, e.X, e.Y, e.Width, e.Height, e.X+e.Width/2, e.Y+e.Height/2, e.Confidence, e.PageIndex,
+					`{"text":%q,"type":%q,"x":%d,"y":%d,"width":%d,"height":%d,"center_x":%d,"center_y":%d,"confidence":%.1f,"page_index":%d}`,
+					e.Text, string(e.Type), e.X, e.Y, e.Width, e.Height, e.X+e.Width/2, e.Y+e.Height/2, e.Confidence, e.PageIndex,
 				))
 			}
 		}
@@ -1575,17 +1602,37 @@ func handleFindElements(ctx context.Context, request mcp.CallToolRequest) (*mcp.
 		}
 	}
 
-	// Build JSON response - put labels FIRST so agent sees them immediately
+	// Build JSON response.
+	// actionable_elements is listed first: buttons, inputs, and other interactive
+	// elements sorted by confidence — the most useful target for find_and_click.
+	// elements contains the complete list including headings, labels, and body text.
 	if offPageNote != "" {
 		return mcp.NewToolResultText(fmt.Sprintf(
-			`{"success":true,"labels":%s,"label_note":"FIELD LABELS VISIBLE ON SCREEN - search for these exact texts!","element_count":%d,"region":{"x":%d,"y":%d,"width":%d,"height":%d},"elements":%s,"learned_off_page_note":%q,"learned_off_page_elements":%s}`,
-			labelsJSON, len(elements), regionX, regionY, regionW, regionH, elementsJSON, offPageNote, offPageElements,
+			`{"success":true,"actionable_count":%d,"actionable_elements":%s,"labels":%s,"element_count":%d,"region":{"x":%d,"y":%d,"width":%d,"height":%d},"elements":%s,"learned_off_page_note":%q,"learned_off_page_elements":%s}`,
+			len(actionable), actionableJSON, labelsJSON, len(elements), regionX, regionY, regionW, regionH, elementsJSON, offPageNote, offPageElements,
 		)), nil
 	}
 	return mcp.NewToolResultText(fmt.Sprintf(
-		`{"success":true,"labels":%s,"label_note":"FIELD LABELS VISIBLE ON SCREEN - search for these exact texts!","element_count":%d,"region":{"x":%d,"y":%d,"width":%d,"height":%d},"elements":%s}`,
-		labelsJSON, len(elements), regionX, regionY, regionW, regionH, elementsJSON,
+		`{"success":true,"actionable_count":%d,"actionable_elements":%s,"labels":%s,"element_count":%d,"region":{"x":%d,"y":%d,"width":%d,"height":%d},"elements":%s}`,
+		len(actionable), actionableJSON, labelsJSON, len(elements), regionX, regionY, regionW, regionH, elementsJSON,
 	)), nil
+}
+
+// isActionableElementType returns true for interactive element types that can be
+// clicked, typed into, toggled, or otherwise manipulated by an automation agent.
+func isActionableElementType(t learner.ElementType) bool {
+	switch t {
+	case learner.ElementTypeButton,
+		learner.ElementTypeInput,
+		learner.ElementTypeCheckbox,
+		learner.ElementTypeRadio,
+		learner.ElementTypeDropdown,
+		learner.ElementTypeToggle,
+		learner.ElementTypeSlider,
+		learner.ElementTypeLink:
+		return true
+	}
+	return false
 }
 
 // handleFindAndClickAll finds and clicks multiple text labels in sequence.

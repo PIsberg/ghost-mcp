@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ghost-mcp/internal/learner"
 	"github.com/ghost-mcp/internal/ocr"
 	"github.com/mark3labs/mcp-go/mcp"
 )
@@ -924,6 +925,43 @@ func TestIsWordBoundary(t *testing.T) {
 		result := isWordBoundary(tt.char)
 		if result != tt.expected {
 			t.Errorf("isWordBoundary(%q) = %v, want %v", tt.char, result, tt.expected)
+		}
+	}
+}
+
+// =============================================================================
+// ACTIONABLE ELEMENT FILTER TESTS
+// =============================================================================
+
+func TestIsActionableElementType_Interactive(t *testing.T) {
+	interactive := []learner.ElementType{
+		learner.ElementTypeButton,
+		learner.ElementTypeInput,
+		learner.ElementTypeCheckbox,
+		learner.ElementTypeRadio,
+		learner.ElementTypeDropdown,
+		learner.ElementTypeToggle,
+		learner.ElementTypeSlider,
+		learner.ElementTypeLink,
+	}
+	for _, et := range interactive {
+		if !isActionableElementType(et) {
+			t.Errorf("isActionableElementType(%q) = false, want true", et)
+		}
+	}
+}
+
+func TestIsActionableElementType_NonInteractive(t *testing.T) {
+	nonInteractive := []learner.ElementType{
+		learner.ElementTypeHeading,
+		learner.ElementTypeLabel,
+		learner.ElementTypeValue,
+		learner.ElementTypeText,
+		learner.ElementTypeUnknown,
+	}
+	for _, et := range nonInteractive {
+		if isActionableElementType(et) {
+			t.Errorf("isActionableElementType(%q) = true, want false", et)
 		}
 	}
 }
