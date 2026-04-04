@@ -258,15 +258,19 @@ you control when ` + "`clear_learned_view`" + ` is called.
 
 ## 3. Learning Mode — When and Why
 
-**Use learning mode when:**
-- You have 3 or more sequential actions on the same screen
-- The interface scrolls and elements may be off-screen
-- A prompt gives you multiple instructions to carry out on one screen
+**Learning mode is ON by default.** The first OCR call (` + "`find_and_click`" + `, ` + "`find_elements`" + `, etc.)
+automatically runs ` + "`learn_screen`" + ` if no cached view exists yet. You do not need to call
+` + "`set_learning_mode`" + ` or ` + "`learn_screen`" + ` manually to get this benefit.
 
-**Skip learning mode when:**
-- You only need to do one or two things
-- The page will navigate away immediately after the action
-- You have already called ` + "`learn_screen`" + ` and haven't navigated
+**Call ` + "`learn_screen`" + ` explicitly when:**
+- You want to control exactly when the scan happens (before a burst of actions).
+- The page is long/scrollable and you need ` + "`max_pages > 1`" + `.
+- The view is stale after navigation (after ` + "`clear_learned_view`" + `).
+
+**Call ` + "`clear_learned_view`" + ` when:**
+- You navigate to a new page, open a dialog, or close a modal.
+- ` + "`find_and_click`" + ` starts mis-clicking (stale cached coordinates).
+- You want to force a fresh scan of the current screen.
 
 **Lifecycle:**
 

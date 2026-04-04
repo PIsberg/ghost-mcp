@@ -70,12 +70,11 @@ stale element positions from causing mis-clicks. Then call learn_screen to rebui
 	mcpServer.AddTool(mcp.NewTool("set_learning_mode",
 		mcp.WithDescription(`Enable or disable learning mode at runtime.
 
-When enabled: the first call to find_and_click or find_elements automatically triggers
-learn_screen if no view exists, and all subsequent OCR calls use the cached view (10–25× faster).
+Learning mode is ON by default. When enabled, the first OCR call auto-runs learn_screen,
+and all subsequent calls use the cached view (10–25× faster than full-screen scans).
 
-When disabled: every OCR call does a fresh full-screen scan.
-
-Learning mode can also be enabled permanently at startup with GHOST_MCP_LEARNING=1.`),
+Set enabled=false only if you need raw full-screen OCR on every call without caching.
+To disable at startup instead, set GHOST_MCP_LEARNING=0 in the server environment.`),
 		mcp.WithBoolean("enabled", mcp.Description("true to enable learning mode, false to disable."), mcp.Required()),
 	), handleSetLearningMode)
 
