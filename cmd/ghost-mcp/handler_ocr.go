@@ -2464,17 +2464,73 @@ func handleFindClickAndType(ctx context.Context, request mcp.CallToolRequest) (*
 		robotgo.KeyTap("enter")
 	}
 
-	finalX, finalY := robotgo.GetMousePos()
+	// ── Verify the typed text actually appeared on screen ─────────────────
+	// Without this, a mis-click means keystrokes go into the void and the
+	// tool falsely reports success (the root cause of audit log seq 5-6
+	// where "GHOST MCP ROCKS!!" was never entered despite TOOL_SUCCESS).
 	foundText := searchText
 	if labelFound {
-		foundText = searchText // Keep original search text in response
+		foundText = searchText
 	}
-	logging.Info("ACTION COMPLETE: find_click_and_type %q -> typed %d characters", searchText, len(typeText))
+	verified := verifyTextOnScreen(typeText, 3, 400*time.Millisecond)
+	if !verified {
+		// Retry: click again and re-type (common fix for missed focus)
+		logging.Info("find_click_and_type: verification failed, retrying click + type")
+		robotgo.Move(cx, cy)
+		time.Sleep(100 * time.Millisecond)
+		robotgo.Click("left", false)
+		time.Sleep(200 * time.Millisecond)
+		robotgo.TypeStr(typeText)
+		if pressEnter {
+			robotgo.KeyTap("enter")
+		}
+		verified = verifyTextOnScreen(typeText, 3, 400*time.Millisecond)
+		if !verified {
+			logging.Info("find_click_and_type: text %q NOT verified on screen after retry", typeText)
+			return mcp.NewToolResultText(fmt.Sprintf(
+				`{"success":false,"found":%q,"box":{"x":%d,"y":%d,"width":%d,"height":%d},"clicked_x":%d,"clicked_y":%d,"characters_typed":%d,"enter_pressed":%t,"pass":%q,"scroll_count":%d,"label_found":%t,"verified":false,"error":"text %q did not appear on screen after typing — click may have missed the target"}`,
+				foundText, minX, minY, maxX-minX, maxY-minY, cx, cy, len(typeText), pressEnter, passName, scrollCount, labelFound, typeText,
+			)), nil
+		}
+	}
+
+	finalX, finalY := robotgo.GetMousePos()
+	logging.Info("ACTION COMPLETE: find_click_and_type %q -> typed %d characters (verified on screen)", searchText, len(typeText))
 
 	return mcp.NewToolResultText(fmt.Sprintf(
-		`{"success":true,"found":%q,"box":{"x":%d,"y":%d,"width":%d,"height":%d},"clicked_x":%d,"clicked_y":%d,"actual_x":%d,"actual_y":%d,"characters_typed":%d,"enter_pressed":%t,"pass":%q,"scroll_count":%d,"label_found":%t}`,
+		`{"success":true,"found":%q,"box":{"x":%d,"y":%d,"width":%d,"height":%d},"clicked_x":%d,"clicked_y":%d,"actual_x":%d,"actual_y":%d,"characters_typed":%d,"enter_pressed":%t,"pass":%q,"scroll_count":%d,"label_found":%t,"verified":true}`,
 		foundText, minX, minY, maxX-minX, maxY-minY, cx, cy, finalX, finalY, len(typeText), pressEnter, passName, scrollCount, labelFound,
 	)), nil
+}
+
+// verifyTextOnScreen captures the screen and checks if typeText appears via OCR.
+// Retries up to maxAttempts times with delay between each. Returns true if found.
+func verifyTextOnScreen(typeText string, maxAttempts int, delay time.Duration) bool {
+	if strings.TrimSpace(typeText) == "" {
+		return true // Nothing to verify
+	}
+	screenW, screenH := robotgo.GetScreenSize()
+	needle := strings.ToLower(strings.TrimSpace(typeText))
+
+	for attempt := 0; attempt < maxAttempts; attempt++ {
+		time.Sleep(delay)
+		img, err := robotgo.CaptureImg(0, 0, screenW, screenH)
+		if err != nil {
+			continue
+		}
+		ocrResult, ocrErr := ocr.ReadImage(img, ocr.Options{Color: false})
+		if ocrErr != nil || ocrResult == nil {
+			continue
+		}
+		for _, w := range ocrResult.Words {
+			if strings.Contains(strings.ToLower(strings.TrimSpace(w.Text)), needle) {
+				logging.Info("verifyTextOnScreen: found %q (attempt %d/%d)", typeText, attempt+1, maxAttempts)
+				return true
+			}
+		}
+	}
+	logging.Info("verifyTextOnScreen: %q not found after %d attempts", typeText, maxAttempts)
+	return false
 }
 
 // saveScreenshotIfKept centralizes the logic to write a debug screenshot to disk

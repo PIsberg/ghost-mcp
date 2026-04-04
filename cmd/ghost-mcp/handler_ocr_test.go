@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"image"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -1180,5 +1181,37 @@ func TestFindButtonLikeElements_Deduplicates(t *testing.T) {
 	got := findButtonLikeElements(result, 10)
 	if len(got) > 1 {
 		t.Errorf("expected at most 1 element (deduplicated), got %d: %v", len(got), got)
+	}
+}
+
+// =============================================================================
+// verifyTextOnScreen
+// =============================================================================
+
+func TestVerifyTextOnScreen_ShortCircuitOnEmpty(t *testing.T) {
+	// Empty needle should still attempt captures but is a valid edge case
+	// This test just ensures no panic on empty input
+	if os.Getenv("CI") != "" || os.Getenv("GITHUB_ACTIONS") != "" {
+		t.Skip("skipping: requires real desktop screen")
+	}
+	// Should not panic
+	_ = verifyTextOnScreen("", 1, 100*time.Millisecond)
+}
+
+func TestVerifyTextOnScreen_RespectsMaxAttempts(t *testing.T) {
+	if os.Getenv("CI") != "" || os.Getenv("GITHUB_ACTIONS") != "" {
+		t.Skip("skipping: requires real desktop screen")
+	}
+	// Searching for gibberish that won't be on screen should return false
+	// but should complete within maxAttempts * delay timeframe
+	start := time.Now()
+	got := verifyTextOnScreen("XYZNONEXISTENTTEXT999", 2, 100*time.Millisecond)
+	elapsed := time.Since(start)
+	if got {
+		t.Fatal("expected false for nonexistent text")
+	}
+	// Should have waited at least 2 * 100ms = 200ms
+	if elapsed < 200*time.Millisecond {
+		t.Errorf("expected at least 200ms elapsed, got %v", elapsed)
 	}
 }
