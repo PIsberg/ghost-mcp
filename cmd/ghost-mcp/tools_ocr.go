@@ -12,6 +12,15 @@ func registerOCRTools(mcpServer *server.MCPServer) {
 	mcpServer.AddTool(mcp.NewTool("find_and_click",
 		mcp.WithDescription(`Find text on screen and click its center. Case-insensitive substring match.
 
+⚠️ USE element_type TO AVOID FALSE MATCHES:
+If the search text could match multiple element types (e.g. "Submit" appears as both a button AND a heading),
+set element_type to target the correct one. Examples:
+  - "click the Submit button" → {"text": "Submit", "element_type": "button"}
+  - "click the Save button" → {"text": "Save", "element_type": "button"}
+  - "click the checkbox" → {"text": "I agree", "element_type": "checkbox"}
+  - "click the link" → {"text": "Privacy Policy", "element_type": "link"}
+If the text is unique and unambiguous, you can omit element_type.
+
 For best performance, call learn_screen first — subsequent calls use the cached element
 location (10–25× faster). For a single one-off click, find_and_click works without learn_screen.
 
@@ -55,6 +64,7 @@ RESPONSE: {success, found, box, requested_x, requested_y, actual_x, actual_y, bu
 		mcp.WithNumber("height", mcp.Description("Height of region to scan (default: full screen). Smaller = faster.")),
 		mcp.WithNumber("delay_ms", mcp.Description("Milliseconds to wait after click (default: 100). Set to 0 to skip. Max: 10000.")),
 		mcp.WithBoolean("grayscale", mcp.Description("Use grayscale OCR (default: true). Set false for color-dependent text.")),
+		mcp.WithString("element_type", mcp.Description("Use when text could match multiple element types. 'button' for buttons, 'checkbox' for checkboxes, 'radio' for radio buttons, 'link' for hyperlinks, 'label' for field labels, 'input' for text fields, 'dropdown' for select menus, 'toggle' for switches, 'slider' for range controls, 'heading' for titles, 'value' for numbers, 'text' for body text. EXAMPLE: User says 'click the Save button' → set element_type='button'.")),
 		mcp.WithString("scroll_direction", mcp.Description("Optional: scroll direction to search off-screen ('up' or 'down'). If set, tool will scroll and search until text is found.")),
 		mcp.WithNumber("max_scrolls", mcp.Description("Maximum scroll attempts when scroll_direction is set (default: 8).")),
 		mcp.WithNumber("scroll_amount", mcp.Description("Scroll amount per step when scroll_direction is set (default: 5).")),
@@ -105,10 +115,27 @@ RESPONSE: {success, text, visible, waited_ms} or {error: "timeout..."}`),
 		mcp.WithNumber("y", mcp.Description("Y coordinate of region to scan (default: 0 = full screen).")),
 		mcp.WithNumber("width", mcp.Description("Width of region to scan (default: full screen width).")),
 		mcp.WithNumber("height", mcp.Description("Height of region to scan (default: full screen height).")),
+		mcp.WithString("element_type", mcp.Description("Filter to specific element type: 'button', 'input', 'checkbox', 'radio', 'dropdown', 'toggle', 'slider', 'label', 'heading', 'link', 'value', 'text'. Only waits for elements of this type.")),
 	), handleWaitForText)
 
 	mcpServer.AddTool(mcp.NewTool("find_elements",
 		mcp.WithDescription(`READ ALL VISIBLE TEXT ON SCREEN with coordinates, types, and bounding boxes.
+
+⚠️ CRITICAL: ALWAYS SET element_type WHEN USER ASKS FOR SPECIFIC ELEMENT TYPES
+When the user asks for buttons, checkboxes, inputs, links, labels, headings, dropdowns, sliders, toggles, radio buttons, or values —
+YOU MUST set element_type to the matching value. Examples:
+  - "find all buttons" → {"element_type": "button"}
+  - "what checkboxes are there" → {"element_type": "checkbox"}
+  - "find input fields" → {"element_type": "input"}
+  - "show me links" → {"element_type": "link"}
+  - "what labels are on this form" → {"element_type": "label"}
+  - "find all headings" → {"element_type": "heading"}
+  - "show dropdowns" → {"element_type": "dropdown"}
+  - "find sliders" → {"element_type": "slider"}
+  - "find toggles/switches" → {"element_type": "toggle"}
+  - "find radio buttons" → {"element_type": "radio"}
+  - "show me prices/values" → {"element_type": "value"}
+Only omit element_type when the user asks a general question like "what's on screen?" or "what text do you see?"
 
 EXPLORATION HIERARCHY — use tools in this order when encountering an unknown screen:
   1. find_elements            ← PRIMARY: fast text dump, always try this first
@@ -142,8 +169,11 @@ LIMITATIONS:
 
 DO NOT use to look up a button before clicking — call find_and_click directly.
 
+EXAMPLE: Find all buttons on screen
+{"element_type": "button"}
+
 EXAMPLE: Full-page exploration (replaces learn_screen + get_learned_view):
-{"scan_pages": 5}
+{"scan_pages": 5, "element_type": "button"}
 
 // Response includes all elements from all pages:
 {
@@ -162,15 +192,15 @@ TIPS:
 - Elements filtered by confidence (min 40%) and size (min 15x8px)
 - center_x/center_y are ready to use with click_at or move_mouse
 - All coordinates use logical pixels
-- FILTER BY TYPE: Use type field to find specific elements:
-  - type=button for buttons
-  - type=input for text input fields
-  - type=checkbox for checkboxes
-  - type=radio for radio buttons
-  - type=dropdown for dropdown menus
-  - type=toggle for on/off switches
-  - type=slider for sliders/range controls
-  - type=label for field labels
+- FILTER BY TYPE: Use element_type parameter when looking for specific elements:
+  - element_type="button" for buttons
+  - element_type="input" for text input fields
+  - element_type="checkbox" for checkboxes
+  - element_type="radio" for radio buttons
+  - element_type="dropdown" for dropdown menus
+  - element_type="toggle" for on/off switches
+  - element_type="slider" for sliders/range controls
+  - element_type="label" for field labels
 - Element types: button, input, checkbox, radio, dropdown, toggle, slider, label, heading, link, value, text
 - width/height help identify element type (wide+short = likely button)
 
@@ -194,6 +224,7 @@ EXAMPLE: Find form elements:
 		mcp.WithNumber("y", mcp.Description("Y coordinate of region to scan (default: 0 = full screen).")),
 		mcp.WithNumber("width", mcp.Description("Width of region to scan (default: full screen width).")),
 		mcp.WithNumber("height", mcp.Description("Height of region to scan (default: full screen height).")),
+		mcp.WithString("element_type", mcp.Description("REQUIRED when user asks for specific UI elements. Use 'button' for buttons, 'input' for text fields, 'checkbox' for checkboxes, 'radio' for radio buttons, 'dropdown' for select menus, 'toggle' for switches, 'slider' for range controls, 'label' for field labels, 'heading' for titles, 'link' for hyperlinks, 'value' for numbers/prices, 'text' for body text. EXAMPLE: User says 'find all buttons' → set element_type='button'. User says 'what's on screen?' → omit this parameter.")),
 		mcp.WithNumber("scan_pages", mcp.Description("Number of scroll pages to scan (default: 1 = current viewport only). Set >1 to auto-scroll and discover elements across multiple pages. Each page scrolls the default ScrollAmount (5) ticks. Elements from non-zero pages include page_index in the response.")),
 	), handleFindElements)
 
@@ -221,6 +252,7 @@ On failure the error includes closest OCR matches so you can refine the search t
 		mcp.WithNumber("scroll_x", mcp.Description("X coordinate to scroll at (default: screen center). Useful for scrolling a specific panel.")),
 		mcp.WithNumber("scroll_y", mcp.Description("Y coordinate to scroll at (default: screen center). Useful for scrolling a specific panel.")),
 		mcp.WithBoolean("grayscale", mcp.Description("Use grayscale OCR (default: true).")),
+		mcp.WithString("element_type", mcp.Description("Filter search to specific element type: 'button', 'input', 'checkbox', 'radio', 'dropdown', 'toggle', 'slider', 'label', 'heading', 'link', 'value', 'text'. Only matches elements of this type.")),
 	), handleFindClickAndType)
 
 	mcpServer.AddTool(mcp.NewTool("get_region_cache_stats",

@@ -537,9 +537,9 @@ The OCR layer keeps a lightweight single-entry cache keyed by a fast hash of the
 
 | Aspect | Details |
 |--------|---------|
-| **Purpose** | Capture screen region, run Tesseract OCR, return all text elements with bounding boxes and center coordinates |
-| **Parameters** | `x`, `y`, `width`, `height` (all optional — defaults to full screen) |
-| **Returns** | `{"success": bool, "element_count": int, "region": {...}, "elements": [{text, x, y, width, height, center_x, center_y, confidence}]}` |
+| **Purpose** | Capture screen region, run Tesseract OCR, return all text elements with bounding boxes, center coordinates, and element types |
+| **Parameters** | `x`, `y`, `width`, `height` (all optional — defaults to full screen), `element_type` (optional string: `button`, `input`, `checkbox`, `radio`, `dropdown`, `toggle`, `slider`, `label`, `heading`, `link`, `value`, `text`) |
+| **Returns** | `{"success": bool, "element_count": int, "region": {...}, "elements": [{text, type, x, y, width, height, center_x, center_y, confidence}]}` |
 | **Dependencies** | Tesseract OCR (`gosseract`), `TESSDATA_PREFIX` must be set |
 | **Coordinates** | Element positions are absolute screen coordinates, ready to use with `click_at` |
 
@@ -548,9 +548,9 @@ The OCR layer keeps a lightweight single-entry cache keyed by a fast hash of the
 | Aspect | Details |
 |--------|---------|
 | **Purpose** | Full-screen OCR scan, find nth matching word, click its center |
-| **Parameters** | `text` (string, required), `button` (default "left"), `nth` (int, default 1) |
+| **Parameters** | `text` (string, required), `button` (default "left"), `nth` (int, default 1), `element_type` (optional string: `button`, `input`, `checkbox`, `radio`, `dropdown`, `toggle`, `slider`, `label`, `heading`, `link`, `value`, `text`) |
 | **Returns** | `{"success": bool, "found": string, "x": int, "y": int, "button": string, "occurrence": int}` |
-| **Match logic** | Case-insensitive substring match against each OCR word |
+| **Match logic** | Case-insensitive substring match against each OCR word, filtered by element type if specified |
 | **Dependencies** | Tesseract OCR (`gosseract`), `TESSDATA_PREFIX` must be set |
 | **RobotGo Calls** | `robotgo.CaptureImg()`, `robotgo.Move()`, `robotgo.Click()` |
 

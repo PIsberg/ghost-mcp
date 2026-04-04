@@ -352,6 +352,12 @@ func handleFindAndClick(ctx context.Context, request mcp.CallToolRequest) (*mcp.
 		nth = n
 	}
 
+	// Element type filter
+	elementTypeFilter, _ := getStringParam(request, "element_type")
+	if elementTypeFilter != "" && !isValidElementType(elementTypeFilter) {
+		return mcp.NewToolResultError(fmt.Sprintf("invalid element_type '%s', must be one of: button, input, checkbox, radio, dropdown, toggle, slider, label, heading, link, value, text", elementTypeFilter)), nil
+	}
+
 	// Auto-scroll feature: scroll down searching for text if not found on first screen
 	scrollDirection, _ := getStringParam(request, "scroll_direction")
 	maxScrolls := 8
@@ -424,13 +430,13 @@ func handleFindAndClick(ctx context.Context, request mcp.CallToolRequest) (*mcp.
 	// Scroll-and-search mode (same page)
 	if scrollDirection != "" && (scrollDirection == "down" || scrollDirection == "up") {
 		logging.Info("find_and_click: scroll-and-search mode, direction=%s, max_scrolls=%d", scrollDirection, maxScrolls)
-		return findAndClickWithScroll(ctx, request, searchText, button, nth, scrollDirection, maxScrolls, scrollAmount, screenW, screenH)
+		return findAndClickWithScroll(ctx, request, searchText, button, nth, scrollDirection, maxScrolls, scrollAmount, screenW, screenH, elementTypeFilter)
 	}
 
 	// Multi-page search mode (different pages/tabs)
 	if nextPageKeys != "" || maxPages > 1 {
 		logging.Info("find_and_click: multi-page search mode, max_pages=%d, next_keys=%s", maxPages, nextPageKeys)
-		return findAndClickMultiPage(ctx, request, searchText, button, nth, nextPageKeys, maxPages, screenW, screenH)
+		return findAndClickMultiPage(ctx, request, searchText, button, nth, nextPageKeys, maxPages, screenW, screenH, elementTypeFilter)
 	}
 
 	// Learning-mode fast path: if a learned view exists and no custom region was
@@ -482,12 +488,12 @@ func handleFindAndClick(ctx context.Context, request mcp.CallToolRequest) (*mcp.
 
 	grayscale := getBoolParam(request, "grayscale", true)
 
-	minX, minY, maxX, maxY, found, passName := parallelFindText(ctx, img, searchText, nth, grayscale)
+	minX, minY, maxX, maxY, found, passName := parallelFindText(ctx, img, searchText, nth, grayscale, elementTypeFilter)
 	if !found {
 		logging.Info("Text %q (occurrence %d) not found on screen", searchText, nth)
 
 		// Get candidates to show what WAS found (helps AI decide next action)
-		candidates := getMatchCandidates(searchText, img, grayscale)
+		candidates := getMatchCandidates(searchText, img, grayscale, elementTypeFilter)
 
 		// Record failure and get updated stats
 		failStats := tracker.recordCall("find_and_click", searchText, false)
@@ -578,7 +584,7 @@ func handleFindAndClick(ctx context.Context, request mcp.CallToolRequest) (*mcp.
 
 // getMatchCandidates returns all potential matches with their scores.
 // This helps AI understand which text elements were considered and their confidence.
-func getMatchCandidates(searchText string, img image.Image, grayscale bool) string {
+func getMatchCandidates(searchText string, img image.Image, grayscale bool, elementTypeFilter string) string {
 	ocrResult, err := ocr.ReadImage(img, ocr.Options{Color: !grayscale})
 	if err != nil || ocrResult == nil {
 		return "[]"
@@ -598,6 +604,11 @@ func getMatchCandidates(searchText string, img image.Image, grayscale bool) stri
 	var candidates []candidate
 
 	for _, w := range ocrResult.Words {
+		// Filter by element type if specified
+		if !matchesElementType(w, elementTypeFilter) {
+			continue
+		}
+		
 		phrase := strings.ToLower(strings.TrimSpace(w.Text))
 		score := scoreMatch(phrase, needle, needleWords)
 		if score > 0 {
@@ -706,6 +717,7 @@ func findAndClickWithScroll(
 	nth int,
 	scrollDirection string,
 	maxScrolls, scrollAmount, screenW, screenH int,
+	elementTypeFilter string,
 ) (*mcp.CallToolResult, error) {
 
 	// Scroll and search loop
@@ -720,7 +732,7 @@ func findAndClickWithScroll(
 		grayscale := getBoolParam(request, "grayscale", true)
 
 		// Search for text
-		minX, minY, maxX, maxY, found, passName := parallelFindText(ctx, img, searchText, nth, grayscale)
+		minX, minY, maxX, maxY, found, passName := parallelFindText(ctx, img, searchText, nth, grayscale, elementTypeFilter)
 		if found {
 			// Calculate click position
 			cx := minX + (maxX-minX)/2
@@ -787,6 +799,7 @@ func findAndClickMultiPage(
 	nextPageKeys string,
 	maxPages int,
 	screenW, screenH int,
+	elementTypeFilter string,
 ) (*mcp.CallToolResult, error) {
 
 	selectBest := getBoolParam(request, "select_best", false)
@@ -799,11 +812,11 @@ func findAndClickMultiPage(
 
 	// Mode 1: Select best - scan all pages first, collect matches, choose highest score
 	if selectBest {
-		return findAndClickMultiPageSelectBest(ctx, request, searchText, button, nth, nextPageKeys, maxPages, screenW, screenH, keys)
+		return findAndClickMultiPageSelectBest(ctx, request, searchText, button, nth, nextPageKeys, maxPages, screenW, screenH, keys, elementTypeFilter)
 	}
 
 	// Mode 2: First match - click the first match found (original behavior)
-	return findAndClickMultiPageFirstMatch(ctx, request, searchText, button, nth, nextPageKeys, maxPages, screenW, screenH, keys)
+	return findAndClickMultiPageFirstMatch(ctx, request, searchText, button, nth, nextPageKeys, maxPages, screenW, screenH, keys, elementTypeFilter)
 }
 
 // findAndClickMultiPageSelectBest scans ALL pages first, collects all matches with scores,
@@ -817,6 +830,7 @@ func findAndClickMultiPageSelectBest(
 	maxPages int,
 	screenW, screenH int,
 	keys []string,
+	elementTypeFilter string,
 ) (*mcp.CallToolResult, error) {
 
 	type pageMatch struct {
@@ -841,7 +855,7 @@ func findAndClickMultiPageSelectBest(
 		}
 
 		// Get all match candidates with scores
-		candidates := getMatchCandidates(searchText, img, grayscale)
+		candidates := getMatchCandidates(searchText, img, grayscale, elementTypeFilter)
 		if candidates != "[]" {
 			// Parse candidates and add page info
 			var parsed []struct {
@@ -959,6 +973,7 @@ func findAndClickMultiPageFirstMatch(
 	maxPages int,
 	screenW, screenH int,
 	keys []string,
+	elementTypeFilter string,
 ) (*mcp.CallToolResult, error) {
 
 	for page := 0; page < maxPages; page++ {
@@ -970,7 +985,7 @@ func findAndClickMultiPageFirstMatch(
 		}
 
 		grayscale := getBoolParam(request, "grayscale", true)
-		minX, minY, maxX, maxY, found, passName := parallelFindText(ctx, img, searchText, nth, grayscale)
+		minX, minY, maxX, maxY, found, passName := parallelFindText(ctx, img, searchText, nth, grayscale, elementTypeFilter)
 
 		if found {
 			// Calculate click position
@@ -1038,7 +1053,7 @@ func findAndClickMultiPageFirstMatch(
 // words that match searchText. This handles multi-word buttons like "Save Changes"
 // by returning the combined bounding box of all matching words on the same line.
 // Returns the merged bounds relative to the OCR image, or false if not found.
-func findButtonBounds(ocrResult *ocr.Result, searchText string, nth int) (minX, minY, maxX, maxY int, found bool) {
+func findButtonBounds(ocrResult *ocr.Result, searchText string, nth int, elementTypeFilter string) (minX, minY, maxX, maxY int, found bool) {
 	needle := strings.ToLower(strings.TrimSpace(searchText))
 	needleWords := strings.Fields(needle) // Split into words for smarter matching
 
@@ -1050,6 +1065,11 @@ func findButtonBounds(ocrResult *ocr.Result, searchText string, nth int) (minX, 
 	var matches []match
 
 	for i, w := range ocrResult.Words {
+		// Filter by element type if specified
+		if !matchesElementType(w, elementTypeFilter) {
+			continue
+		}
+
 		minX, minY = w.X, w.Y
 		maxX, maxY = w.X+w.Width, w.Y+w.Height
 		avgHeight := w.Height
@@ -1608,7 +1628,7 @@ func tryTextVariations(ctx context.Context, request mcp.CallToolRequest, origina
 
 	// Try each variation
 	for _, variation := range variations {
-		foundX, foundY, foundW, foundH, found, _ := parallelFindText(ctx, nil, variation, nth, true)
+		foundX, foundY, foundW, foundH, found, _ := parallelFindText(ctx, nil, variation, nth, true, "")
 		if found {
 			logging.Info("tryTextVariations: FOUND with variation %q at (%d,%d)", variation, foundX, foundY)
 			// Update cache with original text but found variation's bounds
@@ -1662,6 +1682,13 @@ func handleFindElements(ctx context.Context, request mcp.CallToolRequest) (*mcp.
 		userSpecifiedRegion = true
 	}
 
+	// Element type filter
+	elementTypeFilter, _ := getStringParam(request, "element_type")
+	if elementTypeFilter != "" && !isValidElementType(elementTypeFilter) {
+		return mcp.NewToolResultError(fmt.Sprintf("invalid element_type '%s', must be one of: button, input, checkbox, radio, dropdown, toggle, slider, label, heading, link, value, text", elementTypeFilter)), nil
+	}
+	requestedElementType := parseElementType(elementTypeFilter)
+
 	// ── scan_pages: single-call multi-page exploration ────────────────────
 	scanPages := 1
 	if n, err := getIntParam(request, "scan_pages"); err == nil && n > 1 {
@@ -1669,7 +1696,7 @@ func handleFindElements(ctx context.Context, request mcp.CallToolRequest) (*mcp.
 	}
 
 	if scanPages > 1 {
-		return handleFindElementsScanPages(ctx, request, scanPages)
+		return handleFindElementsScanPages(ctx, request, scanPages, elementTypeFilter)
 	}
 
 	// Auto-learn if learning mode is on and no view exists yet.
@@ -1708,6 +1735,11 @@ func handleFindElements(ctx context.Context, request mcp.CallToolRequest) (*mcp.
 
 		// Infer element type to help AI identify buttons vs labels vs headings
 		elementType := learner.InferElementType(w.Text, w.Width, w.Height)
+
+		// Filter by requested element type
+		if elementTypeFilter != "" && elementType != requestedElementType {
+			continue
+		}
 
 		elements = append(elements, map[string]interface{}{
 			"text":       w.Text,
@@ -1783,6 +1815,10 @@ func handleFindElements(ctx context.Context, request mcp.CallToolRequest) (*mcp.
 		var offPage []string
 		for _, e := range view.Elements {
 			if e.PageIndex > 0 {
+				// Filter by element type if specified
+				if elementTypeFilter != "" && e.Type != requestedElementType {
+					continue
+				}
 				offPage = append(offPage, fmt.Sprintf(
 					`{"text":%q,"type":%q,"x":%d,"y":%d,"width":%d,"height":%d,"center_x":%d,"center_y":%d,"confidence":%.1f,"page_index":%d}`,
 					e.Text, string(e.Type), e.X, e.Y, e.Width, e.Height, e.X+e.Width/2, e.Y+e.Height/2, e.Confidence, e.PageIndex,
@@ -1815,8 +1851,8 @@ func handleFindElements(ctx context.Context, request mcp.CallToolRequest) (*mcp.
 // handleFindElementsScanPages performs a multi-page scan via learnScreen,
 // merges all discovered elements from every scroll page, and returns them
 // in a single response with page_index on each element.
-func handleFindElementsScanPages(_ context.Context, request mcp.CallToolRequest, scanPages int) (*mcp.CallToolResult, error) {
-	logging.Info("find_elements(scan_pages=%d): running multi-page scan", scanPages)
+func handleFindElementsScanPages(_ context.Context, request mcp.CallToolRequest, scanPages int, elementTypeFilter string) (*mcp.CallToolResult, error) {
+	logging.Info("find_elements(scan_pages=%d, element_type=%s): running multi-page scan", scanPages, elementTypeFilter)
 
 	view, err := autoLearnWithPages(scanPages)
 	if err != nil {
@@ -1826,9 +1862,20 @@ func handleFindElementsScanPages(_ context.Context, request mcp.CallToolRequest,
 	// Store the view so subsequent learning-mode lookups can use it.
 	globalLearner.SetView(view)
 
+	// Parse element type filter
+	requestedElementType := learner.ElementTypeUnknown
+	if elementTypeFilter != "" {
+		requestedElementType = parseElementType(elementTypeFilter)
+	}
+
 	// Collect all elements, tagging page_index.
 	allElements := make([]map[string]interface{}, 0, len(view.Elements))
 	for _, e := range view.Elements {
+		// Filter by element type if specified
+		if elementTypeFilter != "" && e.Type != requestedElementType {
+			continue
+		}
+		
 		allElements = append(allElements, map[string]interface{}{
 			"text":       e.Text,
 			"x":          e.X,
@@ -1924,6 +1971,58 @@ func handleFindElementsScanPages(_ context.Context, request mcp.CallToolRequest,
 	)), nil
 }
 
+// isValidElementType checks if the given type string is a valid element type.
+func isValidElementType(typeStr string) bool {
+	switch typeStr {
+	case "button", "input", "checkbox", "radio", "dropdown", "toggle", "slider", "label", "heading", "link", "value", "text":
+		return true
+	}
+	return false
+}
+
+// parseElementType converts a string to learner.ElementType.
+func parseElementType(typeStr string) learner.ElementType {
+	switch typeStr {
+	case "button":
+		return learner.ElementTypeButton
+	case "input":
+		return learner.ElementTypeInput
+	case "checkbox":
+		return learner.ElementTypeCheckbox
+	case "radio":
+		return learner.ElementTypeRadio
+	case "dropdown":
+		return learner.ElementTypeDropdown
+	case "toggle":
+		return learner.ElementTypeToggle
+	case "slider":
+		return learner.ElementTypeSlider
+	case "label":
+		return learner.ElementTypeLabel
+	case "heading":
+		return learner.ElementTypeHeading
+	case "link":
+		return learner.ElementTypeLink
+	case "value":
+		return learner.ElementTypeValue
+	case "text":
+		return learner.ElementTypeText
+	default:
+		return learner.ElementTypeUnknown
+	}
+}
+
+// matchesElementType checks if a word matches the requested element type filter.
+func matchesElementType(w ocr.Word, elementTypeFilter string) bool {
+	if elementTypeFilter == "" {
+		return true // No filter, all elements match
+	}
+	
+	inferredType := learner.InferElementType(w.Text, w.Width, w.Height)
+	requestedType := parseElementType(elementTypeFilter)
+	return inferredType == requestedType
+}
+
 // isActionableElementType returns true for interactive element types that can be
 // clicked, typed into, toggled, or otherwise manipulated by an automation agent.
 func isActionableElementType(t learner.ElementType) bool {
@@ -1979,6 +2078,13 @@ func handleFindAndClickAll(ctx context.Context, request mcp.CallToolRequest) (*m
 	saveScreenshotIfKept(img, "ghost-mcp-findclickall")
 
 	grayscale := getBoolParam(request, "grayscale", true)
+	
+	// Element type filter
+	elementTypeFilter, _ := getStringParam(request, "element_type")
+	if elementTypeFilter != "" && !isValidElementType(elementTypeFilter) {
+		return mcp.NewToolResultError(fmt.Sprintf("invalid element_type '%s', must be one of: button, input, checkbox, radio, dropdown, toggle, slider, label, heading, link, value, text", elementTypeFilter)), nil
+	}
+	
 	prepared, prepareErr := prepareParallelOCRImageSet(img, grayscale)
 	if prepareErr != nil {
 		logging.Error("find_and_click_all preprocessing failed: %v", prepareErr)
@@ -1988,7 +2094,7 @@ func handleFindAndClickAll(ctx context.Context, request mcp.CallToolRequest) (*m
 	// Click each text in sequence
 	clicks := make([]map[string]interface{}, 0, len(texts))
 	for _, text := range texts {
-		minX, minY, maxX, maxY, found, passName := parallelFindPreparedText(ctx, prepared, text, 1, grayscale)
+		minX, minY, maxX, maxY, found, passName := parallelFindPreparedText(ctx, prepared, text, 1, grayscale, elementTypeFilter)
 		if !found {
 			logging.Info("find_and_click_all: text %q not found, stopping", text)
 			// Report which items were already clicked before this failure so the
@@ -2090,6 +2196,12 @@ func handleWaitForText(ctx context.Context, request mcp.CallToolRequest) (*mcp.C
 		regionH = h
 	}
 
+	// Element type filter
+	elementTypeFilter, _ := getStringParam(request, "element_type")
+	if elementTypeFilter != "" && !isValidElementType(elementTypeFilter) {
+		return mcp.NewToolResultError(fmt.Sprintf("invalid element_type '%s', must be one of: button, input, checkbox, radio, dropdown, toggle, slider, label, heading, link, value, text", elementTypeFilter)), nil
+	}
+
 	startTime := time.Now()
 	timeout := time.Duration(timeoutMS) * time.Millisecond
 	if waitForTextInitialDelay > 0 {
@@ -2104,7 +2216,7 @@ func handleWaitForText(ctx context.Context, request mcp.CallToolRequest) (*mcp.C
 		img, captureErr := waitForTextCaptureImage(regionX, regionY, regionW, regionH)
 		if captureErr == nil {
 			grayscale := getBoolParam(request, "grayscale", true)
-			_, _, _, _, found, passName := parallelFindText(ctx, img, text, 1, grayscale)
+			_, _, _, _, found, passName := parallelFindText(ctx, img, text, 1, grayscale, elementTypeFilter)
 			if visible && found {
 				logging.Info("wait_for_text: text %q appeared via %s pass after %v", text, passName, time.Since(startTime))
 				return mcp.NewToolResultText(fmt.Sprintf(
@@ -2342,6 +2454,13 @@ func handleFindClickAndType(ctx context.Context, request mcp.CallToolRequest) (*
 	saveScreenshotIfKept(img, "ghost-mcp-findclicktype")
 
 	grayscale := getBoolParam(request, "grayscale", true)
+	
+	// Element type filter
+	elementTypeFilter, _ := getStringParam(request, "element_type")
+	if elementTypeFilter != "" && !isValidElementType(elementTypeFilter) {
+		return mcp.NewToolResultError(fmt.Sprintf("invalid element_type '%s', must be one of: button, input, checkbox, radio, dropdown, toggle, slider, label, heading, link, value, text", elementTypeFilter)), nil
+	}
+	
 	scrollDirection, _ := getStringParam(request, "scroll_direction")
 	scrollAmount := 5
 	if v, err := getIntParam(request, "scroll_amount"); err == nil {
@@ -2372,7 +2491,7 @@ func handleFindClickAndType(ctx context.Context, request mcp.CallToolRequest) (*
 		scrollY = v
 	}
 
-	minX, minY, maxX, maxY, found, passName := parallelFindText(ctx, img, searchText, nth, grayscale)
+	minX, minY, maxX, maxY, found, passName := parallelFindText(ctx, img, searchText, nth, grayscale, elementTypeFilter)
 	scrollCount := 0
 
 	// If not found, try label search BEFORE scrolling (much faster!)
@@ -2394,18 +2513,19 @@ func handleFindClickAndType(ctx context.Context, request mcp.CallToolRequest) (*
 	// Only scroll if label search also failed
 	if !found && scrollDirection != "" {
 		scrollResult, searchErr := findTextWithScrolling(ctx, scrollSearchConfig{
-			SearchText: searchText,
-			Direction:  scrollDirection,
-			Amount:     scrollAmount,
-			MaxScrolls: maxScrolls,
-			Nth:        nth,
-			ScrollX:    scrollX,
-			ScrollY:    scrollY,
-			RegionX:    regionX,
-			RegionY:    regionY,
-			RegionW:    regionW,
-			RegionH:    regionH,
-			Grayscale:  grayscale,
+			SearchText:  searchText,
+			Direction:   scrollDirection,
+			Amount:      scrollAmount,
+			MaxScrolls:  maxScrolls,
+			Nth:         nth,
+			ScrollX:     scrollX,
+			ScrollY:     scrollY,
+			RegionX:     regionX,
+			RegionY:     regionY,
+			RegionW:     regionW,
+			RegionH:     regionH,
+			Grayscale:   grayscale,
+			ElementType: elementTypeFilter,
 		})
 		if searchErr != nil {
 			return mcp.NewToolResultError(searchErr.Error()), nil
@@ -2554,7 +2674,7 @@ func saveScreenshotIfKept(img image.Image, prefix string) {
 // parallelFindText concurrently executes up to 5 OCR passes (Normal, Inverted,
 // BrightText, Color, ColorInverted) against the provided image and races them
 // to find the first matching bounding box.
-func parallelFindText(ctx context.Context, img image.Image, searchText string, nth int, grayscale bool) (int, int, int, int, bool, string) {
+func parallelFindText(ctx context.Context, img image.Image, searchText string, nth int, grayscale bool, elementTypeFilter string) (int, int, int, int, bool, string) {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -2564,10 +2684,10 @@ func parallelFindText(ctx context.Context, img image.Image, searchText string, n
 		return 0, 0, 0, 0, false, ""
 	}
 
-	return parallelFindPreparedText(ctx, prepared, searchText, nth, grayscale)
+	return parallelFindPreparedText(ctx, prepared, searchText, nth, grayscale, elementTypeFilter)
 }
 
-func parallelFindPreparedText(ctx context.Context, prepared *ocr.PreparedImageSet, searchText string, nth int, grayscale bool) (int, int, int, int, bool, string) {
+func parallelFindPreparedText(ctx context.Context, prepared *ocr.PreparedImageSet, searchText string, nth int, grayscale bool, elementTypeFilter string) (int, int, int, int, bool, string) {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -2589,7 +2709,7 @@ func parallelFindPreparedText(ctx context.Context, prepared *ocr.PreparedImageSe
 
 		ocrResult, err := readPreparedOCRImage(imgBytes, ocr.ScaleFactor)
 		if err == nil && ocrResult != nil {
-			if bMinX, bMinY, bMaxX, bMaxY, bFound := findButtonBounds(ocrResult, searchText, nth); bFound {
+			if bMinX, bMinY, bMaxX, bMaxY, bFound := findButtonBounds(ocrResult, searchText, nth, elementTypeFilter); bFound {
 				select {
 				case matches <- match{bMinX, bMinY, bMaxX, bMaxY, name}:
 					cancel() // Stop the other passes

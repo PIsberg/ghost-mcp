@@ -831,13 +831,14 @@ Set `GHOST_MCP_KEEP_SCREENSHOTS=1` to keep the file on disk.
 
 ### Tool: find_elements
 
-Scans a screen region using OCR and returns all visible text elements with their bounding boxes and center coordinates. Requires Tesseract and `TESSDATA_PREFIX`.
+Scans a screen region using OCR and returns all visible text elements with their bounding boxes, center coordinates, and element types. Requires Tesseract and `TESSDATA_PREFIX`.
 
 **Arguments** (all optional):
 - `x` (number): X coordinate of region (default: 0)
 - `y` (number): Y coordinate of region (default: 0)
 - `width` (number): Width of region (default: full screen)
 - `height` (number): Height of region (default: full screen)
+- `element_type` (string): Filter to specific element type: `button`, `input`, `checkbox`, `radio`, `dropdown`, `toggle`, `slider`, `label`, `heading`, `link`, `value`, `text`
 
 **Returns:**
 ```json
@@ -848,6 +849,7 @@ Scans a screen region using OCR and returns all visible text elements with their
   "elements": [
     {
       "text": "Submit",
+      "type": "button",
       "x": 450, "y": 320,
       "width": 60, "height": 20,
       "center_x": 480, "center_y": 330,
@@ -863,6 +865,16 @@ Element coordinates are **absolute screen positions** — ready to use with `cli
 - Discover what text is visible on screen
 - Get coordinates for clicking when there's no text label
 - Diagnose why `find_and_click` didn't find your text
+- Find all elements of a specific type (e.g., all input fields on a form)
+
+**Example with element_type:**
+```json
+// Find only input fields
+{ "tool": "find_elements", "arguments": { "element_type": "input" } }
+
+// Find only buttons
+{ "tool": "find_elements", "arguments": { "element_type": "button" } }
+```
 
 ---
 
@@ -874,6 +886,13 @@ Scans the full screen with OCR, finds the nth word matching `text`, and clicks i
 - `text` (string, required): Text to search for (case-insensitive substring match)
 - `button` (string, optional): `"left"` (default), `"right"`, or `"middle"`
 - `nth` (number, optional): Which occurrence to click (default: `1`)
+- `element_type` (string, optional): Filter to specific element type: `button`, `input`, `checkbox`, `radio`, `dropdown`, `toggle`, `slider`, `label`, `heading`, `link`, `value`, `text`
+- `x`, `y`, `width`, `height` (number, optional): Region to scan (default: full screen)
+- `scroll_direction` (string, optional): `"up"` or `"down"` for scroll-and-search
+- `max_scrolls` (number, optional): Maximum scroll attempts (default: 8)
+- `next_page_keys` (string, optional): Keys for multi-page navigation (e.g., `"Page_Down"`)
+- `max_pages` (number, optional): Maximum pages for multi-page search
+- `select_best` (boolean, optional): Scan all pages and click highest-score match
 
 **Returns:**
 ```json
@@ -881,6 +900,12 @@ Scans the full screen with OCR, finds the nth word matching `text`, and clicks i
 ```
 
 Returns an error result if the text is not found on screen. The error now includes the searched region, closest OCR matches, and a hint to try `scroll_until_text` before falling back to manual diagnostics.
+
+**Example with element_type:**
+```json
+// Click only the button, ignoring any labels or headings with same text
+{ "tool": "find_and_click", "arguments": { "text": "Submit", "element_type": "button" } }
+```
 
 ---
 

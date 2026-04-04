@@ -61,18 +61,19 @@ type serverState struct {
 }
 
 type scrollSearchConfig struct {
-	SearchText string
-	Direction  string
-	Amount     int
-	MaxScrolls int
-	Nth        int
-	ScrollX    int
-	ScrollY    int
-	RegionX    int
-	RegionY    int
-	RegionW    int
-	RegionH    int
-	Grayscale  bool
+	SearchText  string
+	Direction   string
+	Amount      int
+	MaxScrolls  int
+	Nth         int
+	ScrollX     int
+	ScrollY     int
+	RegionX     int
+	RegionY     int
+	RegionW     int
+	RegionH     int
+	Grayscale   bool
+	ElementType string
 }
 
 type scrollSearchResult struct {
@@ -434,7 +435,7 @@ func scrollSearchForText(ctx context.Context, cfg scrollSearchConfig) (*scrollSe
 		}
 		lastVisibleText = visibleText
 
-		minX, minY, maxX, maxY, found, passName := uiFindText(ctx, img, cfg.SearchText, cfg.Nth, cfg.Grayscale)
+		minX, minY, maxX, maxY, found, passName := uiFindText(ctx, img, cfg.SearchText, cfg.Nth, cfg.Grayscale, cfg.ElementType)
 		if found {
 			return &scrollSearchResult{
 				MinX:        minX,

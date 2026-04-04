@@ -43,14 +43,14 @@ func BenchmarkParallelFindText_FixtureButtons_Grayscale(b *testing.B) {
 	ctx := context.Background()
 	searchText := "Button"
 
-	if _, _, _, _, found, _ := parallelFindText(ctx, img, searchText, 1, true); !found {
+	if _, _, _, _, found, _ := parallelFindText(ctx, img, searchText, 1, true, ""); !found {
 		b.Fatalf("expected to find %q in fixture screenshot", searchText)
 	}
 
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		if _, _, _, _, found, _ := parallelFindText(ctx, img, searchText, 1, true); !found {
+		if _, _, _, _, found, _ := parallelFindText(ctx, img, searchText, 1, true, ""); !found {
 			b.Fatalf("expected to find %q in fixture screenshot", searchText)
 		}
 	}
@@ -61,14 +61,14 @@ func BenchmarkParallelFindText_FixtureButtons_ColorOnly(b *testing.B) {
 	ctx := context.Background()
 	searchText := "Button"
 
-	if _, _, _, _, found, _ := parallelFindText(ctx, img, searchText, 1, false); !found {
+	if _, _, _, _, found, _ := parallelFindText(ctx, img, searchText, 1, false, ""); !found {
 		b.Fatalf("expected to find %q in fixture screenshot", searchText)
 	}
 
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		if _, _, _, _, found, _ := parallelFindText(ctx, img, searchText, 1, false); !found {
+		if _, _, _, _, found, _ := parallelFindText(ctx, img, searchText, 1, false, ""); !found {
 			b.Fatalf("expected to find %q in fixture screenshot", searchText)
 		}
 	}

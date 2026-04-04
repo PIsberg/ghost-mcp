@@ -255,6 +255,61 @@ OCR did not detect it — try `take_screenshot` to check visibility, or re-run
 
 ---
 
+## 3a. Element Type Filtering — Precision Targeting
+
+All OCR search tools support an `element_type` parameter to filter results to specific UI component types.
+
+**Valid types:** `button`, `input`, `checkbox`, `radio`, `dropdown`, `toggle`, `slider`, `label`, `heading`, `link`, `value`, `text`
+
+### When to Use Element Type Filtering
+
+**Use `element_type` when:**
+- Multiple elements share the same text but have different types
+  - Example: "Submit" appears as both a button AND a heading — use `element_type: "button"` to target the button
+- You want to discover all elements of a specific type
+  - Example: Find all input fields on a form before filling them
+- You need to avoid false matches on non-actionable elements
+  - Example: Don't click a "Save" label when looking for the "Save" button
+
+### Element Type Decision Guide
+
+| Target | element_type | Example |
+|--------|--------------|---------|
+| Clickable buttons | `button` | Submit, Save, Cancel, OK |
+| Text input fields | `input` | Username, Email, Search |
+| Checkboxes | `checkbox` | "I agree", "Remember me" |
+| Radio buttons | `radio` | Option selections |
+| Dropdown menus | `dropdown` | Select menus |
+| Field labels | `label` | "Email:", "Name:" |
+| Page/section titles | `heading` | "Dashboard", "Settings" |
+| Navigation links | `link` | "Home", "Profile" |
+| Numeric displays | `value` | Prices, scores, counts |
+
+### Examples
+
+```json
+// Click only the button, ignoring labels with same text
+{"tool": "find_and_click", "arguments": {"text": "Submit", "element_type": "button"}}
+
+// Get all input fields to understand form structure
+{"tool": "find_elements", "arguments": {"element_type": "input"}}
+
+// Wait for a success label to appear
+{"tool": "wait_for_text", "arguments": {"text": "Saved!", "element_type": "label"}}
+
+// Find and type into an input field
+{"tool": "find_click_and_type", "arguments": {"text": "Email:", "type_text": "user@example.com", "element_type": "input"}}
+```
+
+### Important Notes
+
+- Element types are **inferred** from text patterns, dimensions, and context — not explicitly tagged in the UI
+- If you specify an `element_type` and no matching element is found, the tool returns "not found"
+- You can omit `element_type` to search all types (default behavior)
+- Works with all search features: scrolling, multi-page, and region caching
+
+---
+
 ## 4. Troubleshooting & Fallbacks
 
 UI agents fail frequently due to dynamic loading, OCR misses, or timing issues.

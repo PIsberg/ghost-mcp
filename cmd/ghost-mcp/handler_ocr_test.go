@@ -30,7 +30,7 @@ func TestFindButtonBounds_SingleWord(t *testing.T) {
 		},
 	}
 
-	minX, minY, maxX, _, found := findButtonBounds(result, "Save", 1)
+	minX, minY, maxX, _, found := findButtonBounds(result, "Save", 1, "")
 	if !found {
 		t.Fatal("Expected to find 'Save' button")
 	}
@@ -54,7 +54,7 @@ func TestFindButtonBounds_MultiWord(t *testing.T) {
 		},
 	}
 
-	minX, minY, maxX, _, found := findButtonBounds(result, "Save", 1)
+	minX, minY, maxX, _, found := findButtonBounds(result, "Save", 1, "")
 	if !found {
 		t.Fatal("Expected to find 'Save Changes' button")
 	}
@@ -71,7 +71,7 @@ func TestFindButtonBounds_MultiWord(t *testing.T) {
 	}
 
 	// "Cancel" should be found separately
-	minX2, _, maxX2, _, found2 := findButtonBounds(result, "Cancel", 1)
+	minX2, _, maxX2, _, found2 := findButtonBounds(result, "Cancel", 1, "")
 	if !found2 {
 		t.Fatal("Expected to find 'Cancel' button separately")
 	}
@@ -90,7 +90,7 @@ func TestFindButtonBounds_MultiWordPhraseSearch(t *testing.T) {
 		},
 	}
 
-	minX, minY, maxX, maxY, found := findButtonBounds(result, "Type here or use", 1)
+	minX, minY, maxX, maxY, found := findButtonBounds(result, "Type here or use", 1, "")
 	if !found {
 		t.Fatal("Expected to find multi-word phrase across adjacent OCR words")
 	}
@@ -110,7 +110,7 @@ func TestFindButtonBounds_NthOccurrence(t *testing.T) {
 	}
 
 	// Find 2nd occurrence
-	minX, minY, maxX, maxY, found := findButtonBounds(result, "Delete", 2)
+	minX, minY, maxX, maxY, found := findButtonBounds(result, "Delete", 2, "")
 	if !found {
 		t.Fatal("Expected to find 2nd 'Delete' button")
 	}
@@ -128,7 +128,7 @@ func TestFindButtonBounds_NotFound(t *testing.T) {
 		},
 	}
 
-	_, _, _, _, found := findButtonBounds(result, "Submit", 1)
+	_, _, _, _, found := findButtonBounds(result, "Submit", 1, "")
 	if found {
 		t.Error("Expected not to find 'Submit' button")
 	}
@@ -142,7 +142,7 @@ func TestFindButtonBounds_CaseInsensitive(t *testing.T) {
 		},
 	}
 
-	minX, minY, maxX, maxY, found := findButtonBounds(result, "save", 1)
+	minX, minY, maxX, maxY, found := findButtonBounds(result, "save", 1, "")
 	if !found {
 		t.Fatal("Expected to find 'SAVE' with lowercase search")
 	}
@@ -159,7 +159,7 @@ func TestFindButtonBounds_PartialMatch(t *testing.T) {
 		},
 	}
 
-	minX, minY, maxX, maxY, found := findButtonBounds(result, "Submit", 1)
+	minX, minY, maxX, maxY, found := findButtonBounds(result, "Submit", 1, "")
 	if !found {
 		t.Fatal("Expected to find 'Submitting...' with partial match 'Submit'")
 	}
@@ -195,7 +195,7 @@ func TestFindButtonBounds_FixtureButtons(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		minX, minY, maxX, maxY, found := findButtonBounds(result, tt.text, 1)
+		minX, minY, maxX, maxY, found := findButtonBounds(result, tt.text, 1, "")
 		if !found {
 			t.Errorf("Expected to find '%s' button", tt.text)
 			continue
@@ -344,7 +344,7 @@ func TestParallelFindText_PreparesVariantsOnceAndUsesPreparedBytes(t *testing.T)
 		return &ocr.Result{}, nil
 	}
 
-	_, _, _, _, found, pass := parallelFindText(context.Background(), img, "Submit", 1, true)
+	_, _, _, _, found, pass := parallelFindText(context.Background(), img, "Submit", 1, true, "")
 	if !found {
 		t.Fatal("expected text to be found")
 	}
@@ -480,7 +480,7 @@ func TestParallelFindPreparedText_UsesPreparedBytes(t *testing.T) {
 		return &ocr.Result{}, nil
 	}
 
-	_, _, _, _, found, pass := parallelFindPreparedText(context.Background(), prepared, "Submit", 1, true)
+	_, _, _, _, found, pass := parallelFindPreparedText(context.Background(), prepared, "Submit", 1, true, "")
 	if !found {
 		t.Fatal("expected text to be found")
 	}
@@ -516,7 +516,7 @@ func TestParallelFindText_PreprocessFailureReturnsNotFound(t *testing.T) {
 		return nil, fmt.Errorf("boom")
 	}
 
-	_, _, _, _, found, pass := parallelFindText(context.Background(), image.NewRGBA(image.Rect(0, 0, 1, 1)), "Submit", 1, true)
+	_, _, _, _, found, pass := parallelFindText(context.Background(), image.NewRGBA(image.Rect(0, 0, 1, 1)), "Submit", 1, true, "")
 	if found {
 		t.Fatal("expected not found when preprocessing fails")
 	}
@@ -873,7 +873,7 @@ func TestFindButtonBounds_PrefersStandaloneWord(t *testing.T) {
 		},
 	}
 
-	_, minY, _, _, found := findButtonBounds(result, "Click", 1)
+	_, minY, _, _, found := findButtonBounds(result, "Click", 1, "")
 	if !found {
 		t.Fatal("Expected to find 'Click' button")
 	}
@@ -893,7 +893,7 @@ func TestFindButtonBounds_MultiWordButton(t *testing.T) {
 		},
 	}
 
-	minX, minY, maxX, maxY, found := findButtonBounds(result, "Save Changes", 1)
+	minX, minY, maxX, maxY, found := findButtonBounds(result, "Save Changes", 1, "")
 	if !found {
 		t.Fatal("Expected to find 'Save Changes' button")
 	}
