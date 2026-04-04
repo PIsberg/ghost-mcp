@@ -12,15 +12,22 @@ func registerLearningTools(mcpServer *server.MCPServer) {
 	logging.Info("Registering learning mode tools...")
 
 	mcpServer.AddTool(mcp.NewTool("learn_screen",
-		mcp.WithDescription(`STEP 1 FOR ANY UI TASK — Call this before interacting with a new screen.
+		mcp.WithDescription(`Scan the full interface, run multi-pass OCR, and cache the element map.
 
-learn_screen photographs the full interface and reads every text element, including content below the scroll fold. It scrolls through the page automatically, then returns the viewport to where it started. The result is stored as an internal view that makes every subsequent find_and_click and find_elements call faster and smarter.
+EXPLORATION HIERARCHY — for unknown screens, prefer find_elements first:
+  1. find_elements   ← PRIMARY exploration (fast, visible elements only)
+  2. take_screenshot ← SECONDARY (only for icon-only interfaces)
+  3. learn_screen    ← TERTIARY for exploration, but PRIMARY for complex workflows
 
-── WHEN TO CALL IT ────────────────────────────────────────────────────────────
-• At the START of every automation workflow — before any clicks or typing.
+Use learn_screen when:
+• You have 3+ sequential actions on the same screen (caches the map for all steps).
+• The page scrolls and you need elements below the visible area.
 • After navigating to a new page, opening a dialog, or switching tabs.
-• When find_and_click or find_elements returns unexpected results (stale view).
-• When you need to know what elements exist below the visible area.
+• find_and_click or find_elements returns unexpected results (rebuild stale view).
+
+Skip learn_screen when:
+• You only need one or two actions — find_and_click directly is faster.
+• The page navigates away immediately after the action.
 
 ── RECOMMENDED WORKFLOW ───────────────────────────────────────────────────────
   1. learn_screen          ← map the full interface (scroll through if needed)

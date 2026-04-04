@@ -183,25 +183,25 @@ TIPS:
 	mcpServer.AddTool(mcp.NewTool("find_elements",
 		mcp.WithDescription(`READ ALL VISIBLE TEXT ON SCREEN with coordinates and bounding boxes.
 
+EXPLORATION HIERARCHY — use tools in this order when encountering an unknown screen:
+  1. find_elements   ← PRIMARY: fast text dump, always try this first
+  2. take_screenshot ← SECONDARY: only if find_elements misses icon-only elements
+  3. learn_screen    ← TERTIARY: only if the page scrolls and you need below-fold content
+
 ⚡ LEARNING MODE: If learning mode is on and no view exists yet, this call
 automatically triggers learn_screen first. When a multi-page view exists the
 response also includes learned_off_page_elements — all elements found on
 scroll pages below the current viewport — so you can see the FULL UI in one
 call without manually scrolling.
 
-PREFERRED WORKFLOW FOR NEW SCREENS:
-  1. learn_screen           ← scan entire interface (once per page)
-  2. get_learned_view       ← full element list including below-fold elements
-  3. find_elements          ← confirm visible elements before acting (optional)
-  4. find_and_click / find_click_and_type
-
-🎯 WHEN TO USE WITHOUT LEARNING MODE:
+🎯 WHEN TO USE:
+- First tool to call on any unknown screen.
 - find_and_click failed — call this to see what OCR actually detected.
 - You need center_x/center_y coordinates for click_at.
 - Auditing what text is visible in a specific screen region.
 
 ⚠️ LIMITATIONS:
-- Detects TEXT ONLY — not icons or images.
+- Detects TEXT ONLY — not icons or images without text labels.
 - Only shows what is CURRENTLY VISIBLE (use learn_screen to see below-fold).
 - Colored buttons (white on dark) may require grayscale=false.
 
