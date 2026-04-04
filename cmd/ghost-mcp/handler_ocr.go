@@ -608,7 +608,7 @@ func getMatchCandidates(searchText string, img image.Image, grayscale bool, elem
 		if !matchesElementType(w, elementTypeFilter) {
 			continue
 		}
-		
+
 		phrase := strings.ToLower(strings.TrimSpace(w.Text))
 		score := scoreMatch(phrase, needle, needleWords)
 		if score > 0 {
@@ -1875,7 +1875,7 @@ func handleFindElementsScanPages(_ context.Context, request mcp.CallToolRequest,
 		if elementTypeFilter != "" && e.Type != requestedElementType {
 			continue
 		}
-		
+
 		allElements = append(allElements, map[string]interface{}{
 			"text":       e.Text,
 			"x":          e.X,
@@ -2017,7 +2017,7 @@ func matchesElementType(w ocr.Word, elementTypeFilter string) bool {
 	if elementTypeFilter == "" {
 		return true // No filter, all elements match
 	}
-	
+
 	inferredType := learner.InferElementType(w.Text, w.Width, w.Height)
 	requestedType := parseElementType(elementTypeFilter)
 	return inferredType == requestedType
@@ -2078,13 +2078,13 @@ func handleFindAndClickAll(ctx context.Context, request mcp.CallToolRequest) (*m
 	saveScreenshotIfKept(img, "ghost-mcp-findclickall")
 
 	grayscale := getBoolParam(request, "grayscale", true)
-	
+
 	// Element type filter
 	elementTypeFilter, _ := getStringParam(request, "element_type")
 	if elementTypeFilter != "" && !isValidElementType(elementTypeFilter) {
 		return mcp.NewToolResultError(fmt.Sprintf("invalid element_type '%s', must be one of: button, input, checkbox, radio, dropdown, toggle, slider, label, heading, link, value, text", elementTypeFilter)), nil
 	}
-	
+
 	prepared, prepareErr := prepareParallelOCRImageSet(img, grayscale)
 	if prepareErr != nil {
 		logging.Error("find_and_click_all preprocessing failed: %v", prepareErr)
@@ -2454,13 +2454,13 @@ func handleFindClickAndType(ctx context.Context, request mcp.CallToolRequest) (*
 	saveScreenshotIfKept(img, "ghost-mcp-findclicktype")
 
 	grayscale := getBoolParam(request, "grayscale", true)
-	
+
 	// Element type filter
 	elementTypeFilter, _ := getStringParam(request, "element_type")
 	if elementTypeFilter != "" && !isValidElementType(elementTypeFilter) {
 		return mcp.NewToolResultError(fmt.Sprintf("invalid element_type '%s', must be one of: button, input, checkbox, radio, dropdown, toggle, slider, label, heading, link, value, text", elementTypeFilter)), nil
 	}
-	
+
 	scrollDirection, _ := getStringParam(request, "scroll_direction")
 	scrollAmount := 5
 	if v, err := getIntParam(request, "scroll_amount"); err == nil {

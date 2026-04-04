@@ -65,12 +65,12 @@ func TestParseElementType(t *testing.T) {
 func TestMatchesElementType(t *testing.T) {
 	// Create test words with different characteristics
 	tests := []struct {
-		name          string
-		wordText      string
-		wordWidth     int
-		wordHeight    int
-		filterType    string
-		shouldMatch   bool
+		name        string
+		wordText    string
+		wordWidth   int
+		wordHeight  int
+		filterType  string
+		shouldMatch bool
 	}{
 		{
 			name:        "button matches button filter",
