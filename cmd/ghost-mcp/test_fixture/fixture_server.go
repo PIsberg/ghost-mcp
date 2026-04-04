@@ -4,8 +4,9 @@
 // accessed and controlled via the MCP UI automation tools.
 //
 // Routes:
-//   /          - Normal fixture (light theme, standard buttons)
-//   /challenge - Challenge fixture (dark theme, gradient buttons)
+//
+//	/          - Normal fixture (light theme, standard buttons)
+//	/challenge - Challenge fixture (dark theme, gradient buttons)
 package main
 
 import (
