@@ -9,6 +9,25 @@ together, and when to invest in Learning Mode for complex sessions.
 
 ---
 
+## 0. CRITICAL RULES — Read Before Acting
+
+These rules override everything else. Violating them can cause data loss or runaway loops.
+
+1. **Failsafe — NEVER move the mouse to (0, 0).** Moving to top-left triggers an emergency
+   shutdown. Do not do this unless the goal is to stop the server.
+
+2. **Loop protection — 25-call limit.** `find_and_click` enforces a 25-call-per-session
+   limit. If you are approaching it, switch to `execute_workflow` for remaining steps.
+
+3. **Stale view — clear after navigation.** After any click that navigates to a new page,
+   opens a dialog, or causes significant UI change, call `clear_learned_view` immediately.
+   Stale positions cause mis-clicks on the wrong elements.
+
+4. **Verify destructive actions.** After delete, submit, or confirm, always call
+   `wait_for_text` to verify the outcome before proceeding.
+
+---
+
 ## 1. Quick-Reference Decision Table
 
 | What you need to do | Best tool |
@@ -46,7 +65,7 @@ If you are unsure the click succeeded, chain with `wait_for_text`:
 
 ```json
 {"tool": "find_and_click", "arguments": {"text": "Save"}}
-{"tool": "wait_for_text", "arguments": {"text": "Saved successfully", "visible": true, "timeout_ms": 5000}}
+{"tool": "wait_for_text",  "arguments": {"text": "Saved successfully", "visible": true, "timeout_ms": 5000}}
 ```
 
 ### Scenario B — Fill a simple form
@@ -144,12 +163,12 @@ Always use `wait_for_text` rather than a fixed delay:
 Invest in learning once; all subsequent find operations use the cached map:
 
 ```json
-{"tool": "learn_screen",      "arguments": {"max_pages": 5}}
-{"tool": "get_learned_view",  "arguments": {}}
-{"tool": "find_and_click",    "arguments": {"text": "Settings"}}
+{"tool": "learn_screen",        "arguments": {"max_pages": 5}}
+{"tool": "get_learned_view",    "arguments": {}}
+{"tool": "find_and_click",      "arguments": {"text": "Settings"}}
 {"tool": "find_click_and_type", "arguments": {"text": "API Key", "type_text": "abc123"}}
-{"tool": "find_and_click",    "arguments": {"text": "Save"}}
-{"tool": "clear_learned_view","arguments": {}}
+{"tool": "find_and_click",      "arguments": {"text": "Save"}}
+{"tool": "clear_learned_view",  "arguments": {}}
 ```
 
 `learn_screen` scans the full interface across scroll positions. `get_learned_view` returns the
@@ -216,10 +235,10 @@ you control when `clear_learned_view` is called.
 **Lifecycle:**
 
 ```json
-{"tool": "learn_screen",       "arguments": {}}
-{"tool": "find_and_click",     "arguments": {"text": "..."}}
-{"tool": "find_click_and_type","arguments": {"text": "...", "type_text": "..."}}
-{"tool": "clear_learned_view", "arguments": {}}
+{"tool": "learn_screen",        "arguments": {}}
+{"tool": "find_and_click",      "arguments": {"text": "..."}}
+{"tool": "find_click_and_type", "arguments": {"text": "...", "type_text": "..."}}
+{"tool": "clear_learned_view",  "arguments": {}}
 ```
 
 **Performance:** After `learn_screen`, each `find_and_click` narrows its OCR scan
@@ -229,16 +248,3 @@ to a small bounding box — typically 10–25× faster than a full-screen scan.
 call `get_learned_view` to see the full element list. If the target is missing,
 OCR did not detect it — try `take_screenshot` to check visibility, or re-run
 `learn_screen` with a higher `max_pages` value.
-
----
-
-## 4. Safety and Verification Rules
-
-1. **Always verify destructive actions** (delete, submit, confirm) with
-   `wait_for_text` before treating them as complete.
-2. **Failsafe:** Moving the mouse to (0, 0) triggers an emergency shutdown.
-   Never instruct the user to move the mouse there unless stopping is intentional.
-3. **Loop protection:** `find_and_click` enforces a 25-call-per-session limit.
-   If you are approaching it, switch to `execute_workflow` for remaining steps.
-4. **After page navigation:** call `clear_learned_view` so stale element
-   positions don't cause mis-clicks on the new page.

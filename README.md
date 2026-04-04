@@ -26,7 +26,7 @@ Ghost MCP allows AI assistants like Claude to control your computer's mouse, key
 
 ## Available Tools
 
-> **AI routing guide:** Before automating a UI, read [`docs/routing_prompt.md`](docs/routing_prompt.md) for decision tables, optimal tool sequences, and when to use learning mode. The server also delivers this guide automatically to AI clients via the `ghost_mcp_guide` MCP prompt on connect.
+> **AI routing guide:** Before automating a UI, read [`docs/routing_prompt.md`](docs/routing_prompt.md) for critical safety rules, decision tables, optimal tool sequences, and when to use learning mode. The server also delivers this guide automatically to AI clients via the `ghost_mcp_guide` MCP prompt on connect.
 
 | Tool | Description | Parameters | OCR |
 |------|-------------|------------|-----|
