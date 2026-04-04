@@ -64,6 +64,20 @@ These rules override everything else. Violating them can cause data loss or runa
 
 ---
 
+## Safety & Loop Protection
+
+Ghost MCP has **built-in safeguards** to prevent infinite retry loops and runaway automation:
+
+- **Global call limit (25/session).** ` + "`find_and_click`" + ` stops after 25 calls. Switch to
+  ` + "`execute_workflow`" + ` when approaching the limit.
+- **Consecutive failure detection (3 strikes).** Failing 3 times on the same search returns a
+  "GIVE UP RECOMMENDATION" — stop and try a different approach.
+- **Repeated click detection (5 clicks).** Clicking the same coordinates 5 times in 30 seconds
+  triggers a warning to verify the action is correct.
+- **Failsafe corner (0,0).** Moving the mouse to top-left triggers emergency shutdown.
+
+---
+
 ## 1. Quick-Reference Decision Table
 
 | What you need to do | Best tool |
