@@ -431,7 +431,7 @@ func IsCheckedSymbol(text string) bool {
 	}
 	lower := strings.ToLower(text)
 	return strings.Contains(lower, "[x]") ||
-		strings.Contains(lower, "(*)")  ||
+		strings.Contains(lower, "(*)") ||
 		strings.Contains(lower, "(•)")
 }
 
