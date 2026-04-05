@@ -636,13 +636,19 @@ func DeduplicateElements(elements []Element) []Element {
 	out := make([]Element, 0, len(sorted))
 	for _, candidate := range sorted {
 		duplicate := false
-		for _, kept := range out {
+		for i := range out {
+			kept := &out[i]
 			if !strings.EqualFold(kept.Text, candidate.Text) {
 				continue
 			}
 			if rectsOverlap(kept.X, kept.Y, kept.Width, kept.Height,
 				candidate.X, candidate.Y, candidate.Width, candidate.Height) {
 				duplicate = true
+				// Hybrid approach: keep the highest-confidence text/type (already in 'out'
+				// due to sorting), but always preserve the earliest PageIndex encountered.
+				if candidate.PageIndex < kept.PageIndex {
+					kept.PageIndex = candidate.PageIndex
+				}
 				break
 			}
 		}

@@ -250,17 +250,23 @@ func TestDeduplicateElements_RemovesSamePageOverlap(t *testing.T) {
 	}
 }
 
-func TestDeduplicateElements_RemovesCrossPageOverlap(t *testing.T) {
+func TestDeduplicateElements_HybridConfidencePageIndex(t *testing.T) {
+	// Scenario: Page 1 has clearer text (High Conf), but Page 0 was the first encounter.
 	elems := []Element{
-		{Text: "Header", X: 10, Y: 10, Width: 60, Height: 30, PageIndex: 0},
-		{Text: "Header", X: 10, Y: 10, Width: 60, Height: 30, PageIndex: 1},
+		{Text: "Submit", X: 10, Y: 10, Width: 60, Height: 30, Confidence: 80, PageIndex: 0},
+		{Text: "Submit", X: 10, Y: 10, Width: 60, Height: 30, Confidence: 95, PageIndex: 1},
 	}
 	got := DeduplicateElements(elems)
 	if len(got) != 1 {
-		t.Fatalf("same text on different pages at the same spot should be deduplicated; got %d", len(got))
+		t.Fatalf("expected 1 element after hybrid dedup, got %d", len(got))
 	}
+	// Verify it kept the 95% confidence from Page 1
+	if got[0].Confidence != 95 {
+		t.Errorf("expected confidence 95, got %f", got[0].Confidence)
+	}
+	// Verify it backfilled the PageIndex 0 from Page 0
 	if got[0].PageIndex != 0 {
-		t.Errorf("should keep earliest page index; got %d", got[0].PageIndex)
+		t.Fatalf("expected PageIndex 0 (the first page it appeared on), got %d", got[0].PageIndex)
 	}
 }
 
