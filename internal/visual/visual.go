@@ -25,8 +25,8 @@ func AnnotateImage(src image.Image, elements []learner.Element) image.Image {
 	draw.Draw(dst, bounds, src, bounds.Min, draw.Src)
 
 	// Colours for the annotations.
-	boxColor := color.RGBA{0, 255, 0, 180}   // Bright green for boxes
-	badgeColor := color.RGBA{0, 0, 0, 220}   // Dark background for text
+	boxColor := color.RGBA{0, 255, 0, 180} // Bright green for boxes
+	badgeColor := color.RGBA{0, 0, 0, 220} // Dark background for text
 	textColor := image.NewUniform(color.White)
 
 	d := &font.Drawer{
