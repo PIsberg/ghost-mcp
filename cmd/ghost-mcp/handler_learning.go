@@ -506,7 +506,7 @@ func handleGetAnnotatedView(_ context.Context, request mcp.CallToolRequest) (*mc
 	}
 
 	// Annotate with visual anchors
-	annotated := visual.AnnotateImage(img, view.Elements)
+	annotated := visual.AnnotateImage(img, view.Elements, x, y)
 
 	// Encode to JPEG
 	buf := new(bytes.Buffer)

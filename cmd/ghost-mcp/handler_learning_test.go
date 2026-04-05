@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"strings"
@@ -325,7 +326,7 @@ func TestHandleLearnScreen_InvalidScrollDirection(t *testing.T) {
 	req := makeLearnReq(map[string]interface{}{
 		"scroll_direction": "sideways",
 	})
-	result, err := handleLearnScreen(nil, req)
+	result, err := handleLearnScreen(context.TODO(), req)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -347,7 +348,7 @@ func TestHandleGetLearnedView_NoView(t *testing.T) {
 	defer func() { globalLearner = orig }()
 	globalLearner = learner.New()
 
-	result, err := handleGetLearnedView(nil, makeLearnReq(nil))
+	result, err := handleGetLearnedView(context.TODO(), makeLearnReq(nil))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -374,7 +375,7 @@ func TestHandleGetLearnedView_WithView(t *testing.T) {
 		ScreenH:    800,
 	})
 
-	result, err := handleGetLearnedView(nil, makeLearnReq(nil))
+	result, err := handleGetLearnedView(context.TODO(), makeLearnReq(nil))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -413,7 +414,7 @@ func TestHandleClearLearnedView(t *testing.T) {
 		CapturedAt: time.Now(),
 	})
 
-	result, err := handleClearLearnedView(nil, makeLearnReq(nil))
+	result, err := handleClearLearnedView(context.TODO(), makeLearnReq(nil))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -435,7 +436,7 @@ func TestHandleSetLearningMode_Enable(t *testing.T) {
 	globalLearner = learner.New()
 
 	req := makeLearnReq(map[string]interface{}{"enabled": true})
-	result, err := handleSetLearningMode(nil, req)
+	result, err := handleSetLearningMode(context.TODO(), req)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -458,7 +459,7 @@ func TestHandleSetLearningMode_Disable(t *testing.T) {
 	globalLearner.Enable()
 
 	req := makeLearnReq(map[string]interface{}{"enabled": false})
-	result, err := handleSetLearningMode(nil, req)
+	result, err := handleSetLearningMode(context.TODO(), req)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

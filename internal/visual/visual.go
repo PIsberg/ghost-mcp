@@ -18,7 +18,8 @@ import (
 
 // AnnotateImage draws bounding boxes and numeric ID badges on an image,
 // facilitating AI visual reasoning (Set-of-Marks).
-func AnnotateImage(src image.Image, elements []learner.Element) image.Image {
+// offsetX and offsetY are the top-left coordinates of the src image in absolute screen space.
+func AnnotateImage(src image.Image, elements []learner.Element, offsetX, offsetY int) image.Image {
 	bounds := src.Bounds()
 	// Create an RGBA copy so we can draw safely.
 	dst := image.NewRGBA(bounds)
@@ -36,8 +37,18 @@ func AnnotateImage(src image.Image, elements []learner.Element) image.Image {
 	}
 
 	for _, e := range elements {
+		// Normalize coordinates to the image's local space
+		relX := e.X - offsetX
+		relY := e.Y - offsetY
+
+		// Skip if the element is completely outside the capture region
+		if relX+e.Width < bounds.Min.X || relX > bounds.Max.X ||
+			relY+e.Height < bounds.Min.Y || relY > bounds.Max.Y {
+			continue
+		}
+
 		// 1. Draw element bounding box (1px outline)
-		drawOutline(dst, e.X, e.Y, e.Width, e.Height, boxColor)
+		drawOutline(dst, relX, relY, e.Width, e.Height, boxColor)
 
 		// 2. Prepare the ID badge string
 		idStr := strconv.Itoa(e.ID)
@@ -46,10 +57,10 @@ func AnnotateImage(src image.Image, elements []learner.Element) image.Image {
 		badgeH := 16
 
 		// 3. Draw badge background (positioned at top-left of element)
-		badgeRect := image.Rect(e.X, e.Y-badgeH, e.X+badgeW, e.Y)
-		// If at the very top of the screen, move badge inside the box
-		if e.Y-badgeH < bounds.Min.Y {
-			badgeRect = image.Rect(e.X, e.Y, e.X+badgeW, e.Y+badgeH)
+		badgeRect := image.Rect(relX, relY-badgeH, relX+badgeW, relY)
+		// If at the very top of the image region, move badge inside the box
+		if relY-badgeH < bounds.Min.Y {
+			badgeRect = image.Rect(relX, relY, relX+badgeW, relY+badgeH)
 		}
 		draw.Draw(dst, badgeRect, image.NewUniform(badgeColor), image.Point{}, draw.Over)
 

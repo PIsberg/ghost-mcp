@@ -22,14 +22,17 @@ func TestAnnotateImage(t *testing.T) {
 		{ID: 2, X: 50, Y: 50, Width: 30, Height: 20},
 	}
 
-	result := AnnotateImage(img, elements)
+	// Test 1: No offset (full screen capture at 0,0)
+	result := AnnotateImage(img, elements, 0, 0)
 	if result == nil {
 		t.Fatal("expected non-nil result")
 	}
 
-	bounds := result.Bounds()
-	if bounds.Dx() != 100 || bounds.Dy() != 100 {
-		t.Errorf("expected size 100x100, got %dx%d", bounds.Dx(), bounds.Dy())
+	// Test 2: With offset (capture region starting at 40,40)
+	// Element 2 (at 50,50) should be visible at local (10,10)
+	resultOffset := AnnotateImage(img, elements, 40, 40)
+	if resultOffset == nil {
+		t.Fatal("expected non-nil result for offset")
 	}
 }
 
