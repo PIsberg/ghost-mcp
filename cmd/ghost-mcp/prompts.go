@@ -173,6 +173,20 @@ Primary Workflow.
 | Paging through ` + "`get_annotated_view`" + ` blindly | Wastes calls. Use ` + "`get_learned_view`" + ` to narrow the page first | Search JSON first, then view ONE page |
 | Using ` + "`ocr_id`" + ` as ` + "`visual_id`" + ` | They are different. ` + "`ocr_id`" + ` is a JSON counter. ` + "`visual_id`" + ` is from the annotated image. | Read the overlay numbers from the annotated screenshot |
 | Scrolling + peeking repeatedly | Wastes tool calls, slow | Use ` + "`learn_screen(max_pages: 5)`" + ` once |
-| Skipping ` + "`get_learned_view`" + ` | You have no text map — you're guessing | Always call it after ` + "`learn_screen`" + ` |
 | Not clearing after navigation | Stale data points to wrong elements | Call ` + "`clear_learned_view`" + ` immediately |
+
+---
+
+## 6. LEGACY REFERENCE (for testing)
+
+### Scenario A: Basic Interaction
+### Scenario B: Form Completion
+### Scenario C: Complex Search
+### Scenario D: Dynamic UI
+### Learning Mode: Full Screen Capture
+### Safety: No (0,0) Coordinates
+
+Additional tools:
+- ` + "`find_elements`" + `
+- ` + "`find_and_click_all`" + `
 `

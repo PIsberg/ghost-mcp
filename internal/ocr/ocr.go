@@ -143,8 +143,8 @@ const MinConfidence = 35.0
 //   - Pure #00f2fe (0,242,254):   lum=191 but spread=254 > 180 ✓
 //   - Pure #38ef7d (56,239,125):  lum=192 but spread=183 > 180 ✓
 //   - Pure #4facfe (79,172,254):  lum=158 < 185 ✓
-//   - Yellow #f0ad4e (240,173,78): lum=180 > 175 AND spread=162 ≤ 180 (Wait! This now passes!)
-const brightTextMaxSpread = 180
+//   - Yellow #f0ad4e (240,173,78): lum=180 > 175 AND spread=162 > 130 (Excluded ✓)
+const brightTextMaxSpread = 130
 
 // darkTextMaxLum is the maximum allowed BT.709 luminance for a pixel to be
 // classified as near-dark or medium-gray text in darkTextToGray.
@@ -166,8 +166,8 @@ const brightTextMaxSpread = 180
 //
 // Coloured backgrounds are still excluded by the spread check (> 180) even
 // when their luminance falls below 200:
-//   - Yellow #f0ad4e (240,173,78): lum=180 ≤ 200 but spread=162 ≤ 180 (Wait! This now passes!)
-const darkTextMaxLum = 200
+//   - Yellow #f0ad4e (240,173,78): lum=180 > 175 AND spread=162 > 130 (Excluded ✓)
+const darkTextMaxLum = 175
 
 // Common character sets for specific OCR contexts
 const (
