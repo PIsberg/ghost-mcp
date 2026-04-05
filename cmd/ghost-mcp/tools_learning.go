@@ -12,23 +12,24 @@ func registerLearningTools(mcpServer *server.MCPServer) {
 	logging.Info("Registering learning mode tools...")
 
 	mcpServer.AddTool(mcp.NewTool("learn_screen",
-		mcp.WithDescription(`PRIMARY EXPLORATION TOOL — Perform a deep scan of the current screen or web page.
-This tool builds an internal map of all text, buttons, and input fields.
-
-🎯 MANDATORY FOLLOW-UP: Immediately call get_annotated_view after this tool.
-You cannot interact with IDs until you have seen them on the annotated image.
+		mcp.WithDescription(`INDEX FULL INTERFACE — Scan the UI across multiple scroll positions.
+🚨 USE THIS FOR LONG PAGES: Instead of manually scrolling and taking pictures, 
+use max_pages > 1 to "index" the entire form/list in one tool call.
 
 ── WHY CALL THIS? ─────────────────────────────────────────────────────────────
-- It is 100% precise. No coordinate guessing or OCR drift.
-- It is 10–25× faster for subsequent actions as results are cached.
-- It detects elements across multiple scroll pages if max_pages > 1.`),
+- It builds a single, durable map of all elements (on-screen and off-screen).
+- It allows you to find IDs for buttons that are currently hidden below the fold.
+- It prevents the inefficient "Scroll -> Peek -> Scroll -> Peek" loop.
+
+After one scan, you can use click_at(id=N) for ANY element, and the server will 
+automatically handle the necessary scrolling for you.`),
 		mcp.WithNumber("x", mcp.Description("Left edge of the scan region in pixels (default: 0 / full screen).")),
 		mcp.WithNumber("y", mcp.Description("Top edge of the scan region in pixels (default: 0 / full screen).")),
 		mcp.WithNumber("width", mcp.Description("Width of the scan region in pixels (default: full screen width).")),
 		mcp.WithNumber("height", mcp.Description("Height of the scan region in pixels (default: full screen height).")),
-		mcp.WithNumber("max_pages", mcp.Description("Maximum number of scroll pages to scan (default: 10). Each page scrolls scroll_amount ticks downward.")),
-		mcp.WithNumber("scroll_amount", mcp.Description("Number of wheel-click ticks to scroll per page (default: 5).")),
-		mcp.WithString("scroll_direction", mcp.Description("Direction to scroll while scanning: 'down' (default) or 'up'.")),
+		mcp.WithNumber("max_pages", mcp.Description("Optional: Max scroll pages to index (default: 1). Set >1 for long forms.")),
+		mcp.WithNumber("scroll_amount", mcp.Description("Optional: Wheel ticks per page (default: 5).")),
+		mcp.WithString("scroll_direction", mcp.Description("Optional: 'down' (default) or 'up'.")),
 	), handleLearnScreen)
 
 	mcpServer.AddTool(mcp.NewTool("get_learned_view",
@@ -56,9 +57,12 @@ verify the interface and identify the correct IDs for interaction.
 ── WHY CALL THIS? ─────────────────────────────────────────────────────────────
 - It provides numeric badges (e.g. [5]) overlaid on every button/input.
 - It is the ONLY source for the 'id' parameter used in click_at(id=N).
-- It allows you to confirm that the OCR correctly identified the target.
+- ⚡ PAGE HISTORY: Use 'page_index' (0, 1, 2...) to see elements from the last 
+  learn_screen session. This allows you to inspect off-screen content WITHOUT 
+  manually scrolling there.
 
-If the page is long, use the 'page_index' parameter to see IDs for lower sections.`),
+🚫 NO-PEEK RULE: Do NOT "Scroll -> get_annotated_view" repeatedly. 
+Instead, call learn_screen(max_pages: 3) once, then use page_index to inspect.`),
 		mcp.WithNumber("page_index", mcp.Description("Optional: The scroll-page index (0, 1, 2...) from the last scan.")),
 		mcp.WithNumber("x", mcp.Description("X coordinate (live mode only, default: 0).")),
 		mcp.WithNumber("y", mcp.Description("Y coordinate (live mode only, default: 0).")),

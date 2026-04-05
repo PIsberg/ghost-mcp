@@ -142,18 +142,16 @@ After ` + "`find_elements`" + ` returns results:
 - If you see the target element → use ` + "`find_and_click`" + ` or ` + "`find_click_and_type`" + ` directly
 - If the screen is COMPLEX (many buttons/fields) → use ` + "`get_annotated_view`" + ` then ` + "`click_at(id=N)`" + `
 
-**OFF-SCREEN ELEMENTS (MULTI-PAGE):**
-- If the target is likely below the fold, use ` + "`learn_screen(max_pages=3)`" + ` to scan everything.
-- To see IDs for lower sections, use ` + "`get_annotated_view(page_index=1)`" + ` (for the second page).
-- **IMPORTANT**: To click an ID on another page, you MUST scroll there first before calling ` + "`click_at(id=N)`" + `.
+**OFF-SCREEN ELEMENTS (LONG PAGES):**
+🚫 **NO-PEEK RULE:** Do NOT use the "Scroll -> ` + "`get_annotated_view`" + ` -> Scroll" peek-loop. It is slow and uses too many tool calls.
 
-### SCENARIO A: First Time on a New Screen (COMPLETE MAPPING)
-1. ` + "`learn_screen(max_pages=2)`" + ` → map the current interface.
-2. ` + "`get_learned_view`" + ` → MANDATORY: load the searchable text-map of IDs.
-3. ` + "`get_annotated_view`" + ` → MANDATORY: see the visual ID badges.
-4. ` + "`click_at(id=5)`" + ` → use the ID from Step 2 confirmed in Step 3.
+Instead, use the **Index-then-Act** flow:
+1. **Index Once**: ` + "`learn_screen(max_pages: 5)`" + ` to scan the entire long page/form.
+2. **Search Map**: ` + "`get_learned_view`" + ` to find the IDs for ALL elements (even off-screen).
+3. **Verify Visually**: ` + "`get_annotated_view(page_index: 2)`" + ` to see the 3rd scroll-page from history without live-scrolling.
+4. **Interact**: ` + "`click_at(id=N)`" + `. The server will automatically scroll to the target if it's off-screen.
 
-**NEVER** skip Step 2. You cannot guess the Numeric IDs; you must see them on the annotated image.
+**NEVER** use ` + "`take_screenshot`" + ` or live ` + "`scroll`" + ` to find things you can index with one ` + "`learn_screen`" + ` call.
 
 ### Scenario I — One-off click on a new screen (convenience)
 
