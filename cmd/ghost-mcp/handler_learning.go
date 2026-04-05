@@ -108,10 +108,11 @@ func learnScreen(cfg learnCfg) (*learner.View, error) {
 		normalResult, _ := ocr.ReadPreparedBytes(prepared.Normal, ocr.ScaleFactor, ocr.Options{})
 		invertedResult, _ := ocr.ReadPreparedBytes(prepared.Inverted, ocr.ScaleFactor, ocr.Options{})
 		brightResult, _ := ocr.ReadPreparedBytes(prepared.BrightText, ocr.ScaleFactor, ocr.Options{})
+		darkResult, _ := ocr.ReadPreparedBytes(prepared.DarkText, ocr.ScaleFactor, ocr.Options{})
 		colorResult, _ := ocr.ReadPreparedBytes(prepared.Color, ocr.ScaleFactor, ocr.Options{})
 
 		pageElements := mergeOCRPasses(page, cfg.RegionX, cfg.RegionY,
-			normalResult, invertedResult, brightResult, colorResult)
+			normalResult, invertedResult, brightResult, darkResult, colorResult)
 		allElements = append(allElements, pageElements...)
 
 		// ── Screenshot storage ───────────────────────────────────────────────
@@ -208,18 +209,31 @@ func scrollBack(scrollsDone, scrollAmount int) {
 	}
 }
 
-// mergeOCRPasses combines words from up to four OCR passes into a single
+// mergeOCRPasses combines words from up to five OCR passes into a single
 // deduplicated element list. The pass that first discovers each word is
 // recorded in OcrPass so the AI knows which rendering caught the element.
+// Expected argument order: normal, inverted, bright-text, dark-text, color.
 func mergeOCRPasses(pageIndex, offsetX, offsetY int, results ...*ocr.Result) []learner.Element {
-	passes := []struct {
+	passTags := []learner.OcrPass{
+		learner.OcrPassNormal,
+		learner.OcrPassInverted,
+		learner.OcrPassBrightText,
+		learner.OcrPassDarkText,
+		learner.OcrPassColor,
+	}
+	passes := make([]struct {
 		result *ocr.Result
 		pass   learner.OcrPass
-	}{
-		{results[0], learner.OcrPassNormal},
-		{results[1], learner.OcrPassInverted},
-		{results[2], learner.OcrPassBrightText},
-		{results[3], learner.OcrPassColor},
+	}, len(results))
+	for i, r := range results {
+		tag := learner.OcrPassNormal
+		if i < len(passTags) {
+			tag = passTags[i]
+		}
+		passes[i] = struct {
+			result *ocr.Result
+			pass   learner.OcrPass
+		}{r, tag}
 	}
 
 	type wordKey struct {

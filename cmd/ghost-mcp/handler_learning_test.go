@@ -148,7 +148,7 @@ func TestMergeOCRPasses_SkipsEmptyText(t *testing.T) {
 	}
 }
 
-func TestMergeOCRPasses_ThreePasses(t *testing.T) {
+func TestMergeOCRPasses_AllFivePasses(t *testing.T) {
 	normal := &ocr.Result{
 		Words: []ocr.Word{
 			{Text: "Normal", X: 10, Y: 10, Width: 50, Height: 20, Confidence: 90},
@@ -164,14 +164,19 @@ func TestMergeOCRPasses_ThreePasses(t *testing.T) {
 			{Text: "Bright", X: 150, Y: 10, Width: 50, Height: 20, Confidence: 86},
 		},
 	}
+	dark := &ocr.Result{
+		Words: []ocr.Word{
+			{Text: "Dark", X: 300, Y: 10, Width: 40, Height: 20, Confidence: 87},
+		},
+	}
 	color := &ocr.Result{
 		Words: []ocr.Word{
 			{Text: "Color", X: 200, Y: 10, Width: 40, Height: 20, Confidence: 88},
 		},
 	}
-	elems := mergeOCRPasses(0, 0, 0, normal, inverted, bright, color)
-	if len(elems) != 4 {
-		t.Fatalf("expected 4 elements from 4 passes, got %d", len(elems))
+	elems := mergeOCRPasses(0, 0, 0, normal, inverted, bright, dark, color)
+	if len(elems) != 5 {
+		t.Fatalf("expected 5 elements from 5 passes, got %d", len(elems))
 	}
 
 	passes := map[learner.OcrPass]bool{}
@@ -186,6 +191,9 @@ func TestMergeOCRPasses_ThreePasses(t *testing.T) {
 	}
 	if !passes[learner.OcrPassBrightText] {
 		t.Error("expected bright_text pass element")
+	}
+	if !passes[learner.OcrPassDarkText] {
+		t.Error("expected dark_text pass element")
 	}
 	if !passes[learner.OcrPassColor] {
 		t.Error("expected color pass element")

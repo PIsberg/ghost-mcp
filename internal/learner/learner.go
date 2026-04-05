@@ -52,7 +52,8 @@ type OcrPass string
 const (
 	OcrPassNormal     OcrPass = "normal"      // grayscale + contrast stretch
 	OcrPassInverted   OcrPass = "inverted"    // brightness inversion (white-on-dark)
-	OcrPassBrightText OcrPass = "bright_text" // isolates near-white pixels
+	OcrPassBrightText OcrPass = "bright_text" // isolates near-white pixels (white text on coloured bg)
+	OcrPassDarkText   OcrPass = "dark_text"   // isolates near-dark achromatic pixels (dark text on coloured bg)
 	OcrPassColor      OcrPass = "color"       // full colour (coloured-background buttons)
 )
 
