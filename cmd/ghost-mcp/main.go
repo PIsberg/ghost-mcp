@@ -189,7 +189,7 @@ func handleMoveMouse(_ context.Context, request mcp.CallToolRequest) (*mcp.CallT
 	}
 
 	robotgo.Move(x, y)
-	return mcp.NewToolResultText(fmt.Sprintf("Moved mouse to (%d, %d)", x, y)), nil
+	return mcp.NewToolResultText(fmt.Sprintf(`{"success": true, "x": %d, "y": %d}`, x, y)), nil
 }
 
 func handleClick(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
