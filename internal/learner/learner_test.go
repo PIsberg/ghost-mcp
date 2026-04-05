@@ -453,13 +453,36 @@ func TestInferElementType_Checkbox(t *testing.T) {
 		width  int
 		height int
 	}{
+		// Unchecked symbols (uncheckedSymbols constant)
 		{"☐ I agree", 150, 20},
+		{"□ unchecked item", 100, 20},
+		{"◻ empty box", 100, 20},
+		{"▢ tick box", 100, 20},
+		// Checked symbols (checkedSymbols constant)
 		{"☑ Accept terms", 150, 20},
+		{"☒ dismissed", 100, 20},
 		{"✓ Yes", 50, 20},
+		{"✔ completed", 100, 20},
+		{"✗ declined", 100, 20},
+		{"✘ invalid", 100, 20},
+		// Bracket patterns
 		{"[ ] Option", 100, 20},
 		{"[x] Selected", 100, 20},
+		{"[X] Done", 100, 20},
+		{"(x) confirm", 100, 20},
+		{"(X) opted in", 100, 20},
+		{"( ) pending", 100, 20},
+		// Agreement / opt-in text
 		{"Remember me", 100, 20},
 		{"Subscribe", 80, 20},
+		{"I agree to the terms", 200, 20},
+		{"Agree to terms", 150, 20},
+		{"opt in for updates", 150, 20},
+		{"opt out of emails", 150, 20},
+		// State description text
+		{"mark as complete", 150, 20},
+		{"tick this box", 150, 20},
+		{"check this to confirm", 200, 20},
 	}
 	for _, tc := range tests {
 		got := InferElementType(tc.text, tc.width, tc.height)
@@ -475,14 +498,72 @@ func TestInferElementType_Radio(t *testing.T) {
 		width  int
 		height int
 	}{
+		// Empty radio symbols (radioEmptySymbols constant)
 		{"○ Option A", 100, 20},
+		{"◯ empty option", 100, 20},
+		{"◎ ringed option", 100, 20},
+		// Selected radio symbols (radioSelectedSymbols constant)
 		{"● Selected", 100, 20},
 		{"◉ Option B", 100, 20},
+		{"⊙ option C", 100, 20},
+		{"⊚ chosen", 100, 20},
+		// ASCII-art radio patterns
+		{"(*) selected option", 100, 20},
+		{"( • ) choice", 100, 20},
+		{"(•) point", 100, 20},
+		// Phrase patterns
+		{"Option 1", 100, 20},
+		{"Choice A", 100, 20},
+		{"select option A", 150, 20},
+		{"select this option", 150, 20},
 	}
 	for _, tc := range tests {
 		got := InferElementType(tc.text, tc.width, tc.height)
 		if got != ElementTypeRadio {
 			t.Errorf("InferElementType(%q, %d, %d) = %v, want radio", tc.text, tc.width, tc.height, got)
+		}
+	}
+}
+
+// =============================================================================
+// IsCheckedSymbol
+// =============================================================================
+
+func TestIsCheckedSymbol_CheckedStates(t *testing.T) {
+	checked := []string{
+		// checkedSymbols: ☑☒✓✔✗✘
+		"☑", "☒", "✓", "✔", "✗", "✘",
+		// radioSelectedSymbols: ●◉⊙⊚
+		"●", "◉", "⊙", "⊚",
+		// pattern-based
+		"[x]", "[X]", "(*)", "(•)",
+		// embedded in text
+		"☑ Accept terms",
+		"(*) Selected option",
+		"✓ confirmed",
+	}
+	for _, s := range checked {
+		if !IsCheckedSymbol(s) {
+			t.Errorf("IsCheckedSymbol(%q) = false, want true", s)
+		}
+	}
+}
+
+func TestIsCheckedSymbol_UncheckedStates(t *testing.T) {
+	unchecked := []string{
+		// uncheckedSymbols: ☐□◻▢
+		"☐", "□", "◻", "▢",
+		// radioEmptySymbols: ○◯◎
+		"○", "◯", "◎",
+		// ASCII empty
+		"[ ]", "( )",
+		// plain label text
+		"Remember me",
+		"Option 1",
+	}
+	for _, s := range unchecked {
+		if IsCheckedSymbol(s) {
+			t.Errorf("IsCheckedSymbol(%q) = true, want false", s)
 		}
 	}
 }

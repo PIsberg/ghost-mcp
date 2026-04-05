@@ -357,15 +357,35 @@ func isInputPlaceholder(s string) bool {
 	return false
 }
 
+// checkedSymbols are Unicode codepoints that indicate a selected/ticked state.
+// Used by both isCheckboxText (symbol detection) and IsCheckedSymbol (state detection).
+const checkedSymbols = "☑☒✓✔✗✘" // ballot-box-checked, heavy-check, ballot-x variants
+
+// uncheckedSymbols are Unicode codepoints that indicate an empty/unselected state.
+const uncheckedSymbols = "☐□◻▢"
+
+// radioSelectedSymbols indicate a selected radio button.
+const radioSelectedSymbols = "●◉⊙⊚"
+
+// radioEmptySymbols indicate an unselected radio button.
+const radioEmptySymbols = "○◯◎"
+
 var checkboxPatterns = []string{
-	"[ ]", "[x]", "[✓]", "[✔]",
-	"i agree", "accept", "agree to", "terms",
-	"subscribe", "remember me", "keep me",
+	// Symbol strings OCR may return as multi-char sequences
+	"[ ]", "[x]", "[X]", "[✓]", "[✔]", "[ x ]",
+	"(x)", "(X)", "( )",
+	// Agreement / opt-in text
+	"i agree", "agree to", "agree with", "accept",
+	"subscribe", "unsubscribe", "opt in", "opt out",
+	"remember me", "keep me", "stay logged in",
+	"select all", "deselect all",
+	// State description text
+	"check this", "tick this", "mark as",
 }
 
-// isCheckboxText returns true for checkbox text or symbols.
+// isCheckboxText returns true when OCR output looks like a checkbox widget or label.
 func isCheckboxText(s string) bool {
-	if strings.ContainsAny(s, "☐☑✓✗✘√[]") {
+	if strings.ContainsAny(s, checkedSymbols+uncheckedSymbols) {
 		return true
 	}
 	for _, p := range checkboxPatterns {
@@ -377,12 +397,18 @@ func isCheckboxText(s string) bool {
 }
 
 var radioPatterns = []string{
-	"option ", "choice ", "select this",
+	// Enumerated options — the trailing space is intentional to avoid matching
+	// words like "optional" or "choices".
+	"option ", "choice ",
+	// Symbol strings OCR may return
+	"( )", "(*)", "( • )", "(•)",
+	// Explicit radio-button phrases
+	"select this", "select option",
 }
 
-// isRadioText returns true for radio button text or symbols.
+// isRadioText returns true when OCR output looks like a radio-button widget or label.
 func isRadioText(s string) bool {
-	if strings.ContainsAny(s, "○●◉◎") {
+	if strings.ContainsAny(s, radioSelectedSymbols+radioEmptySymbols) {
 		return true
 	}
 	for _, p := range radioPatterns {
@@ -391,6 +417,22 @@ func isRadioText(s string) bool {
 		}
 	}
 	return false
+}
+
+// IsCheckedSymbol returns true when text contains a symbol indicating a
+// checked/selected control state. Used by find_elements to populate the
+// "checked" field for checkbox and radio elements when OCR captures state symbols.
+//
+// Checked indicators: ☑ ☒ ✓ ✔ ✗ ✘ ● ◉ [x] [X] (*) (•)
+// These are distinct from mere presence indicators (☐ ○) which are unchecked.
+func IsCheckedSymbol(text string) bool {
+	if strings.ContainsAny(text, checkedSymbols+radioSelectedSymbols) {
+		return true
+	}
+	lower := strings.ToLower(text)
+	return strings.Contains(lower, "[x]") ||
+		strings.Contains(lower, "(*)")  ||
+		strings.Contains(lower, "(•)")
 }
 
 var dropdownPatterns = []string{
