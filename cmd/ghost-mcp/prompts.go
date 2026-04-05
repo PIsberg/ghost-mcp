@@ -27,12 +27,7 @@ func handleGhostMCPGuide(_ context.Context, _ mcp.GetPromptRequest) (*mcp.GetPro
 	return &mcp.GetPromptResult{
 		Description: "Ghost MCP tool routing guide",
 		Messages: []mcp.PromptMessage{
-			{
-				Role: mcp.RoleUser,
-				Content: mcp.TextContent{
-					Text: ghostMCPGuide,
-				},
-			},
+			mcp.NewPromptMessage(mcp.RoleUser, mcp.NewTextContent(ghostMCPGuide)),
 		},
 	}, nil
 }
