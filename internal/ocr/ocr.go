@@ -75,6 +75,18 @@ type Options struct {
 	// after grayscale conversion.
 	ColorInverted bool
 
+	// DarkText isolates near-dark achromatic pixels for detecting dark text on
+	// any coloured background. A pixel is mapped to black (text) when its
+	// BT.709 luminance ≤ darkTextMaxLum AND its channel spread (max−min) ≤
+	// brightTextMaxSpread; everything else becomes white (background).
+	// This is the mirror of BrightText: where BrightText finds white labels on
+	// coloured buttons, DarkText finds dark labels (e.g. #333) on
+	// light-coloured buttons such as the WARNING button (#f0ad4e yellow), where
+	// normal grayscale preprocessing loses contrast between the dark text and the
+	// medium-luminance yellow background.
+	// Ignored when BrightText, ColorInverted, Color, or Inverted is true.
+	DarkText bool
+
 	// CharacterSet restricts OCR to specific characters for improved accuracy.
 	// Use for specific contexts:
 	// - Buttons: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
@@ -104,7 +116,8 @@ type Options struct {
 const MinConfidence = 35.0
 
 // brightTextMaxSpread is the maximum allowed channel spread (max−min across R,G,B)
-// for a pixel to be classified as near-white text in brightTextToGray.
+// for a pixel to be classified as near-white/near-dark achromatic text in
+// brightTextToGray and darkTextToGray.
 //
 // Value 130 is chosen to catch anti-aliased edges of white text on the full
 // range of button gradient colours used in practice:
@@ -113,12 +126,32 @@ const MinConfidence = 35.0
 //   - White on cyan #00f2fe (50% blend):   spread=127 ≤ 130 ✓  (was failing at 100)
 //   - White on green #38ef7d (50% blend):  spread=92  ≤ 130 ✓
 //
+// For dark text, anti-aliased edges blended with a yellow background also pass:
+//   - #333 on #f0ad4e (50% blend → (146,112,65)): spread=81 ≤ 130 ✓
+//
 // Pure coloured backgrounds are still excluded because their luminance check
-// fails first (lum < 185) or their spread far exceeds 130:
+// fails first (lum < 185 for bright; lum > 120 for dark) or their spread
+// far exceeds 130:
 //   - Pure #00f2fe (0,242,254):   lum=191 but spread=254 > 130 ✓
 //   - Pure #38ef7d (56,239,125):  lum=192 but spread=183 > 130 ✓
 //   - Pure #4facfe (79,172,254):  lum=158 < 185 ✓
+//   - Yellow #f0ad4e (240,173,78): lum=180 > 120 (excluded by darkTextMaxLum) ✓
 const brightTextMaxSpread = 130
+
+// darkTextMaxLum is the maximum allowed BT.709 luminance for a pixel to be
+// classified as near-dark text in darkTextToGray.
+//
+// Value 120 is chosen to catch dark text (#333, lum=51) used on warning-style
+// buttons and its anti-aliased edges blended into a yellow background
+// (#f0ad4e, lum=180):
+//   - Pure #333 (51,51,51):            lum=51  ≤ 120 ✓
+//   - 50% blend with #f0ad4e yellow:   lum=115 ≤ 120 ✓  (anti-aliased edge)
+//
+// Light/coloured backgrounds are excluded because their luminance exceeds 120:
+//   - Yellow #f0ad4e (240,173,78): lum=180 > 120 ✓
+//   - White #ffffff (255,255,255): lum=255 > 120 ✓
+//   - Light gray #f5f5f5:          lum=245 > 120 ✓
+const darkTextMaxLum = 120
 
 // Common character sets for specific OCR contexts
 const (
@@ -340,6 +373,7 @@ type PreparedImageSet struct {
 	Normal        []byte
 	Inverted      []byte
 	BrightText    []byte
+	DarkText      []byte
 	Color         []byte
 	ColorInverted []byte
 }
@@ -362,7 +396,7 @@ func PrepareParallelImageSet(img image.Image, grayscale bool) (*PreparedImageSet
 		return &PreparedImageSet{Normal: colorBytes, Color: colorBytes}, nil
 	}
 
-	// Run all 5 preprocessing passes concurrently. Each pass reads img (no writes)
+	// Run all 6 preprocessing passes concurrently. Each pass reads img (no writes)
 	// and writes to its own independent output buffer, so no synchronisation is needed
 	// beyond waiting for all goroutines to finish.
 	type encodeResult struct {
@@ -370,15 +404,16 @@ func PrepareParallelImageSet(img image.Image, grayscale bool) (*PreparedImageSet
 		data []byte
 		err  error
 	}
-	ch := make(chan encodeResult, 5)
+	ch := make(chan encodeResult, 6)
 
-	passes := [5]struct {
+	passes := [6]struct {
 		name string
 		opts Options
 	}{
 		{"normal", Options{}},
 		{"inverted", Options{Inverted: true}},
 		{"bright-text", Options{BrightText: true}},
+		{"dark-text", Options{DarkText: true}},
 		{"color", Options{Color: true}},
 		{"color-inverted", Options{ColorInverted: true}},
 	}
@@ -403,6 +438,8 @@ func PrepareParallelImageSet(img image.Image, grayscale bool) (*PreparedImageSet
 			set.Inverted = r.data
 		case "bright-text":
 			set.BrightText = r.data
+		case "dark-text":
+			set.DarkText = r.data
 		case "color":
 			set.Color = r.data
 		case "color-inverted":
@@ -499,15 +536,22 @@ func preprocessToBytes(src string, factor int, opts Options) ([]byte, error) {
 // (file path input) and ReadImage (in-memory image input).
 //
 // Preprocessing is selected by opts (evaluated in priority order):
-//  1. BrightText: pixels where all RGB ≥ 240 → black, else → white.
-//     Isolates pure-white button text from any background. Upscaled as Gray.
-//  2. Color (and not BrightText): no grayscale/inversion; upscale as RGBA.
-//  3. Default (grayscale): BT.709 grayscale + contrast stretch + optional
+//  1. BrightText: near-white achromatic pixels → black, else → white.
+//     Isolates white button text from any coloured background. Upscaled as Gray.
+//  2. DarkText: near-dark achromatic pixels → black, else → white.
+//     Isolates dark button text (e.g. #333) from light-coloured backgrounds
+//     such as the WARNING yellow (#f0ad4e). Upscaled as Gray.
+//  3. ColorInverted: RGB-invert then grayscale. Upscaled as Gray.
+//  4. Color: no grayscale/inversion; upscale as RGBA.
+//  5. Default (grayscale): BT.709 grayscale + contrast stretch + optional
 //     inversion (opts.Inverted). Upscaled as Gray.
 func encodeForOCR(img image.Image, factor int, opts Options) ([]byte, error) {
 	var scaledImg image.Image
 	if opts.BrightText {
 		preprocessed := brightTextToGray(img, 185)
+		scaledImg = scaleGrayNearest(preprocessed, factor)
+	} else if opts.DarkText {
+		preprocessed := darkTextToGray(img)
 		scaledImg = scaleGrayNearest(preprocessed, factor)
 	} else if opts.ColorInverted {
 		preprocessed := colorInvertGray(img)
@@ -709,6 +753,88 @@ func brightTextToGray(img image.Image, threshold uint8) *image.Gray {
 					lo = b8
 				}
 				if lum >= uint32(threshold) && hi-lo <= brightTextMaxSpread {
+					out.Pix[dstOff+x] = 0
+				} else {
+					out.Pix[dstOff+x] = 255
+				}
+			}
+		}
+	}
+	return out
+}
+
+// darkTextToGray creates a binary image where near-dark achromatic pixels become
+// black (text) and everything else becomes white (background). It is the mirror
+// of brightTextToGray, designed to isolate dark button labels — and their
+// anti-aliased edges — from any coloured background.
+//
+// Detection condition (both must hold):
+//
+//  1. BT.709 luminance ≤ darkTextMaxLum  (pixel is dark enough to be dark text
+//     or a lightly-blended anti-aliased edge against a light background).
+//  2. max(R,G,B) − min(R,G,B) ≤ brightTextMaxSpread  (pixel is achromatic
+//     enough — coloured backgrounds like yellow #f0ad4e have spread > 160 and
+//     are excluded even when their luminance is relatively low).
+//
+// Primary use case: WARNING-style buttons with dark (#333) text on a
+// yellow/orange background (#f0ad4e) where grayscale preprocessing loses the
+// contrast between the dark text (lum=51) and the medium-luminance yellow
+// background (lum=180).
+func darkTextToGray(img image.Image) *image.Gray {
+	b := img.Bounds()
+	out := image.NewGray(b)
+	w, h := b.Dx(), b.Dy()
+
+	// Fast path for *image.RGBA — direct Pix slice access, no interface calls.
+	if rgba, ok := img.(*image.RGBA); ok {
+		for y := 0; y < h; y++ {
+			srcRow := rgba.Pix[y*rgba.Stride : y*rgba.Stride+w*4]
+			dstOff := y * out.Stride
+			for x := 0; x < w; x++ {
+				r := srcRow[x*4]
+				g := srcRow[x*4+1]
+				bl := srcRow[x*4+2]
+				// BT.709 luminance, scaled ×10000 to stay integer.
+				lum := (2126*uint32(r) + 7152*uint32(g) + 722*uint32(bl) + 5000) / 10000
+				// Channel spread: high spread = colourful (not near-dark text).
+				hi, lo := r, r
+				if g > hi {
+					hi = g
+				} else if g < lo {
+					lo = g
+				}
+				if bl > hi {
+					hi = bl
+				} else if bl < lo {
+					lo = bl
+				}
+				if lum <= darkTextMaxLum && hi-lo <= brightTextMaxSpread {
+					out.Pix[dstOff+x] = 0 // near-dark, low-saturation → black (text)
+				} else {
+					out.Pix[dstOff+x] = 255 // coloured or bright → white (background)
+				}
+			}
+		}
+	} else {
+		// Slow path: interface dispatch fallback for any other image type.
+		for y := b.Min.Y; y < b.Max.Y; y++ {
+			dstOff := (y-b.Min.Y)*out.Stride - b.Min.X
+			for x := b.Min.X; x < b.Max.X; x++ {
+				r32, g32, b32, _ := img.At(x, y).RGBA()
+				r8, g8, b8 := uint8(r32>>8), uint8(g32>>8), uint8(b32>>8)
+				lum := (2126*uint32(r8) + 7152*uint32(g8) + 722*uint32(b8) + 5000) / 10000
+				hi, lo := r8, r8
+				if g8 > hi {
+					hi = g8
+				} else if g8 < lo {
+					lo = g8
+				}
+				if b8 > hi {
+					hi = b8
+				} else if b8 < lo {
+					lo = b8
+				}
+				if lum <= darkTextMaxLum && hi-lo <= brightTextMaxSpread {
 					out.Pix[dstOff+x] = 0
 				} else {
 					out.Pix[dstOff+x] = 255
