@@ -249,7 +249,7 @@ func InferElementType(text string, width, height int) ElementType {
 	words := strings.Fields(trimmed)
 
 	// Label: ends with a colon (English or full-width).
-	if strings.HasSuffix(trimmed, ":") || strings.HasSuffix(trimmed, ":") {
+	if strings.HasSuffix(trimmed, ":") || strings.HasSuffix(trimmed, "：") {
 		return ElementTypeLabel
 	}
 
@@ -637,9 +637,6 @@ func DeduplicateElements(elements []Element) []Element {
 	for _, candidate := range sorted {
 		duplicate := false
 		for _, kept := range out {
-			if kept.PageIndex != candidate.PageIndex {
-				continue
-			}
 			if !strings.EqualFold(kept.Text, candidate.Text) {
 				continue
 			}

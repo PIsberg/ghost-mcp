@@ -250,14 +250,17 @@ func TestDeduplicateElements_RemovesSamePageOverlap(t *testing.T) {
 	}
 }
 
-func TestDeduplicateElements_KeepsDifferentPages(t *testing.T) {
+func TestDeduplicateElements_RemovesCrossPageOverlap(t *testing.T) {
 	elems := []Element{
 		{Text: "Header", X: 10, Y: 10, Width: 60, Height: 30, PageIndex: 0},
 		{Text: "Header", X: 10, Y: 10, Width: 60, Height: 30, PageIndex: 1},
 	}
 	got := DeduplicateElements(elems)
-	if len(got) != 2 {
-		t.Fatalf("same text on different pages should be kept; got %d", len(got))
+	if len(got) != 1 {
+		t.Fatalf("same text on different pages at the same spot should be deduplicated; got %d", len(got))
+	}
+	if got[0].PageIndex != 0 {
+		t.Errorf("should keep earliest page index; got %d", got[0].PageIndex)
 	}
 }
 
