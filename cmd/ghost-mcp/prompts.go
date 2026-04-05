@@ -148,7 +148,7 @@ They are completely different numbers. Never use ` + "`ocr_id`" + ` as ` + "`vis
 
 ### Action tools that accept coordinates OR visual_id
 
-| Action | By coordinates (Path A) | By badge (Path B) |
+| Action | By coordinates (Path A) | By visual_id (Path B) |
 |--------|------------------------|-------------------|
 | Click | ` + "`click_at(x, y)`" + ` | ` + "`click_at(visual_id=N)`" + ` |
 | Type | ` + "`click_and_type(x, y, text=\"...\")`" + ` | ` + "`click_and_type(visual_id=N, text=\"...\")`" + ` |
@@ -193,7 +193,7 @@ If the target might be below the fold, increase ` + "`max_pages`" + `:
 
 - ` + "`get_learned_view`" + ` returns elements from ALL pages at once.
 - If the element is not found, call ` + "`get_annotated_view(page_index: N)`" + ` to
-  visually inspect a specific page and read the badge number.
+  visually inspect a specific page and read the visual_id from the overlay.
 - ` + "`click_at(visual_id=N)`" + ` works for any indexed element. The server scrolls for you.
 
 **NEVER** manually scroll + screenshot to find things. Index once, then act.
@@ -205,7 +205,7 @@ If the target might be below the fold, increase ` + "`max_pages`" + `:
 ### Element not found after scan
 1. Call ` + "`get_learned_view`" + ` to see what OCR actually detected.
 2. If the target is missing, re-run ` + "`learn_screen`" + ` with higher ` + "`max_pages`" + `.
-3. If still missing, use ` + "`get_annotated_view`" + ` to visually find it and read its badge.
+3. If still missing, use ` + "`get_annotated_view`" + ` to visually find it and read its visual_id.
 
 ### Click did not work (UI unchanged)
 1. Call ` + "`wait_for_text`" + ` with a short timeout — the UI may be loading.

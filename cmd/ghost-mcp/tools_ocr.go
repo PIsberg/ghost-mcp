@@ -25,8 +25,8 @@ For best performance, call learn_screen first — subsequent calls use the cache
 location (10–25× faster). For a single one-off click, find_and_click works without learn_screen.
 
 🎯 FOR HIGHEST PRECISION (MANDATORY): Always consider calling learn_screen then 
-get_annotated_view FIRST. This gives you numeric ID badges (e.g. [5], [12]). 
-Use these IDs with click_at(id=N) for 100% precision.
+get_annotated_view FIRST. This gives you visual_id overlays (e.g. 5, 12). 
+Use these with click_at(visual_id=N) for 100% precision.
 
 WHEN TO USE:
 - Click a single button, link, or menu item by its visible text label.
@@ -133,7 +133,7 @@ RESPONSE: {success, text, visible, waited_ms} or {error: "timeout..."}`),
 corresponds to which UI element without calling get_annotated_view first.
 
 For any task involving 2+ steps, PREFER learn_screen followed by get_annotated_view.
-This gives you numeric ID badges that you can use with click_at(id=N) for 100% precision.
+This gives you visual_id overlays that you can use with click_at(visual_id=N) for 100% precision.
 
 RESPONSE STRUCTURE:
 - actionable_elements: focusable items like buttons, inputs, links.
