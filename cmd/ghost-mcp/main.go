@@ -93,11 +93,40 @@ var (
 	uiGetScreenSize = robotgo.GetScreenSize
 	uiMoveMouse     = func(x, y int) { robotgo.Move(x, y) }
 	uiScrollDir     = func(amount int, direction string) { robotgo.ScrollDir(amount, direction) }
-	uiCaptureImage  = func(x, y, width, height int) (image.Image, error) { return robotgo.CaptureImg(x, y, width, height) }
+	uiCaptureImage  = func(x, y, w, h int) (image.Image, error) {
+		img, err := robotgo.CaptureImg(x, y, w, h)
+		if err != nil {
+			return nil, err
+		}
+
+		// Detect blank/failed screenshots
+		if isUniform(img) {
+			logging.Error("uiCaptureImage: Captured image is completely uniform (all pixels same color). This often indicates a screen capture failure or per-app protection.")
+		}
+
+		return img, nil
+	}
 	uiReadImage     = ocr.ReadImage
 	uiCheckFailsafe = checkFailsafe
 	uiFindText      = parallelFindText
 )
+
+func isUniform(img image.Image) bool {
+	bounds := img.Bounds()
+	if bounds.Empty() {
+		return true
+	}
+	r0, g0, b0, a0 := img.At(bounds.Min.X, bounds.Min.Y).RGBA()
+	for py := bounds.Min.Y; py < bounds.Max.Y; py++ {
+		for px := bounds.Min.X; px < bounds.Max.X; px++ {
+			r, g, b, a := img.At(px, py).RGBA()
+			if r != r0 || g != g0 || b != b0 || a != a0 {
+				return false
+			}
+		}
+	}
+	return true
+}
 
 // =============================================================================
 // FAILSAFE
@@ -137,43 +166,30 @@ func handleGetScreenSize(ctx context.Context, request mcp.CallToolRequest) (*mcp
 	)), nil
 }
 
-func handleMoveMouse(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func handleMoveMouse(_ context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	logging.Debug("Handling move_mouse request")
 
-	x, err := getIntParam(request, "x")
-	if err != nil {
-		logging.Error("Invalid x parameter: %v", err)
-		return mcp.NewToolResultError(fmt.Sprintf("invalid x parameter: %v", err)), nil
-	}
-	y, err := getIntParam(request, "y")
-	if err != nil {
-		logging.Error("Invalid y parameter: %v", err)
-		return mcp.NewToolResultError(fmt.Sprintf("invalid y parameter: %v", err)), nil
+	x, errX := getIntParam(request, "x")
+	y, errY := getIntParam(request, "y")
+	vid, errVID := getIntParam(request, "visual_id")
+
+	if errVID == nil {
+		foundX, foundY, found := globalLearner.GetElementCoords(vid)
+		if !found {
+			return mcp.NewToolResultError(fmt.Sprintf("visual_id %d not found in current view", vid)), nil
+		}
+		x, y = foundX, foundY
+	} else if errX != nil || errY != nil {
+		return mcp.NewToolResultError("either 'visual_id' or both 'x' and 'y' must be provided"), nil
 	}
 
 	screenW, screenH := robotgo.GetScreenSize()
 	if err := validate.Coords(x, y, screenW, screenH); err != nil {
-		logging.Error("Coordinate validation failed: %v", err)
-		return mcp.NewToolResultError(fmt.Sprintf("invalid coordinates: %v", err)), nil
+		return mcp.NewToolResultError(fmt.Sprintf("invalid position: %v", err)), nil
 	}
-
-	// Log current position
-	currentX, currentY := robotgo.GetMousePos()
-	logging.Info("ACTION: Moving mouse from (%d, %d) to (%d, %d)", currentX, currentY, x, y)
 
 	robotgo.Move(x, y)
-
-	if os.Getenv("GHOST_MCP_VISUAL") == "1" {
-		visual.PulseCursor(x, y)
-	}
-
-	if err := checkFailsafe(); err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	finalX, finalY := robotgo.GetMousePos()
-	logging.Info("ACTION COMPLETE: Mouse now at (%d, %d)", finalX, finalY)
-	return mcp.NewToolResultText(fmt.Sprintf(`{"success": true, "x": %d, "y": %d}`, finalX, finalY)), nil
+	return mcp.NewToolResultText(fmt.Sprintf(`{"success": true, "x": %d, "y": %d}`, x, y)), nil
 }
 
 func handleClick(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -215,15 +231,18 @@ func handleClick(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToo
 func handleClickAt(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	logging.Debug("Handling click_at request")
 
-	x, err := getIntParam(request, "x")
-	if err != nil {
-		logging.Error("Invalid x parameter: %v", err)
-		return mcp.NewToolResultError(fmt.Sprintf("invalid x parameter: %v", err)), nil
-	}
-	y, err := getIntParam(request, "y")
-	if err != nil {
-		logging.Error("Invalid y parameter: %v", err)
-		return mcp.NewToolResultError(fmt.Sprintf("invalid y parameter: %v", err)), nil
+	x, errX := getIntParam(request, "x")
+	y, errY := getIntParam(request, "y")
+	vid, errVID := getIntParam(request, "visual_id")
+
+	if errVID == nil {
+		foundX, foundY, found := globalLearner.GetElementCoords(vid)
+		if !found {
+			return mcp.NewToolResultError(fmt.Sprintf("visual_id %d not found in current view", vid)), nil
+		}
+		x, y = foundX, foundY
+	} else if errX != nil || errY != nil {
+		return mcp.NewToolResultError("either 'visual_id' or both 'x' and 'y' must be provided"), nil
 	}
 
 	button, err := getStringParam(request, "button")
@@ -257,9 +276,9 @@ func handleClickAt(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallT
 		visual.PulseCursor(x, y)
 	}
 
-	if err := checkFailsafe(); err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
+	// Ensure mouse is exactly at target after pulse and let it settle
+	robotgo.Move(x, y)
+	time.Sleep(100 * time.Millisecond)
 
 	robotgo.Click(button, false)
 	applyClickDelay(request)
@@ -284,50 +303,37 @@ func handleClickAt(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallT
 	return mcp.NewToolResultText(response + "}"), nil
 }
 
-func handleDoubleClick(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func handleDoubleClick(_ context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	logging.Debug("Handling double_click request")
 
-	x, err := getIntParam(request, "x")
-	if err != nil {
-		logging.Error("Invalid x parameter: %v", err)
-		return mcp.NewToolResultError(fmt.Sprintf("invalid x parameter: %v", err)), nil
-	}
-	y, err := getIntParam(request, "y")
-	if err != nil {
-		logging.Error("Invalid y parameter: %v", err)
-		return mcp.NewToolResultError(fmt.Sprintf("invalid y parameter: %v", err)), nil
+	x, errX := getIntParam(request, "x")
+	y, errY := getIntParam(request, "y")
+	vid, errVID := getIntParam(request, "visual_id")
+
+	if errVID == nil {
+		foundX, foundY, found := globalLearner.GetElementCoords(vid)
+		if !found {
+			return mcp.NewToolResultError(fmt.Sprintf("visual_id %d not found in current view", vid)), nil
+		}
+		x, y = foundX, foundY
+	} else if errX != nil || errY != nil {
+		return mcp.NewToolResultError("either 'visual_id' or both 'x' and 'y' must be provided"), nil
 	}
 
 	screenW, screenH := robotgo.GetScreenSize()
 	if err := validate.Coords(x, y, screenW, screenH); err != nil {
-		logging.Error("Coordinate validation failed: %v", err)
-		return mcp.NewToolResultError(fmt.Sprintf("invalid coordinates: %v", err)), nil
+		return mcp.NewToolResultError(fmt.Sprintf("invalid double_click position: %v", err)), nil
 	}
 
-	logging.Info("ACTION: Moving mouse to (%d, %d) for double-click", x, y)
 	robotgo.Move(x, y)
-
-	if os.Getenv("GHOST_MCP_VISUAL") == "1" {
-		visual.PulseCursor(x, y)
+	robotgo.Click("left", true) // true = double click
+	delay, _ := getIntParam(request, "delay_ms")
+	if delay <= 0 {
+		delay = 100
 	}
+	time.Sleep(time.Duration(delay) * time.Millisecond)
 
-	if err := checkFailsafe(); err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	robotgo.Click("left", true)
-	applyClickDelay(request)
-
-	finalX, finalY := robotgo.GetMousePos()
-	if finalX != x || finalY != y {
-		logging.Info("WARNING: cursor moved after double-click: requested (%d,%d) actual (%d,%d)", x, y, finalX, finalY)
-	}
-	logging.Info("ACTION COMPLETE: Double-click at (%d, %d)", x, y)
-
-	return mcp.NewToolResultText(fmt.Sprintf(
-		`{"success": true, "requested_x": %d, "requested_y": %d, "actual_x": %d, "actual_y": %d}`,
-		x, y, finalX, finalY,
-	)), nil
+	return mcp.NewToolResultText(fmt.Sprintf("Double-clicked at (%d, %d)", x, y)), nil
 }
 
 func handleScroll(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -628,15 +634,18 @@ func handleTypeText(ctx context.Context, request mcp.CallToolRequest) (*mcp.Call
 func handleClickAndType(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	logging.Debug("Handling click_and_type request")
 
-	x, err := getIntParam(request, "x")
-	if err != nil {
-		logging.Error("Invalid x parameter: %v", err)
-		return mcp.NewToolResultError(fmt.Sprintf("invalid x parameter: %v", err)), nil
-	}
-	y, err := getIntParam(request, "y")
-	if err != nil {
-		logging.Error("Invalid y parameter: %v", err)
-		return mcp.NewToolResultError(fmt.Sprintf("invalid y parameter: %v", err)), nil
+	x, errX := getIntParam(request, "x")
+	y, errY := getIntParam(request, "y")
+	vid, errVID := getIntParam(request, "visual_id")
+
+	if errVID == nil {
+		foundX, foundY, found := globalLearner.GetElementCoords(vid)
+		if !found {
+			return mcp.NewToolResultError(fmt.Sprintf("visual_id %d not found in current view", vid)), nil
+		}
+		x, y = foundX, foundY
+	} else if errX != nil || errY != nil {
+		return mcp.NewToolResultError("either 'visual_id' or both 'x' and 'y' must be provided"), nil
 	}
 
 	text, err := getStringParam(request, "text")
@@ -942,13 +951,14 @@ Returns {width, height, scale_factor}.
 	), handleGetScreenSize)
 
 	mcpServer.AddTool(mcp.NewTool("move_mouse",
-		mcp.WithDescription(`Move the mouse cursor to absolute screen coordinates. (0,0) is the top-left corner.
+		mcp.WithDescription(`Move the mouse cursor to absolute screen coordinates or a visual_id.
 
-⚠️ NOT FOR CLICKING BUTTONS: If you want to click a button or link by its text label, use find_and_click instead — it locates the target by OCR and clicks in one call with no coordinate guessing.
-
-Use move_mouse only when you already have exact coordinates (e.g. from find_elements center_x/center_y) and need to hover before a click, or when dragging.`),
-		mcp.WithNumber("x", mcp.Description("X coordinate in pixels from the left edge of the screen. Must be within screen bounds."), mcp.Required()),
-		mcp.WithNumber("y", mcp.Description("Y coordinate in pixels from the top edge of the screen. Must be within screen bounds."), mcp.Required()),
+Two modes:
+- Coordinates: move_mouse(x=350, y=780)
+- Visual ID:   move_mouse(visual_id=12) — read the visual_id from the get_annotated_view image.`),
+		mcp.WithNumber("x", mcp.Description("X coordinate in pixels. Required if 'visual_id' is not provided.")),
+		mcp.WithNumber("y", mcp.Description("Y coordinate in pixels. Required if 'visual_id' is not provided.")),
+		mcp.WithNumber("visual_id", mcp.Description("The number shown on the overlay in the get_annotated_view image (e.g. overlay shows 12 means visual_id=12). If provided, x/y are ignored.")),
 	), handleMoveMouse)
 
 	mcpServer.AddTool(mcp.NewTool("click",
@@ -962,43 +972,48 @@ Use this tool only when you have already moved the mouse to exact coordinates an
 	), handleClick)
 
 	mcpServer.AddTool(mcp.NewTool("click_at",
-		mcp.WithDescription(`Move the mouse to (x, y) and click in one atomic operation. Preferred over separate move_mouse + click calls.
+		mcp.WithDescription(`Move the mouse and click in one atomic operation.
 
-⚠️ NOT FOR CLICKING BUTTONS BY LABEL: Use find_and_click instead — it finds the text on screen and clicks without needing you to supply coordinates.
+Two modes:
+- Coordinates: click_at(x=350, y=780) — use when get_learned_view found the element.
+- Visual ID:   click_at(visual_id=12)  — use when you read visual_id 12 from the get_annotated_view image.
 
-Use click_at only when you already have exact pixel coordinates (e.g. center_x/center_y from find_elements, or a known fixed coordinate). Do not guess coordinates — guessing will miss.`),
-		mcp.WithNumber("x", mcp.Description("X coordinate in pixels from the left edge of the screen."), mcp.Required()),
-		mcp.WithNumber("y", mcp.Description("Y coordinate in pixels from the top edge of the screen."), mcp.Required()),
+Choose coordinates when OCR found your target. Choose visual_id when you identified
+the overlay number by looking at the annotated screenshot.`),
+		mcp.WithNumber("x", mcp.Description("X coordinate in pixels. Required if 'visual_id' is not provided.")),
+		mcp.WithNumber("y", mcp.Description("Y coordinate in pixels. Required if 'visual_id' is not provided.")),
+		mcp.WithNumber("visual_id", mcp.Description("The number shown on the overlay in the get_annotated_view image (e.g. overlay shows 12 means visual_id=12). If provided, x/y are ignored.")),
 		mcp.WithString("button", mcp.Description("Mouse button: 'left' (default), 'right', or 'middle'.")),
 		mcp.WithNumber("delay_ms", mcp.Description("Milliseconds to wait after the click for the UI to update (default: 100). Set to 0 to skip. Max: 10000.")),
 	), handleClickAt)
 
 	mcpServer.AddTool(mcp.NewTool("double_click",
-		mcp.WithDescription(`Move the mouse to (x, y) and perform a double-click. Use for opening files, activating items, or any UI that requires double-click.
+		mcp.WithDescription(`Move the mouse and double-click. Use for opening files or activating items.
 
-Use coordinates from find_elements (center_x/center_y) or a known fixed position. Do not guess coordinates.`),
-		mcp.WithNumber("x", mcp.Description("X coordinate in pixels from the left edge of the screen."), mcp.Required()),
-		mcp.WithNumber("y", mcp.Description("Y coordinate in pixels from the top edge of the screen."), mcp.Required()),
-		mcp.WithNumber("delay_ms", mcp.Description("Milliseconds to wait after the click for the UI to update (default: 100). Set to 0 to skip. Max: 10000.")),
+Two modes:
+- Coordinates: double_click(x=350, y=780)
+- Visual ID:   double_click(visual_id=12) — read the visual_id from the get_annotated_view image.`),
+		mcp.WithNumber("x", mcp.Description("X coordinate in pixels. Required if 'visual_id' is not provided.")),
+		mcp.WithNumber("y", mcp.Description("Y coordinate in pixels. Required if 'visual_id' is not provided.")),
+		mcp.WithNumber("visual_id", mcp.Description("The number shown on the overlay in the get_annotated_view image (e.g. overlay shows 12 means visual_id=12). If provided, x/y are ignored.")),
+		mcp.WithNumber("delay_ms", mcp.Description("Wait after double-click (default: 100). Max: 10000.")),
 	), handleDoubleClick)
 
 	mcpServer.AddTool(mcp.NewTool("scroll",
-		mcp.WithDescription(`Move the mouse to (x, y) and scroll the mouse wheel. Use for scrolling lists, pages, and dropdowns.
+		mcp.WithDescription(`Move the mouse to (x, y) and scroll the mouse wheel.
 
-Scroll 'down' to reveal content below, 'up' to go back up. For horizontal content use 'left' or 'right'.
+NO-PEEK RULE: Do NOT use this tool manually to "peek" at the UI after learn_screen.
+Instead, use click_at(id=N). The server will automatically scroll to the
+indexed target for you.
 
-The response includes visible_text — the OCR text of the centre half of the screen after scrolling. Use this to know what is now on screen WITHOUT needing a separate find_elements or take_screenshot call.
+── WHEN TO USE ────────────────────────────────────────────────────────────────
+- To scroll for human-only visual inspection (e.g. reading an article).
+- When learn_screen is NOT in use.
 
-🚫 AFTER SCROLL, DO NOT call find_elements or take_screenshot unless you specifically need to interact with a region not covered by visible_text. visible_text already tells you what appeared!
-
-AMOUNT GUIDANCE — use small increments to avoid overshooting:
-- amount=15 (default): ~2/3 screen — best for general page navigation
-- amount=5: ~1/4 screen — use for fine control or small sections
-- amount=30: ~full screen — use for very long pages
-
-SEARCH WORKFLOW: scroll down by 15, check visible_text for your target; repeat if not found. Only 3-4 scrolls needed to cover a full page!
-
-x and y are optional and default to the screen centre, which is correct for most page scrolling. Only specify them when scrolling a specific widget (e.g. a side panel or dropdown list).`),
+AMOUNT GUIDANCE:
+- amount=15 (default): ~2/3 screen
+- amount=5: ~1/4 screen
+- amount=30: ~full screen`),
 		mcp.WithNumber("x", mcp.Description("X coordinate to scroll at (pixels from left edge). Defaults to screen centre.")),
 		mcp.WithNumber("y", mcp.Description("Y coordinate to scroll at (pixels from top edge). Defaults to screen centre.")),
 		mcp.WithString("direction", mcp.Description("Scroll direction: 'up', 'down', 'left', or 'right'."), mcp.Required()),
@@ -1011,94 +1026,71 @@ x and y are optional and default to the screen centre, which is correct for most
 🎯 WHEN TO USE:
 - You need to find text that is likely off-screen in a scrollable page, list, or panel
 - You want a bounded search with fewer tool calls and no manual scroll loop
-- You want to stop automatically when the viewport stops changing
 
 HOW IT WORKS:
 1. OCR-searches the current viewport first
 2. If not found, scrolls in the requested direction
 3. Repeats search up to max_scrolls times
-4. Stops early if the viewport text stops changing (likely end reached)
-5. Returns the found text box and center coordinates
-
-SPEED TIPS:
-- Use x/y/width/height to search only the relevant panel or form area
-- amount=5 is the default because it moves faster than fine scrolling without overshooting as badly as 10
-- Prefer this over repeated scroll calls when hunting for a label or input field on a long page
-
-RETURNS:
-- On success: {success, found, box, center_x, center_y, scroll_count, direction, amount, pass, visible_text}
-- On failure: error with the last visible_text to explain what was on screen`),
+4. Stops early if the viewport text stops changing (end reached)
+5. Returns the found text box and center coordinates`),
 		mcp.WithString("text", mcp.Description("Text to search for while scrolling (case-insensitive substring match)."), mcp.Required()),
 		mcp.WithString("direction", mcp.Description("Scroll direction: 'up', 'down', 'left', or 'right'."), mcp.Required()),
-		mcp.WithNumber("amount", mcp.Description("Scroll steps per attempt (default: 5). amount=3 is finer, amount=10 jumps farther but may overshoot.")),
-		mcp.WithNumber("max_scrolls", mcp.Description("Maximum number of scroll attempts after the initial viewport check (default: 8).")),
+		mcp.WithNumber("amount", mcp.Description("Scroll steps per attempt (default: 5).")),
+		mcp.WithNumber("max_scrolls", mcp.Description("Maximum number of scroll attempts (default: 8).")),
 		mcp.WithNumber("nth", mcp.Description("Which occurrence to match if the text appears multiple times (default: 1).")),
-		mcp.WithNumber("scroll_x", mcp.Description("X coordinate to scroll at (default: screen center). Useful for scrolling a specific panel.")),
-		mcp.WithNumber("scroll_y", mcp.Description("Y coordinate to scroll at (default: screen center). Useful for scrolling a specific panel.")),
+		mcp.WithNumber("scroll_x", mcp.Description("X coordinate to scroll at (default: screen center).")),
+		mcp.WithNumber("scroll_y", mcp.Description("Y coordinate to scroll at (default: screen center).")),
 		mcp.WithNumber("x", mcp.Description("X coordinate of the OCR search region (default: 0 = full screen).")),
 		mcp.WithNumber("y", mcp.Description("Y coordinate of the OCR search region (default: 0 = full screen).")),
-		mcp.WithNumber("width", mcp.Description("Width of the OCR search region (default: full screen). Smaller regions are faster.")),
-		mcp.WithNumber("height", mcp.Description("Height of the OCR search region (default: full screen). Smaller regions are faster.")),
-		mcp.WithBoolean("grayscale", mcp.Description("Use grayscale OCR (default: true). Set false when colour context matters.")),
+		mcp.WithNumber("width", mcp.Description("Width of the OCR search region (default: full screen).")),
+		mcp.WithNumber("height", mcp.Description("Height of the OCR search region (default: full screen).")),
+		mcp.WithBoolean("grayscale", mcp.Description("Use grayscale OCR (default: true).")),
 	), handleScrollUntilText)
 
 	mcpServer.AddTool(mcp.NewTool("type_text",
-		mcp.WithDescription(`Type text as keyboard input into the currently focused element. Click the target input field first to ensure it has focus before typing.
+		mcp.WithDescription(`Type text as keyboard input into the currently focused element. 
 
 NORMAL WORKFLOW:
-1. find_and_click {"text": "placeholder or label text"} → focuses the field
-2. type_text {"text": "your text"}
-
-IF THE FIELD HAS NO DETECTABLE TEXT (e.g. dark/empty placeholder):
-- Find a labeled button immediately next to the field (e.g. "Clear" button beside the input)
-- find_and_click {"text": "Clear"} → response includes box: {x, y, width, height}
-- The input field is to the LEFT: click_at {"x": box.x - 200, "y": box.y + box.height/2}
-- Then type_text
-
-For special characters or control sequences (Enter, Tab, Ctrl+C), use press_key instead. To verify the text was entered, use wait_for_text or find_elements on the input region — not a full screenshot.`),
-		mcp.WithString("text", mcp.Description("The exact text string to type. Supports Unicode. Do not include control characters — use press_key for Enter, Tab, Backspace etc."), mcp.Required()),
-		mcp.WithBoolean("press_enter", mcp.Description("If true, automatically presses the Enter key immediately after the text is typed (default: false).")),
+1. find_and_click {"text": "label"} → focuses the field
+2. type_text {"text": "your text"}`),
+		mcp.WithString("text", mcp.Description("The exact text string to type."), mcp.Required()),
+		mcp.WithBoolean("press_enter", mcp.Description("If true, automatically presses the Enter key immediately after typing (default: false).")),
 	), handleTypeText)
 
 	mcpServer.AddTool(mcp.NewTool("click_and_type",
-		mcp.WithDescription(`Move the mouse to (x, y), click to focus, and then type text. This is a single atomic operation that replaces separate click_at and type_text calls.
+		mcp.WithDescription(`Click to focus a field and type text.
 
-Use this tool when you already have the absolute pixel coordinates (e.g. from find_elements) and need to interact with an input field. Do not guess coordinates.`),
-		mcp.WithNumber("x", mcp.Description("X coordinate in pixels from the left edge of the screen."), mcp.Required()),
-		mcp.WithNumber("y", mcp.Description("Y coordinate in pixels from the top edge of the screen."), mcp.Required()),
-		mcp.WithString("text", mcp.Description("The exact text string to type. Supports Unicode."), mcp.Required()),
-		mcp.WithBoolean("press_enter", mcp.Description("If true, automatically presses the Enter key immediately after the text is typed (default: false).")),
-		mcp.WithNumber("delay_ms", mcp.Description("Milliseconds to wait after the click before typing begins. This gives the UI time to focus the input field (default: 100). Max: 10000.")),
+Two modes:
+- Coordinates: click_and_type(x=350, y=780, text="hello")
+- Visual ID:   click_and_type(visual_id=12, text="hello") — read visual_id from the annotated image.`),
+		mcp.WithNumber("x", mcp.Description("X coordinate in pixels. Required if 'visual_id' is not provided.")),
+		mcp.WithNumber("y", mcp.Description("Y coordinate in pixels. Required if 'visual_id' is not provided.")),
+		mcp.WithNumber("visual_id", mcp.Description("The number shown on the overlay in the get_annotated_view image (e.g. overlay shows 12 means visual_id=12). If provided, x/y are ignored.")),
+		mcp.WithString("text", mcp.Description("The exact text string to type."), mcp.Required()),
+		mcp.WithBoolean("press_enter", mcp.Description("If true, automatically presses Enter after typing (default: false).")),
+		mcp.WithNumber("delay_ms", mcp.Description("Wait after click before typing (default: 100).")),
 	), handleClickAndType)
 
 	mcpServer.AddTool(mcp.NewTool("press_key",
-		mcp.WithDescription(`Press a single keyboard key or key combination. Use for control keys, navigation, and shortcuts.
-
-Common uses: 'enter' to confirm/submit, 'tab' to move between fields, 'esc' to cancel/close, 'backspace'/'delete' to erase, arrow keys to navigate lists. For shortcuts use modifier keys: 'ctrl', 'alt', 'shift', 'cmd' (macOS).`),
-		mcp.WithString("key", mcp.Description("Key name: 'enter', 'tab', 'esc', 'space', 'backspace', 'delete', 'up', 'down', 'left', 'right', 'ctrl', 'alt', 'shift', 'win' (Windows key), 'cmd' (macOS), 'f1'–'f12', or any single letter/digit."), mcp.Required()),
+		mcp.WithDescription(`Press a single keyboard key or key combination. 
+Common keys: 'enter', 'tab', 'esc', 'backspace', 'up', 'down'. Modifiers: 'ctrl', 'alt', 'shift'.`),
+		mcp.WithString("key", mcp.Description("Key name (e.g. 'enter', 'tab', 'shift', 'a', '1')."), mcp.Required()),
 	), handlePressKey)
 
 	mcpServer.AddTool(mcp.NewTool("take_screenshot",
-		mcp.WithDescription(`Capture the screen and return it as an image.
+		mcp.WithDescription(`Capture a raw, un-annotated screenshot. (FOR VISUAL-ONLY TASKS).
 
-🚫 DO NOT take a screenshot before clicking — use find_and_click instead.
-🚫 DO NOT take a screenshot after every click to verify — use wait_for_text instead.
-🚫 DO NOT take a screenshot to find a button's coordinates — use find_and_click or find_elements instead.
-🚫 FOR TEXT FIELDS, NEVER call take_screenshot before trying find_click_and_type, find_elements, or scroll_until_text.
+🚫 DO NOT CALL THIS FOR UI ANALYSIS. If you are trying to find buttons, 
+read text, or identify IDs, you are making a MAJOR REASONING ERROR. 
 
-WHEN TO USE take_screenshot:
-- The task explicitly requires seeing the visual layout (e.g. "describe the screen", "what color is the button").
-- The target has no text (icon, image, progress bar) so OCR cannot locate it.
-- Debugging: find_and_click or find_elements returned unexpected results and you need to see what is on screen.
-
-SPEED TIPS:
-- Use quality=85 (JPEG) for a ~10× smaller image — much faster for the model to process.
-- Use region parameters (x, y, width, height) to capture only the relevant area.`),
+── USE get_annotated_view INSTEAD ─────────────────────────────────────────────
+get_annotated_view provides the essential visual_id overlays (e.g. 5, 12) required for 
+interaction. take_screenshot gives you a "blind" image with no visual_ids.`),
 		mcp.WithNumber("x", mcp.Description("X coordinate of the top-left corner of the capture region in pixels (default: 0).")),
 		mcp.WithNumber("y", mcp.Description("Y coordinate of the top-left corner of the capture region in pixels (default: 0).")),
 		mcp.WithNumber("width", mcp.Description("Width of the capture region in pixels (default: full screen width).")),
 		mcp.WithNumber("height", mcp.Description("Height of the capture region in pixels (default: full screen height).")),
-		mcp.WithNumber("quality", mcp.Description("Image quality: 0 = PNG lossless (default, largest, slowest for model to process). 1–100 = JPEG at that quality (85 recommended — ~10× smaller than PNG, significantly faster). Use PNG when you need to read small text; use JPEG=85 for general visual confirmation.")),
+		mcp.WithNumber("quality", mcp.Description("Image quality: 0 = PNG (fastest), 1-100 = JPEG (recommended 85 for speed).")),
 	), handleTakeScreenshot)
 
 	registerOCRTools(mcpServer)
@@ -1153,13 +1145,25 @@ func min(a, b int) int {
 	return b
 }
 
-// =============================================================================
-// MAIN
-// =============================================================================
-
 func main() {
 	logging.Info("Starting %s v%s...", ServerName, ServerVersion)
 	logging.Info("Platform: %s/%s", runtime.GOOS, runtime.GOARCH)
+
+	// Step 1: Initialize environment (auto-configure Tesseract/DLLs on Windows)
+	SetupWindowsEnv()
+
+	// Step 2: Check Tesseract health (lite check)
+	if version, err := ocr.CheckTesseract(); err != nil {
+		logging.Error("OCR engine initialization check failed: %v", err)
+		logging.Error("OCR tools (find_and_click, learn_screen, etc.) will not work correctly.")
+	} else {
+		logging.Info("OCR engine initialized: Tesseract %s (OK)", version)
+		// Warm the client pool in the background to avoid startup hang
+		go func() {
+			// Triggering ReadAllPasses on a dummy image will prime the pool
+			_, _ = ocr.ReadAllPasses(image.NewGray(image.Rect(0, 0, 1, 1)))
+		}()
+	}
 
 	token, err := validateStartupToken()
 	if err != nil {

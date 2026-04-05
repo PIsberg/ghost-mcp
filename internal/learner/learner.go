@@ -63,6 +63,7 @@ const (
 
 // Element represents a UI text element discovered during screen learning.
 type Element struct {
+	ID         int     `json:"id"`
 	Text       string  `json:"text"`
 	X          int     `json:"x"`
 	Y          int     `json:"y"`
@@ -143,6 +144,24 @@ func (l *Learner) IsEnabled() bool {
 	l.mu.RLock()
 	defer l.mu.RUnlock()
 	return l.enabled
+}
+
+// GetElementCoords returns the absolute screen coordinates (center point) of
+// an element by its numeric ID. Returns (0, 0, false) if the ID is not found.
+func (l *Learner) GetElementCoords(id int) (x, y int, found bool) {
+	l.mu.RLock()
+	defer l.mu.RUnlock()
+
+	if l.view == nil {
+		return 0, 0, false
+	}
+
+	for _, e := range l.view.Elements {
+		if e.ID == id {
+			return e.X + e.Width/2, e.Y + e.Height/2, true
+		}
+	}
+	return 0, 0, false
 }
 
 // GetView returns the current learned view. Returns nil if not yet learned.
@@ -249,7 +268,7 @@ func InferElementType(text string, width, height int) ElementType {
 	words := strings.Fields(trimmed)
 
 	// Label: ends with a colon (English or full-width).
-	if strings.HasSuffix(trimmed, ":") || strings.HasSuffix(trimmed, ":") {
+	if strings.HasSuffix(trimmed, ":") || strings.HasSuffix(trimmed, "：") {
 		return ElementTypeLabel
 	}
 
@@ -636,16 +655,19 @@ func DeduplicateElements(elements []Element) []Element {
 	out := make([]Element, 0, len(sorted))
 	for _, candidate := range sorted {
 		duplicate := false
-		for _, kept := range out {
-			if kept.PageIndex != candidate.PageIndex {
-				continue
-			}
+		for i := range out {
+			kept := &out[i]
 			if !strings.EqualFold(kept.Text, candidate.Text) {
 				continue
 			}
 			if rectsOverlap(kept.X, kept.Y, kept.Width, kept.Height,
 				candidate.X, candidate.Y, candidate.Width, candidate.Height) {
 				duplicate = true
+				// Hybrid approach: keep the highest-confidence text/type (already in 'out'
+				// due to sorting), but always preserve the earliest PageIndex encountered.
+				if candidate.PageIndex < kept.PageIndex {
+					kept.PageIndex = candidate.PageIndex
+				}
 				break
 			}
 		}
@@ -653,6 +675,12 @@ func DeduplicateElements(elements []Element) []Element {
 			out = append(out, candidate)
 		}
 	}
+
+	// Assign sequential IDs (1-based) to the final deduplicated set.
+	for i := range out {
+		out[i].ID = i + 1
+	}
+
 	return out
 }
 

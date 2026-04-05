@@ -4,6 +4,7 @@
 *.dll
 *.so
 *.dylib
+/screenshots/
 /ghost-mcp
 /ghost-mcp.exe
 
@@ -37,3 +38,5 @@ go.work
 
 # Benchmark report (generated output — tracked results are in benchmarks/results/)
 benchmarks/report.html
+
+screenshots

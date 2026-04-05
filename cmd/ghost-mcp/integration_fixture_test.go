@@ -47,7 +47,8 @@ func setupFixtureTest(t *testing.T) (*mcpclient.Client, context.Context, func())
 	serverCleanup := ensureFixtureServer(t)
 
 	client, err := mcpclient.NewClient(mcpclient.Config{
-		Timeout: 30 * time.Second,
+		Timeout: 90 * time.Second,
+		Env:     []string{"GHOST_MCP_KEEP_SCREENSHOTS=1", "INTEGRATION=1"},
 	})
 	if err != nil {
 		serverCleanup()
@@ -69,7 +70,7 @@ func verifyLastAction(t *testing.T, ctx context.Context, client *mcpclient.Clien
 	t.Helper()
 	result, err := client.CallToolString(ctx, "wait_for_text", map[string]interface{}{
 		"text":       expectedText,
-		"timeout_ms": 3000,
+		"timeout_ms": 5000,
 	})
 	if err != nil {
 		t.Errorf("wait_for_text(%q) error: %v", expectedText, err)
@@ -614,15 +615,19 @@ func TestFixture_Keyboard_Input(t *testing.T) {
 	}
 
 	// The typed text appears in the input field and is readable by OCR.
-	result, err := client.CallToolString(ctx, "wait_for_text", map[string]interface{}{
+	learnedViewJSON, err := client.CallToolString(ctx, "wait_for_text", map[string]interface{}{
 		"text":       testInput,
-		"timeout_ms": 3000,
+		"timeout_ms": 5000,
 	})
 	if err != nil {
 		t.Fatalf("wait_for_text failed: %v", err)
 	}
-	if !strings.Contains(result, `"visible":true`) {
-		t.Errorf("Typed text %q not found on screen: %s", testInput, result)
+	if !strings.Contains(learnedViewJSON, `"visible":true`) {
+		t.Errorf("Typed text %q not found on screen: %s", testInput, learnedViewJSON)
+	}
+	// For debugging in constrained environments
+	if strings.Contains(learnedViewJSON, `"element_count":0`) || strings.Contains(learnedViewJSON, `"elements":[]`) {
+		t.Logf("DEBUG: No elements found. Full JSON: %s", learnedViewJSON)
 	}
 	t.Logf("✓ Keyboard input %q verified on screen", testInput)
 }

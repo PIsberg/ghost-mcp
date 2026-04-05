@@ -63,7 +63,9 @@ registerTools()                          (main.go)
         ├─► AddTool("find_and_click",   handleFindAndClick)
         ├─► AddTool("find_click_and_type", handleFindClickAndType)
         ├─► AddTool("find_and_click_all",  handleFindAndClickAll)
-        └─► AddTool("wait_for_text",    handleWaitForText)
+        ├─► AddTool("wait_for_text",    handleWaitForText)
+        ├─► AddTool("get_annotated_view", handleGetAnnotatedView)
+        └─► AddTool("clear_learned_view", handleClearLearnedView)
 ```
 
 Each tool definition includes:
@@ -100,7 +102,22 @@ The `handler_ocr.go` pipeline leverages a pure-concurrency model to minimize lat
    - `Color`: Preserves color (no grayscale)
    - `Bright-Text`: Highlights pure-white letters
 3. **Short-Circuit Cancellation**: A synchronized `context.WithCancel` channel structure immediately aborts and garbage-collects all remaining fallback passes the millisecond a matched coordinate is found.
-4. **Fast Wait Polling**: `wait_for_text` polls every 100ms instead of 500ms, so UI transition checks return closer to the actual screen change rather than spending most of their latency budget asleep between captures.
+4. **Fast Wait Polling**: `wait_for_text` polls every 100ms instead of 500ms, so UI transition checks return closer to the actual screen change rather than spending most their latency budget asleep between captures.
+
+### 6. Visual Annotation Engine (Set-of-Marks)
+
+The `visual` package provides high-precision visual feedback by overlaying metadata on screenshots. This implements the "Set-of-Marks" (SoM) pattern, which allows the AI to reference UI elements by unique IDs rather than coordinates.
+
+#### 1. Element ID Assignment
+During the `DeduplicateElements` phase in the `learner` package, every final UI element is assigned a sequential, 1-based `ID`. These IDs remain stable as long as the learned view is not cleared.
+
+#### 2. Image Annotation (`AnnotateImage`)
+The `AnnotateImage` function in `internal/visual/visual.go` takes a raw screenshot and a list of elements:
+1.  **Outline**: Draws a thin green bounding box around every element.
+2.  **visual_id overlay**: Renders a small black-and-white numeric visual_id overlay (e.g., `[12]`) at the top-left of each box.
+3.  **Font**: Uses `basicfont.Face7x13` for zero-dependency, low-overhead text rendering.
+
+This allows the AI to "see" exactly what the OCR engine has detected and interact with specific elements via `click_at(id=N)`.
 
 ### 7. Smart OCR Matching with Region Cache
 

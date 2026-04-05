@@ -33,6 +33,9 @@ func TestHandleGhostMCPGuide_ReturnsMessages(t *testing.T) {
 	if tc.Text == "" {
 		t.Error("expected non-empty guide text")
 	}
+	if tc.Type != "text" {
+		t.Errorf("expected type %q, got %q", "text", tc.Type)
+	}
 }
 
 func TestGhostMCPGuide_ContainsKeyTools(t *testing.T) {

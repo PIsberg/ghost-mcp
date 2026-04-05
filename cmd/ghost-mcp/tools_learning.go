@@ -12,53 +12,75 @@ func registerLearningTools(mcpServer *server.MCPServer) {
 	logging.Info("Registering learning mode tools...")
 
 	mcpServer.AddTool(mcp.NewTool("learn_screen",
-		mcp.WithDescription(`Scan the full interface, run multi-pass OCR, and cache the element map.
+		mcp.WithDescription(`INDEX FULL INTERFACE — Scan the UI across multiple scroll positions.
 
-EXPLORATION HIERARCHY — for unknown screens, prefer find_elements first:
-  1. find_elements   ← PRIMARY exploration (fast, visible elements only)
-  2. take_screenshot ← SECONDARY (only for icon-only interfaces)
-  3. learn_screen    ← TERTIARY for exploration, but PRIMARY for complex workflows
+🚨 LONG PAGES: You MUST set max_pages > 1 for scrollable UIs. 
+Calling learn_screen with max_pages: 1 (default) on a long page is a failure.
 
-Use learn_screen when:
-• You have 3+ sequential actions on the same screen (caches the map for all steps).
-• The page scrolls and you need elements below the visible area.
-• After navigating to a new page, opening a dialog, or switching tabs.
-• find_and_click or find_elements returns unexpected results (rebuild stale view).
-
-Skip learn_screen when:
-• You only need one or two actions — find_and_click directly is faster.
-• The page navigates away immediately after the action.
-
-── RECOMMENDED WORKFLOW ───────────────────────────────────────────────────────
-  1. learn_screen          ← map the full interface (scroll through if needed)
-  2. get_learned_view      ← read the element map; decide what to interact with
-  3. find_and_click / find_click_and_type / find_elements  ← act on elements
-  4. clear_learned_view    ← after navigating away, then go back to step 1
-
-── CHOOSING max_pages ─────────────────────────────────────────────────────────
-  • Short page / desktop app: max_pages=1 (default 10 is fine too)
-  • Long webpage / settings panel: max_pages=5 to max_pages=10
-  • When in doubt: leave at default; the tool stops early when content repeats.
-
-The tool scrolls DOWN during scanning and automatically scrolls BACK UP when done.`),
+🚫 NO-PEEK RULE: Do NOT use "Scroll -> take_screenshot" repeatedly. 
+Instead, call learn_screen(max_pages: 10) once to index the whole UI.
+The server will then automatically reach any ID for you.`),
 		mcp.WithNumber("x", mcp.Description("Left edge of the scan region in pixels (default: 0 / full screen).")),
 		mcp.WithNumber("y", mcp.Description("Top edge of the scan region in pixels (default: 0 / full screen).")),
 		mcp.WithNumber("width", mcp.Description("Width of the scan region in pixels (default: full screen width).")),
 		mcp.WithNumber("height", mcp.Description("Height of the scan region in pixels (default: full screen height).")),
-		mcp.WithNumber("max_pages", mcp.Description("Maximum number of scroll pages to scan (default: 10). Each page scrolls scroll_amount ticks downward.")),
-		mcp.WithNumber("scroll_amount", mcp.Description("Number of wheel-click ticks to scroll per page (default: 5).")),
-		mcp.WithString("scroll_direction", mcp.Description("Direction to scroll while scanning: 'down' (default) or 'up'.")),
+		mcp.WithNumber("max_pages", mcp.Description("Optional: Max scroll pages to index (default: 1). Set >1 for long forms.")),
+		mcp.WithNumber("scroll_amount", mcp.Description("Optional: Wheel ticks per page (default: 5).")),
+		mcp.WithString("scroll_direction", mcp.Description("Optional: 'down' (default) or 'up'.")),
 	), handleLearnScreen)
 
 	mcpServer.AddTool(mcp.NewTool("get_learned_view",
-		mcp.WithDescription(`Return the full element map from the last learn_screen call.
+		mcp.WithDescription(`OCR ELEMENT INDEX — Returns a JSON list of all text elements found by OCR.
 
-Each element includes: text (use this exact string in find_and_click), x/y coordinates,
-width/height, page_index (0=top, 1+=requires scrolling), and confidence (prefer >60).
+Each element has text, coordinates, type, and page_index. Use this to find
+elements by their text content and click them by coordinates.
 
-Call immediately after learn_screen to inspect the complete interface before acting.
-Returns {"learned":false} if learn_screen has not been called yet.`),
+EXAMPLE OUTPUT:
+  {"elements": [
+    {"ocr_id": 1, "text": "Home",    "type": "link",   "page_index": 0, "x": 100, "y": 50},
+    {"ocr_id": 2, "text": "Submit",  "type": "button", "page_index": 0, "x": 350, "y": 780},
+    {"ocr_id": 3, "text": "INFO",    "type": "button", "page_index": 1, "x": 200, "y": 400}
+  ]}
+
+WORKFLOW:
+1. Search the elements array for your target text.
+2. If found: click_at(x=200, y=400) using the coordinates from the JSON.
+3. If NOT found: call get_annotated_view and look at the image to find
+   your target. Read the visual_id number from the overlay and use click_at(visual_id=N).
+
+Note: ocr_id is just an internal sequence number. It is NOT a visual_id.
+The visual_id comes ONLY from reading the annotated screenshot image.`),
 	), handleGetLearnedView)
+
+	mcpServer.AddTool(mcp.NewTool("get_annotated_view",
+		mcp.WithDescription(`ANNOTATED SCREENSHOT — Returns a screenshot of your UI with visual_id overlays.
+
+The image shows the actual UI PLUS small solid-colored rectangles placed on
+every detected element. The white number inside each rectangle IS the visual_id.
+
+WHAT THE OVERLAYS LOOK LIKE:
+- A small solid-colored rectangle (blue, green, red, etc.) with a white number.
+- Placed at the top-left corner of the element it labels.
+- Example: a rectangle showing "12" on the "INFO" button means visual_id=12.
+
+HOW TO USE THIS IMAGE:
+1. Scan the image for the UI element you need (e.g. the "INFO" button).
+2. Look at the overlay on or near that element. Read the number inside it.
+3. Call click_at(visual_id=12) using that number.
+
+IMPORTANT: visual_id ONLY comes from reading overlay numbers in THIS image.
+It is NOT the same as ocr_id from get_learned_view. Never confuse them.
+
+WHEN TO CALL:
+- After get_learned_view did NOT find your target text (OCR missed it).
+- When the UI has icon-only buttons with no text for OCR to find.
+- Use page_index to view a specific scroll page from the last learn_screen scan.`),
+		mcp.WithNumber("page_index", mcp.Description("The scroll-page index (0, 1, 2...) from the last learn_screen scan.")),
+		mcp.WithNumber("x", mcp.Description("X coordinate (live mode only, default: 0).")),
+		mcp.WithNumber("y", mcp.Description("Y coordinate (live mode only, default: 0).")),
+		mcp.WithNumber("width", mcp.Description("Width (live mode only, default: full screen).")),
+		mcp.WithNumber("height", mcp.Description("Height (live mode only, default: full screen).")),
+	), handleGetAnnotatedView)
 
 	mcpServer.AddTool(mcp.NewTool("clear_learned_view",
 		mcp.WithDescription(`Discard the current learned view so the next learn_screen builds a fresh one.

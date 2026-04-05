@@ -66,7 +66,7 @@ The report is written to `benchmarks/report.html` (self-contained, no internet r
 
 - **Runs**: metadata for each stored run (branch, commit, timestamp, Go version, CPU)
 - **Per-package bar charts**: ns/op and allocs/op for the latest run of each benchmark
-- **Summary table**: ns/op, B/op, allocs/op per benchmark with a delta badge showing % change vs the previous run (green = faster, red = slower)
+- **Summary table**: ns/op, B/op, allocs/op per benchmark with a delta visual_id overlay showing % change vs the previous run (green = faster, red = slower)
 - **Trend modals**: click the `↗ trend` link on any benchmark row to see a line chart of ns/op across all stored runs
 
 ## Stored Results

@@ -873,7 +873,7 @@ func TestGetIntParam_ZeroFloat(t *testing.T) {
 
 func TestHandleTypeText_EmptyText(t *testing.T) {
 	req := mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: map[string]interface{}{"text": ""}}}
-	result, err := handleTypeText(nil, req)
+	result, err := handleTypeText(context.TODO(), req)
 	if err != nil {
 		t.Fatalf("Handler returned unexpected Go error: %v", err)
 	}
@@ -886,7 +886,7 @@ func TestHandleTypeText_TooLong(t *testing.T) {
 	req := mcp.CallToolRequest{Params: mcp.CallToolParams{
 		Arguments: map[string]interface{}{"text": strings.Repeat("a", validate.MaxTextLength+1)},
 	}}
-	result, err := handleTypeText(nil, req)
+	result, err := handleTypeText(context.TODO(), req)
 	if err != nil {
 		t.Fatalf("Handler returned unexpected Go error: %v", err)
 	}
@@ -897,7 +897,7 @@ func TestHandleTypeText_TooLong(t *testing.T) {
 
 func TestHandlePressKey_UnknownKey(t *testing.T) {
 	req := mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: map[string]interface{}{"key": "not_a_real_key"}}}
-	result, err := handlePressKey(nil, req)
+	result, err := handlePressKey(context.TODO(), req)
 	if err != nil {
 		t.Fatalf("Handler returned unexpected Go error: %v", err)
 	}
@@ -909,7 +909,7 @@ func TestHandlePressKey_UnknownKey(t *testing.T) {
 func TestHandlePressKey_InjectionAttempt(t *testing.T) {
 	for _, key := range []string{"; rm -rf /", "$(whoami)", "../../../etc/passwd", "ctrl+alt+del"} {
 		req := mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: map[string]interface{}{"key": key}}}
-		result, err := handlePressKey(nil, req)
+		result, err := handlePressKey(context.TODO(), req)
 		if err != nil {
 			t.Fatalf("Handler returned unexpected Go error for %q: %v", key, err)
 		}
@@ -923,7 +923,7 @@ func TestHandleMoveMouse_FractionalCoords(t *testing.T) {
 	req := mcp.CallToolRequest{Params: mcp.CallToolParams{
 		Arguments: map[string]interface{}{"x": 100.5, "y": float64(200)},
 	}}
-	result, err := handleMoveMouse(nil, req)
+	result, err := handleMoveMouse(context.TODO(), req)
 	if err != nil {
 		t.Fatalf("Handler returned unexpected Go error: %v", err)
 	}
@@ -941,7 +941,7 @@ func TestHandleClickAt_InvalidButton(t *testing.T) {
 	req := mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: map[string]interface{}{
 		"x": float64(100), "y": float64(200), "button": "invalid",
 	}}}
-	result, err := handleClickAt(nil, req)
+	result, err := handleClickAt(context.TODO(), req)
 	if err != nil {
 		t.Fatalf("Handler returned unexpected Go error: %v", err)
 	}
@@ -955,7 +955,7 @@ func TestHandleClickAt_MissingX(t *testing.T) {
 	req := mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: map[string]interface{}{
 		"y": float64(200),
 	}}}
-	result, err := handleClickAt(nil, req)
+	result, err := handleClickAt(context.TODO(), req)
 	if err != nil {
 		t.Fatalf("Handler returned unexpected Go error: %v", err)
 	}
@@ -969,7 +969,7 @@ func TestHandleClickAt_MissingY(t *testing.T) {
 	req := mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: map[string]interface{}{
 		"x": float64(100),
 	}}}
-	result, err := handleClickAt(nil, req)
+	result, err := handleClickAt(context.TODO(), req)
 	if err != nil {
 		t.Fatalf("Handler returned unexpected Go error: %v", err)
 	}
@@ -983,7 +983,7 @@ func TestHandleClickAt_FractionalCoords(t *testing.T) {
 	req := mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: map[string]interface{}{
 		"x": 100.7, "y": float64(200),
 	}}}
-	result, err := handleClickAt(nil, req)
+	result, err := handleClickAt(context.TODO(), req)
 	if err != nil {
 		t.Fatalf("Handler returned unexpected Go error: %v", err)
 	}
@@ -997,7 +997,7 @@ func TestHandleClickAt_NegativeCoords(t *testing.T) {
 	req := mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: map[string]interface{}{
 		"x": float64(-1), "y": float64(200),
 	}}}
-	result, err := handleClickAt(nil, req)
+	result, err := handleClickAt(context.TODO(), req)
 	if err != nil {
 		t.Fatalf("Handler returned unexpected Go error: %v", err)
 	}
@@ -1053,7 +1053,7 @@ func TestHandleDoubleClick_MissingX(t *testing.T) {
 	req := mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: map[string]interface{}{
 		"y": float64(200),
 	}}}
-	result, err := handleDoubleClick(nil, req)
+	result, err := handleDoubleClick(context.TODO(), req)
 	if err != nil {
 		t.Fatalf("Handler returned unexpected Go error: %v", err)
 	}
@@ -1067,7 +1067,7 @@ func TestHandleDoubleClick_MissingY(t *testing.T) {
 	req := mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: map[string]interface{}{
 		"x": float64(100),
 	}}}
-	result, err := handleDoubleClick(nil, req)
+	result, err := handleDoubleClick(context.TODO(), req)
 	if err != nil {
 		t.Fatalf("Handler returned unexpected Go error: %v", err)
 	}
@@ -1081,7 +1081,7 @@ func TestHandleDoubleClick_NegativeCoords(t *testing.T) {
 	req := mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: map[string]interface{}{
 		"x": float64(-1), "y": float64(200),
 	}}}
-	result, err := handleDoubleClick(nil, req)
+	result, err := handleDoubleClick(context.TODO(), req)
 	if err != nil {
 		t.Fatalf("Handler returned unexpected Go error: %v", err)
 	}
@@ -1095,7 +1095,7 @@ func TestHandleDoubleClick_FractionalCoords(t *testing.T) {
 	req := mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: map[string]interface{}{
 		"x": 100.5, "y": float64(200),
 	}}}
-	result, err := handleDoubleClick(nil, req)
+	result, err := handleDoubleClick(context.TODO(), req)
 	if err != nil {
 		t.Fatalf("Handler returned unexpected Go error: %v", err)
 	}
@@ -1113,7 +1113,7 @@ func TestHandleScroll_InvalidDirection(t *testing.T) {
 	req := mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: map[string]interface{}{
 		"x": float64(100), "y": float64(200), "direction": "sideways",
 	}}}
-	result, err := handleScroll(nil, req)
+	result, err := handleScroll(context.TODO(), req)
 	if err != nil {
 		t.Fatalf("Handler returned unexpected Go error: %v", err)
 	}
@@ -1127,7 +1127,7 @@ func TestHandleScroll_MissingDirection(t *testing.T) {
 	req := mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: map[string]interface{}{
 		"x": float64(100), "y": float64(200),
 	}}}
-	result, err := handleScroll(nil, req)
+	result, err := handleScroll(context.TODO(), req)
 	if err != nil {
 		t.Fatalf("Handler returned unexpected Go error: %v", err)
 	}
@@ -1142,7 +1142,7 @@ func TestHandleScroll_MissingX(t *testing.T) {
 	req := mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: map[string]interface{}{
 		"y": float64(200), "direction": "down",
 	}}}
-	result, err := handleScroll(nil, req)
+	result, err := handleScroll(context.TODO(), req)
 	if err != nil {
 		t.Fatalf("Handler returned unexpected Go error: %v", err)
 	}
@@ -1157,7 +1157,7 @@ func TestHandleScroll_ZeroAmount(t *testing.T) {
 	req := mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: map[string]interface{}{
 		"x": float64(100), "y": float64(200), "direction": "down", "amount": float64(0),
 	}}}
-	result, err := handleScroll(nil, req)
+	result, err := handleScroll(context.TODO(), req)
 	if err != nil {
 		t.Fatalf("Handler returned unexpected Go error: %v", err)
 	}
@@ -1171,7 +1171,7 @@ func TestHandleScroll_NegativeCoords(t *testing.T) {
 	req := mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: map[string]interface{}{
 		"x": float64(-1), "y": float64(200), "direction": "down",
 	}}}
-	result, err := handleScroll(nil, req)
+	result, err := handleScroll(context.TODO(), req)
 	if err != nil {
 		t.Fatalf("Handler returned unexpected Go error: %v", err)
 	}
@@ -1414,7 +1414,7 @@ func TestHandleFindAndClick_InvalidButton(t *testing.T) {
 	req := mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: map[string]interface{}{
 		"text": "hello", "button": "invalid",
 	}}}
-	result, err := handleFindAndClick(nil, req)
+	result, err := handleFindAndClick(context.TODO(), req)
 	if err != nil {
 		t.Fatalf("Handler returned unexpected Go error: %v", err)
 	}
@@ -1428,7 +1428,7 @@ func TestHandleFindAndClick_InvalidNth(t *testing.T) {
 	req := mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: map[string]interface{}{
 		"text": "hello", "nth": float64(0),
 	}}}
-	result, err := handleFindAndClick(nil, req)
+	result, err := handleFindAndClick(context.TODO(), req)
 	if err != nil {
 		t.Fatalf("Handler returned unexpected Go error: %v", err)
 	}
@@ -1442,7 +1442,7 @@ func TestHandleFindAndClick_InvalidRegion(t *testing.T) {
 	req := mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: map[string]interface{}{
 		"text": "hello", "x": float64(-1), "y": float64(0), "width": float64(100), "height": float64(100),
 	}}}
-	result, err := handleFindAndClick(nil, req)
+	result, err := handleFindAndClick(context.TODO(), req)
 	if err != nil {
 		t.Fatalf("Handler returned unexpected Go error: %v", err)
 	}
@@ -1456,7 +1456,7 @@ func TestHandleFindAndClick_ZeroSizeRegion(t *testing.T) {
 	req := mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: map[string]interface{}{
 		"text": "hello", "x": float64(0), "y": float64(0), "width": float64(0), "height": float64(100),
 	}}}
-	result, err := handleFindAndClick(nil, req)
+	result, err := handleFindAndClick(context.TODO(), req)
 	if err != nil {
 		t.Fatalf("Handler returned unexpected Go error: %v", err)
 	}

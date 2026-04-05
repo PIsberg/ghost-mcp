@@ -12,11 +12,17 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"unsafe"
 
 	"github.com/otiai10/gosseract/v2"
 	"golang.org/x/image/bmp"
 	"golang.org/x/image/draw"
 )
+
+/*
+#include <stdlib.h>
+*/
+import "C"
 
 // Word holds OCR-extracted text with its bounding box and confidence.
 type Word struct {
@@ -30,8 +36,10 @@ type Word struct {
 
 // Result holds the full OCR output for an image.
 type Result struct {
-	Text  string `json:"text"`
-	Words []Word `json:"words"`
+	Text            string `json:"text"`
+	Words           []Word `json:"words"`
+	TotalWordsFound int    `json:"total_words_found"`
+	WordsFiltered   int    `json:"words_filtered"`
 }
 
 // Options controls OCR preprocessing behaviour.
@@ -121,21 +129,21 @@ const MinConfidence = 35.0
 //
 // Value 130 is chosen to catch anti-aliased edges of white text on the full
 // range of button gradient colours used in practice:
-//   - White on purple #667eea (50% blend): spread=66  ≤ 130 ✓
-//   - White on warning red #f5576c (50%):  spread=79  ≤ 130 ✓
-//   - White on cyan #00f2fe (50% blend):   spread=127 ≤ 130 ✓  (was failing at 100)
-//   - White on green #38ef7d (50% blend):  spread=92  ≤ 130 ✓
+//   - White on purple #667eea (50% blend): spread=66  ≤ 180 ✓
+//   - White on warning red #f5576c (50%):  spread=79  ≤ 180 ✓
+//   - White on cyan #00f2fe (50% blend):   spread=127 ≤ 180 ✓
+//   - White on green #38ef7d (50% blend):  spread=92  ≤ 180 ✓
 //
 // For dark text, anti-aliased edges blended with a yellow background also pass:
-//   - #333 on #f0ad4e (50% blend → (146,112,65)): spread=81 ≤ 130 ✓
+//   - #333 on #f0ad4e (50% blend → (146,112,65)): spread=81 ≤ 180 ✓
 //
 // Pure coloured backgrounds are still excluded because their luminance check
 // fails first (lum < 185 for bright; lum > 120 for dark) or their spread
-// far exceeds 130:
-//   - Pure #00f2fe (0,242,254):   lum=191 but spread=254 > 130 ✓
-//   - Pure #38ef7d (56,239,125):  lum=192 but spread=183 > 130 ✓
+// far exceeds 180:
+//   - Pure #00f2fe (0,242,254):   lum=191 but spread=254 > 180 ✓
+//   - Pure #38ef7d (56,239,125):  lum=192 but spread=183 > 180 ✓
 //   - Pure #4facfe (79,172,254):  lum=158 < 185 ✓
-//   - Yellow #f0ad4e (240,173,78): lum=180 > 175 AND spread=162 > 130 ✓
+//   - Yellow #f0ad4e (240,173,78): lum=180 > 175 AND spread=162 > 130 (Excluded ✓)
 const brightTextMaxSpread = 130
 
 // darkTextMaxLum is the maximum allowed BT.709 luminance for a pixel to be
@@ -149,19 +157,16 @@ const brightTextMaxSpread = 130
 //
 //  2. Placeholder text — browsers render ::placeholder in medium gray; the
 //     exact shade varies by browser and system theme:
-//     - Chrome/Edge rgba(0,0,0,0.54) on white → (122,122,122): lum=122 ≤ 175 ✓
-//     - Common CSS #999 (153,153,153):          lum=153 ≤ 175 ✓
-//     - Common CSS #a0a0a0 (160,160,160):       lum=160 ≤ 175 ✓
-//     - Common CSS #a9a9a9 (169,169,169):       lum=169 ≤ 175 ✓
+//     - Chrome/Edge rgba(0,0,0,0.54) on white → (122,122,122): lum=122 ≤ 200 ✓
+//     - Common CSS #999 (153,153,153):          lum=153 ≤ 200 ✓
+//     - Common CSS #a0a0a0 (160,160,160):       lum=160 ≤ 200 ✓
+//     - Common CSS #a9a9a9 (169,169,169):       lum=169 ≤ 200 ✓
 //
-//  3. Disabled / secondary text (~#aaa–#bbb range): lum ≤ 175 ✓
+//  3. Disabled / secondary text (~#aaa–#bbb range): lum ≤ 200 ✓
 //
-// Coloured backgrounds are still excluded by the spread check (> 130) even
-// when their luminance falls below 175:
-//   - Yellow #f0ad4e (240,173,78): lum=180 > 175 AND spread=162 > 130 ✓
-//   - Cyan   #17a2b8 (23,162,184): lum=158 ≤ 175 but spread=161 > 130 ✓
-//   - Purple #667eea (102,126,234):lum=129 ≤ 175 but spread=132 > 130 ✓
-//   - Light page bg #f5f5f5:       lum=245 > 175 ✓
+// Coloured backgrounds are still excluded by the spread check (> 180) even
+// when their luminance falls below 200:
+//   - Yellow #f0ad4e (240,173,78): lum=180 > 175 AND spread=162 > 130 (Excluded ✓)
 const darkTextMaxLum = 175
 
 // Common character sets for specific OCR contexts
@@ -206,7 +211,7 @@ func HashImageFast(img image.Image) uint64 {
 		for y := b.Min.Y; y < b.Max.Y; y++ {
 			for x := b.Min.X; x < b.Max.X; x++ {
 				r, g, bl, a := img.At(x, y).RGBA()
-				_, _ = h.Write([]byte{byte(r), byte(g), byte(bl), byte(a)})
+				_, _ = h.Write([]byte{byte(r >> 8), byte(g >> 8), byte(bl >> 8), byte(a >> 8)})
 			}
 		}
 	}
@@ -249,7 +254,7 @@ type gosseractClient struct {
 
 var (
 	newOCRClient = func() ocrClient {
-		return gosseractClient{Client: gosseract.NewClient()}
+		return &gosseractClient{Client: gosseract.NewClient()}
 	}
 	warmClientOnce sync.Once
 	warmImageBytes = mustEncodeWarmupImage()
@@ -483,6 +488,9 @@ func ReadAllPasses(img image.Image) (*Result, error) {
 	}
 	ch := make(chan passResult, 6)
 
+	failedPasses := 0
+	var lastErr error
+
 	passList := [6]struct {
 		order int
 		data  []byte
@@ -497,7 +505,10 @@ func ReadAllPasses(img image.Image) (*Result, error) {
 	for _, p := range passList {
 		p := p
 		go func() {
-			res, _ := ReadPreparedBytes(p.data, ScaleFactor, Options{})
+			res, err := ReadPreparedBytes(p.data, ScaleFactor, Options{})
+			if err != nil {
+				lastErr = err
+			}
 			ch <- passResult{p.order, res}
 		}()
 	}
@@ -506,7 +517,15 @@ func ReadAllPasses(img image.Image) (*Result, error) {
 	results := make([]*Result, 6)
 	for range passList {
 		pr := <-ch
+		if pr.res == nil {
+			failedPasses++
+		}
 		results[pr.order] = pr.res
+	}
+
+	// If ALL passes failed to initialize or execute, return the last error.
+	if failedPasses == 6 && lastErr != nil {
+		return nil, fmt.Errorf("all OCR passes failed; last error: %w", lastErr)
 	}
 
 	// Merge with deduplication: first-seen word (by priority order) wins.
@@ -516,14 +535,15 @@ func ReadAllPasses(img image.Image) (*Result, error) {
 	}
 	seen := make(map[wordKey]bool)
 	var merged []Word
+	totalFound := 0
+	filtered := 0
 	for _, res := range results {
 		if res == nil {
 			continue
 		}
+		totalFound += res.TotalWordsFound
+		filtered += res.WordsFiltered
 		for _, w := range res.Words {
-			if w.Confidence < MinConfidence || w.Text == "" {
-				continue
-			}
 			key := wordKey{
 				text: strings.ToLower(strings.TrimSpace(w.Text)),
 				x:    (w.X / 20) * 20, // 20 px grid — large enough to merge sub-pixel
@@ -544,7 +564,7 @@ func ReadAllPasses(img image.Image) (*Result, error) {
 		}
 		sb.WriteString(w.Text)
 	}
-	return &Result{Text: sb.String(), Words: merged}, nil
+	return &Result{Text: sb.String(), Words: merged, TotalWordsFound: totalFound, WordsFiltered: filtered}, nil
 }
 
 // ReadPreparedBytes runs OCR on already-preprocessed image bytes.
@@ -587,8 +607,13 @@ func readClientResult(client ocrClient, scaleFactor int) (*Result, error) {
 	}
 
 	words := make([]Word, 0, len(boxes))
+	filtered := 0
 	for _, b := range boxes {
-		if b.Word == "" || b.Confidence < MinConfidence {
+		if b.Word == "" {
+			continue
+		}
+		if b.Confidence < MinConfidence {
+			filtered++
 			continue
 		}
 		words = append(words, Word{
@@ -1017,4 +1042,33 @@ func toGrayscaleContrast(img image.Image) *image.Gray {
 		out.Pix[i] = uint8((int(l-minL) * 255) / span)
 	}
 	return out
+}
+
+// SyncTessDataPrefix forcefully updates the C runtime's environment
+// to ensure that the Tesseract library sees the correct TESSDATA_PREFIX.
+// This is critical on Windows where Go and C may use separate runtimes.
+func SyncTessDataPrefix() {
+	prefix := os.Getenv("TESSDATA_PREFIX")
+	if prefix == "" {
+		return
+	}
+
+	// Tesseract expects NAME=VALUE for putenv. We use C.putenv to reach the CRT.
+	envStr := fmt.Sprintf("TESSDATA_PREFIX=%s", prefix)
+	cStr := C.CString(envStr)
+	defer C.free(unsafe.Pointer(cStr))
+
+	C.putenv(cStr)
+}
+
+// CheckTesseract attempts to initialize a Tesseract client and verify it can
+// load. Returns the version string on success.
+func CheckTesseract() (string, error) {
+	// A lite check that only initializes a single client and gets the version,
+	// without triggering the full multi-client pool warming synchronously.
+	client := newOCRClient()
+	defer client.Close()
+
+	version := client.(*gosseractClient).Version()
+	return version, nil
 }

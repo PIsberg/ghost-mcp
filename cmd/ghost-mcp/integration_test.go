@@ -23,6 +23,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -33,8 +34,8 @@ import (
 const (
 	fixtureURL  = "http://localhost:8765"
 	fixturePort = "8765"
-	testTimeout = 60 * time.Second
-	settleTime  = 500 * time.Millisecond // Time for UI to settle after actions
+	testTimeout = 120 * time.Second
+	settleTime  = 2 * time.Second // Time for UI to settle after actions
 )
 
 // skipIfNoDisplay skips tests if no display is available
@@ -101,11 +102,42 @@ func waitForFixture(t *testing.T) {
 			resp, err := http.Get(fixtureURL)
 			if err == nil {
 				resp.Body.Close()
+				// On Windows, the browser might open behind the IDE. Try to focus it.
+				if os.Getenv("OS") == "Windows_NT" {
+					FocusFixtureWindow(t)
+				}
+				time.Sleep(5 * time.Second) // Let UI settle (browser needs time to open and focus)
 				return
 			}
 			time.Sleep(100 * time.Millisecond)
 		}
 	}
+}
+
+// FocusFixtureWindow attempts to bring the browser window with the fixture title to the foreground.
+func FocusFixtureWindow(t *testing.T) {
+	t.Helper()
+	// Simpler, more reliable PowerShell approach for focusing the browser window.
+	psScript := `
+		$wshell = New-Object -ComObject WScript.Shell
+		if ($wshell.AppActivate("Ghost MCP Test Fixture")) {
+			"SUCCESS"
+		} else {
+			"NOT_FOUND"
+		}
+	`
+	// Try up to 5 times to focus (browser takes time to open)
+	for i := 0; i < 5; i++ {
+		cmd := exec.Command("powershell", "-Command", psScript)
+		output, err := cmd.CombinedOutput()
+		if err == nil && strings.TrimSpace(string(output)) == "SUCCESS" {
+			t.Log("✓ Successfully focused fixture window via AppActivate")
+			return
+		}
+		t.Logf("Warning: Focus attempt %d failed (output: %s)", i+1, strings.TrimSpace(string(output)))
+		time.Sleep(2 * time.Second)
+	}
+	t.Log("Warning: Could not find fixture window by title 'Ghost MCP Test Fixture' after multiple attempts")
 }
 
 // TestIntegration_GetScreenSize tests the get_screen_size tool

@@ -1,8 +1,40 @@
 package visual
 
 import (
+	"image"
+	"image/color"
 	"testing"
+
+	"github.com/ghost-mcp/internal/learner"
 )
+
+func TestAnnotateImage(t *testing.T) {
+	// Create a dummy image
+	img := image.NewRGBA(image.Rect(0, 0, 100, 100))
+	for y := 0; y < 100; y++ {
+		for x := 0; x < 100; x++ {
+			img.Set(x, y, color.White)
+		}
+	}
+
+	elements := []learner.Element{
+		{ID: 1, X: 10, Y: 10, Width: 20, Height: 10},
+		{ID: 2, X: 50, Y: 50, Width: 30, Height: 20},
+	}
+
+	// Test 1: No offset (full screen capture at 0,0)
+	result := AnnotateImage(img, elements, 0, 0, 1.0)
+	if result == nil {
+		t.Fatal("expected non-nil result")
+	}
+
+	// Test 2: With offset (capture region starting at 40,40)
+	// Element 2 (at 50,50) should be visible at local (10,10)
+	resultOffset := AnnotateImage(img, elements, 40, 40, 1.0)
+	if resultOffset == nil {
+		t.Fatal("expected non-nil result for offset")
+	}
+}
 
 func TestShowClickEffect(t *testing.T) {
 	// Test that ShowClickEffect completes without panic

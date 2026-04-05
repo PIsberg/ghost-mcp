@@ -11,6 +11,7 @@ This guide demonstrates how to use Ghost MCP to automate UI interactions through
 - [OCR Text Payloads](#ocr-text-payloads)
 - [Example Workflows](#example-workflows)
 - [API Reference](#api-reference)
+- [High-Precision Visual Anchors](#high-precision-visual-anchors)
 
 ## Quick Start
 
@@ -61,32 +62,22 @@ The fixture will be available at: **http://localhost:8765**
 
 Ghost MCP provides tools for UI automation. OCR tools (`find_elements`, `find_and_click`, `find_and_click_all`, `wait_for_text`, `find_click_and_type`, `scroll_until_text`) require Tesseract to be installed and `TESSDATA_PREFIX` to be set.
 
-## AI Usage Guide: Optimal Flow
+## AI Usage Guide: The Precision Workflow
 
-### Quick Decision Tree
+Before automating a UI, ALWAYS read the comprehensive [`docs/routing_prompt.md`](routing_prompt.md). This is the source of truth for Ghost MCP automation.
 
-```
-What do you need to do?
-│
-├─ Discover or read visible text → find_elements (PRIMARY OCR TOOL)
-│   └─ Region scan: {x, y, width, height} for 10x speedup
-│   └─ Returns: elements[] with text, center_x, center_y, width, height, confidence
-│
-├─ Click single button → find_and_click
-│   └─ Auto 4-pass OCR (normal→inverted→bright→color)
-│
-├─ Click multiple buttons → find_and_click_all ⭐
-│   └─ {"texts": ["A", "B", "C"], "delay_ms": 200}
-│
-├─ Verify UI changed → wait_for_text ⭐
-│   └─ {text: "Success", timeout_ms: 5000}
-│
-├─ Search a long page/list for text → scroll_until_text
-│   └─ Stops early when the viewport repeats
-│
-└─ See visual layout → take_screenshot
-    └─ Use quality=85 for 10x smaller images
-```
+### Mandatory 4-Step Workflow
+
+For maximum reliability and to avoid "Scroll-and-Peek" inefficiencies, follow this sequence:
+
+1.  **SCAN**: `learn_screen(max_pages: 3)` — Index the full interface (all scroll pages).
+2.  **MAP**: `get_learned_view()` — Load text-to-ID mappings into your context.
+3.  **VERIFY**: `get_annotated_view()` — Check the [ID] visual_id overlays visually.
+4.  **ACT**: `click_at(id=N)` — Act on the confirmed ID.
+
+🚫 **NO-PEEK RULE**: Never manually `scroll` and `take_screenshot` to find elements. Index once with `learn_screen`, then let the server handle the scrolling for you via ID-based actions.
+
+---
 
 ### Example: Click Multiple Buttons (Your Scenario)
 
@@ -184,6 +175,13 @@ Moves the mouse to the given coordinates and clicks — one call instead of two.
 ```
 
 `button` is optional and defaults to `"left"`.
+
+#### Visual Anchor Support
+`click_at` supports high-precision clicking via visual IDs:
+```json
+{ "tool": "click_at", "arguments": { "id": 12 } }
+```
+If `id` is provided, the `x` and `y` parameters are ignored. The server uses the coordinates from the last `get_annotated_view` or `learn_screen` scan.
 
 ---
 
@@ -1041,6 +1039,40 @@ sudo apt install gcc libx11-dev xorg-dev libxtst-dev libpng-dev
 sudo apt install xvfb
 export DISPLAY=:99
 Xvfb :99 &
+```
+
+---
+
+## High-Precision Visual Anchors
+
+When standard OCR matching fails or the UI is icon-heavy, use **Visual Anchors** (also known as Set-of-Marks) for 100% click precision.
+
+### Mandatory 4-Step Workflow
+
+For maximum reliability, always follow this sequence:
+
+1.  **Scan**: Call `learn_screen(max_pages: 3)` to capture the interface.
+2.  **Map**: Call `get_learned_view` to load the **Machine-Map** (the list of text labels and their numeric IDs).
+3.  **Verify**: Call `get_annotated_view`. This returns an image with numeric **ID visual_id overlays** (e.g., `[5]`, `[12]`) overlaid on every element.
+4.  **Act**: Look at the ID visual_id overlay in the image and use one of the **ID-ready tools**:
+    -   `click_at({"id": N})`
+    -   `click_and_type({"id": N, "text": "..."})`
+    -   `move_mouse({"id": N})`
+    -   `double_click({"id": N})`
+
+This eliminates "pixel drift" and ensures you interact with exactly what you see.
+
+### Tool: get_annotated_view
+
+Captures the current viewport and overlays visual IDs from the last scan.
+
+**Arguments** (all optional):
+- `x`, `y`: Top-left of capture region (logical pixels)
+- `width`, `height`: Dimensions of region
+
+**Returns**: JSON metadata + JPEG image:
+```json
+{ "success": true, "element_count": 42, "format": "jpeg", "size_bytes": 125400 }
 ```
 
 ---
