@@ -135,23 +135,34 @@ const MinConfidence = 35.0
 //   - Pure #00f2fe (0,242,254):   lum=191 but spread=254 > 130 ✓
 //   - Pure #38ef7d (56,239,125):  lum=192 but spread=183 > 130 ✓
 //   - Pure #4facfe (79,172,254):  lum=158 < 185 ✓
-//   - Yellow #f0ad4e (240,173,78): lum=180 > 120 (excluded by darkTextMaxLum) ✓
+//   - Yellow #f0ad4e (240,173,78): lum=180 > 175 AND spread=162 > 130 ✓
 const brightTextMaxSpread = 130
 
 // darkTextMaxLum is the maximum allowed BT.709 luminance for a pixel to be
-// classified as near-dark text in darkTextToGray.
+// classified as near-dark or medium-gray text in darkTextToGray.
 //
-// Value 120 is chosen to catch dark text (#333, lum=51) used on warning-style
-// buttons and its anti-aliased edges blended into a yellow background
-// (#f0ad4e, lum=180):
-//   - Pure #333 (51,51,51):            lum=51  ≤ 120 ✓
-//   - 50% blend with #f0ad4e yellow:   lum=115 ≤ 120 ✓  (anti-aliased edge)
+// Value 175 covers three categories of achromatic text on bright backgrounds:
 //
-// Light/coloured backgrounds are excluded because their luminance exceeds 120:
-//   - Yellow #f0ad4e (240,173,78): lum=180 > 120 ✓
-//   - White #ffffff (255,255,255): lum=255 > 120 ✓
-//   - Light gray #f5f5f5:          lum=245 > 120 ✓
-const darkTextMaxLum = 120
+//  1. Dark body/button text (#333, lum=51):
+//     - Pure #333 (51,51,51):            lum=51  ≤ 175 ✓
+//     - 50% blend with #f0ad4e yellow:   lum=115 ≤ 175 ✓  (anti-aliased edge)
+//
+//  2. Placeholder text — browsers render ::placeholder in medium gray; the
+//     exact shade varies by browser and system theme:
+//     - Chrome/Edge rgba(0,0,0,0.54) on white → (122,122,122): lum=122 ≤ 175 ✓
+//     - Common CSS #999 (153,153,153):          lum=153 ≤ 175 ✓
+//     - Common CSS #a0a0a0 (160,160,160):       lum=160 ≤ 175 ✓
+//     - Common CSS #a9a9a9 (169,169,169):       lum=169 ≤ 175 ✓
+//
+//  3. Disabled / secondary text (~#aaa–#bbb range): lum ≤ 175 ✓
+//
+// Coloured backgrounds are still excluded by the spread check (> 130) even
+// when their luminance falls below 175:
+//   - Yellow #f0ad4e (240,173,78): lum=180 > 175 AND spread=162 > 130 ✓
+//   - Cyan   #17a2b8 (23,162,184): lum=158 ≤ 175 but spread=161 > 130 ✓
+//   - Purple #667eea (102,126,234):lum=129 ≤ 175 but spread=132 > 130 ✓
+//   - Light page bg #f5f5f5:       lum=245 > 175 ✓
+const darkTextMaxLum = 175
 
 // Common character sets for specific OCR contexts
 const (
@@ -850,23 +861,26 @@ func brightTextToGray(img image.Image, threshold uint8) *image.Gray {
 	return out
 }
 
-// darkTextToGray creates a binary image where near-dark achromatic pixels become
-// black (text) and everything else becomes white (background). It is the mirror
-// of brightTextToGray, designed to isolate dark button labels — and their
-// anti-aliased edges — from any coloured background.
+// darkTextToGray creates a binary image where achromatic pixels below a
+// luminance threshold become black (text) and everything else becomes white
+// (background). It is the mirror of brightTextToGray and covers two use cases:
+//
+//  1. Dark button labels (#333) on coloured backgrounds (e.g. WARNING yellow):
+//     the yellow background (lum=180 > darkTextMaxLum, spread=162 > 130) becomes
+//     white, while dark text (lum=51, spread=0) becomes black.
+//
+//  2. Placeholder text in input fields: browsers render ::placeholder in a
+//     medium gray (lum ≈ 120–170 depending on browser/theme). Normal grayscale
+//     preprocessing stretches this to roughly 127/255 — low contrast that
+//     Tesseract often misses. This pass makes those pixels black on white,
+//     yielding near-perfect contrast.
 //
 // Detection condition (both must hold):
 //
-//  1. BT.709 luminance ≤ darkTextMaxLum  (pixel is dark enough to be dark text
-//     or a lightly-blended anti-aliased edge against a light background).
-//  2. max(R,G,B) − min(R,G,B) ≤ brightTextMaxSpread  (pixel is achromatic
-//     enough — coloured backgrounds like yellow #f0ad4e have spread > 160 and
-//     are excluded even when their luminance is relatively low).
-//
-// Primary use case: WARNING-style buttons with dark (#333) text on a
-// yellow/orange background (#f0ad4e) where grayscale preprocessing loses the
-// contrast between the dark text (lum=51) and the medium-luminance yellow
-// background (lum=180).
+//  1. BT.709 luminance ≤ darkTextMaxLum  (pixel is dark-to-medium-gray).
+//  2. max(R,G,B) − min(R,G,B) ≤ brightTextMaxSpread  (pixel is achromatic —
+//     coloured backgrounds like yellow or cyan are excluded by their high
+//     channel spread even when their luminance falls below the threshold).
 func darkTextToGray(img image.Image) *image.Gray {
 	b := img.Bounds()
 	out := image.NewGray(b)

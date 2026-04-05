@@ -319,11 +319,26 @@ func InferElementType(text string, width, height int) ElementType {
 }
 
 var inputPlaceholders = []string{
-	"enter your", "type here", "type your", "input your",
+	// Explicit entry prompts
+	"enter your", "enter text", "enter here",
+	"type here", "type your", "type text",
+	"input your", "input here",
+	"write here", "write your",
+	// Common field-name placeholders with ellipsis
 	"email...", "password...",
 	"username...", "name...", "phone...", "address...",
 	"city...", "state...", "zip...", "country...",
 	"message...", "comment...", "notes...", "description...",
+	"search here", "search for",
+	"url...", "website...", "link...",
+	"title...", "subject...", "topic...",
+	"first name", "last name", "full name",
+	// Multi-line / textarea clues
+	"multi-line", "multiline", "text area",
+	// Generic ellipsis-only fields (very short — checked last)
+	"type...", "enter...",
+	// MCP test fixture specific
+	"use mcp type_text",
 }
 
 // isInputPlaceholder returns true for common input field placeholder text.
@@ -333,10 +348,10 @@ func isInputPlaceholder(s string) bool {
 			return true
 		}
 	}
-	// Also check for common single-word placeholders (excluding dropdown/button words)
-	if s == "email" || s == "password" || s == "username" || s == "name" ||
-		s == "phone" || s == "address" || s == "city" || s == "message" ||
-		s == "comment" {
+	// Common single-word field-name placeholders (no ellipsis variant above).
+	switch s {
+	case "email", "password", "username", "name", "phone", "address",
+		"city", "message", "comment", "url", "website":
 		return true
 	}
 	return false

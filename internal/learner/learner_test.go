@@ -419,6 +419,7 @@ func TestInferElementType_Input(t *testing.T) {
 		width  int
 		height int
 	}{
+		// Original patterns
 		{"Enter your email", 150, 20},
 		{"Type here", 100, 20},
 		{"email...", 120, 20},
@@ -427,6 +428,16 @@ func TestInferElementType_Input(t *testing.T) {
 		{"email", 120, 20},
 		{"username", 120, 20},
 		{"message", 120, 20},
+		// New patterns — fixture placeholders
+		{"Type here or use MCP type_text...", 300, 20},
+		{"Multi-line text area...", 300, 24},
+		// New patterns — common web forms
+		{"Enter text", 150, 20},
+		{"Write your message", 300, 20},
+		{"First name", 150, 20},
+		{"Full name", 150, 20},
+		{"Search here", 200, 20},
+		{"Enter here", 150, 20},
 	}
 	for _, tc := range tests {
 		got := InferElementType(tc.text, tc.width, tc.height)

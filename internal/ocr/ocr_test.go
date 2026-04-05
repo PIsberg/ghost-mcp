@@ -515,14 +515,52 @@ func TestDarkTextToGray_DarkOnColored(t *testing.T) {
 	}{
 		{image.Pt(0, 0), 0, "#333 dark text (lum=51, spread=0) → black"},
 		{image.Pt(1, 1), 0, "50% anti-aliased #333+yellow (lum≈115, spread=81) → black"},
-		{image.Pt(2, 2), 255, "yellow #f0ad4e background (lum≈180 > 120) → white"},
-		{image.Pt(3, 3), 255, "white background (lum=255 > 120) → white"},
-		{image.Pt(4, 4), 255, "cyan (lum≈148 > 120) → white"},
-		{image.Pt(5, 5), 0, "dark red (lum=21 ≤ 120, spread=100 ≤ 130) → black"},
+		{image.Pt(2, 2), 255, "yellow #f0ad4e background (lum≈180 > 175) → white"},
+		{image.Pt(3, 3), 255, "white background (lum=255 > 175) → white"},
+		{image.Pt(4, 4), 255, "cyan (spread=220 > 130) → white"},
+		{image.Pt(5, 5), 0, "dark red (lum=21 ≤ 175, spread=100 ≤ 130) → black"},
 	}
 	for _, c := range checks {
 		if got.GrayAt(c.pt.X, c.pt.Y).Y != c.want {
 			t.Errorf("%s: got gray=%d, want %d", c.desc, got.GrayAt(c.pt.X, c.pt.Y).Y, c.want)
+		}
+	}
+}
+
+// TestDarkTextToGray_PlaceholderGray verifies that common browser placeholder
+// text colors (medium gray, achromatic) are detected by darkTextToGray after
+// raising darkTextMaxLum to 175. This ensures find_elements can classify input
+// fields when their placeholder text is rendered in gray rather than black.
+func TestDarkTextToGray_PlaceholderGray(t *testing.T) {
+	checks := []struct {
+		c    color.RGBA
+		want uint8
+		desc string
+	}{
+		// Chrome/Edge: rgba(0,0,0,0.54) on white → (122,122,122), lum=122
+		{color.RGBA{122, 122, 122, 255}, 0, "Chrome placeholder lum=122 → black"},
+		// Common CSS #999, lum=153
+		{color.RGBA{153, 153, 153, 255}, 0, "#999 placeholder lum=153 → black"},
+		// Common CSS #a0a0a0, lum=160
+		{color.RGBA{160, 160, 160, 255}, 0, "#a0a0a0 placeholder lum=160 → black"},
+		// Common CSS #a9a9a9, lum=169
+		{color.RGBA{169, 169, 169, 255}, 0, "#a9a9a9 placeholder lum=169 → black"},
+		// White background must stay white
+		{color.RGBA{255, 255, 255, 255}, 255, "white background lum=255 → white"},
+		// Light page bg #f5f5f5 must stay white
+		{color.RGBA{245, 245, 245, 255}, 255, "#f5f5f5 page bg lum=245 → white"},
+		// Yellow button bg #f0ad4e excluded by both lum>175 and spread>130
+		{color.RGBA{240, 173, 78, 255}, 255, "yellow #f0ad4e lum=180 spread=162 → white"},
+		// Cyan excluded by spread despite lum<175
+		{color.RGBA{23, 162, 184, 255}, 255, "cyan #17a2b8 lum=158 spread=161 → white"},
+	}
+
+	for _, c := range checks {
+		img := image.NewRGBA(image.Rect(0, 0, 1, 1))
+		img.SetRGBA(0, 0, c.c)
+		got := darkTextToGray(img)
+		if got.GrayAt(0, 0).Y != c.want {
+			t.Errorf("%s: got gray=%d, want %d", c.desc, got.GrayAt(0, 0).Y, c.want)
 		}
 	}
 }
