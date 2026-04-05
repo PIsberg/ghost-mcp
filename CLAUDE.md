@@ -90,7 +90,7 @@ Learning mode enables the server to build a full internal picture of the current
 
 1. On the first `find_and_click` or `find_elements` call (or explicitly via `learn_screen`), the server:
    - Takes a screenshot of the full screen (or a specified region)
-   - Runs two OCR passes (normal + inverted) to catch both dark-on-light and light-on-dark text
+   - Runs six OCR passes concurrently (normal, inverted, bright-text, dark-text, color, color-inverted) to catch text in all colour rendering scenarios
    - Scrolls down and repeats until content repeats or `max_pages` is reached
    - Scrolls back to the original position
    - Stores all discovered elements in an internal `View` indexed by scroll page
@@ -113,7 +113,7 @@ Learning mode enables the server to build a full internal picture of the current
 - `internal/validate` — input validation before any robotgo call: `validate.Coords()`, `validate.ScreenRegion()`, `validate.Text()`, `validate.Key()`
 - `internal/audit` — tamper-evident audit logging. Each JSONL entry carries a SHA-256 hash chain. Configured via `GHOST_MCP_AUDIT_LOG` (directory); defaults to `<UserConfigDir>/ghost-mcp/audit/`. Files rotate daily.
 - `internal/transport` — transport mode selection: stdio (default) or HTTP/SSE (`GHOST_MCP_TRANSPORT=http`). HTTP mode requires Bearer token auth and uses `GHOST_MCP_HTTP_ADDR` / `GHOST_MCP_HTTP_BASE_URL`.
-- `internal/ocr` — Tesseract OCR via `gosseract`. Requires Tesseract libraries installed (vcpkg on Windows). Supports grayscale, inverted, and color preprocessing passes.
+- `internal/ocr` — Tesseract OCR via `gosseract`. Requires Tesseract libraries installed (vcpkg on Windows). Runs six preprocessing passes in parallel: **normal** (grayscale + contrast stretch), **inverted** (brightness flip for white-on-dark), **bright-text** (isolates near-white pixels — white labels on coloured buttons), **dark-text** (isolates near-dark achromatic pixels — dark labels like `#333` on yellow/orange buttons), **color** (full RGB), **color-inverted** (RGB-inverted then grayscale — handles high-saturation backgrounds like cyan). `find_and_click` races all six and returns on the first match; `learn_screen` merges all results.
 - `internal/learner` — learning mode core logic. Pure Go (no CGo), fully unit-tested, thread-safe.
 - `internal/visual`, `internal/cursor` — visual click feedback animations (mouse-circle effects).
 
