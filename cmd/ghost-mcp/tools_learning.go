@@ -12,33 +12,25 @@ func registerLearningTools(mcpServer *server.MCPServer) {
 	logging.Info("Registering learning mode tools...")
 
 	mcpServer.AddTool(mcp.NewTool("learn_screen",
-		mcp.WithDescription(`Scan the full interface, run multi-pass OCR, and cache the element map.
+		mcp.WithDescription(`EXPLORATION TOOL — Scan the full interface, run multi-pass OCR, and cache the element map.
+This is the RECOMMENDED logic for any new screen or complex workflow.
 
-EXPLORATION HIERARCHY — for unknown screens, prefer find_elements first:
-  1. find_elements   ← PRIMARY exploration (fast, visible elements only)
-  2. take_screenshot ← SECONDARY (only for icon-only interfaces)
-  3. learn_screen    ← TERTIARY for exploration, but PRIMARY for complex workflows
+EXPLORATION HIERARCHY:
+  1. learn_screen    ← PRIMARY for exploration and complex workflows.
+  2. find_elements   ← SECONDARY for quick text-only dumps.
+  3. take_screenshot ← TERTIARY (only for icon-only interfaces).
 
 Use learn_screen when:
+• You first arrive on a new screen or UI state.
 • You have 3+ sequential actions on the same screen (caches the map for all steps).
 • The page scrolls and you need elements below the visible area.
 • After navigating to a new page, opening a dialog, or switching tabs.
-• find_and_click or find_elements returns unexpected results (rebuild stale view).
-
-Skip learn_screen when:
-• You only need one or two actions — find_and_click directly is faster.
-• The page navigates away immediately after the action.
 
 ── RECOMMENDED WORKFLOW ───────────────────────────────────────────────────────
-  1. learn_screen          ← map the full interface (scroll through if needed)
-  2. get_learned_view      ← read the element map; decide what to interact with
-  3. find_and_click / find_click_and_type / find_elements  ← act on elements
+  1. learn_screen          ← map the interface (scroll through if needed)
+  2. get_annotated_view    ← VISUALLY confirm elements and their numeric IDs
+  3. click_at(id=N)        ← interact with elements using 100% precise IDs
   4. clear_learned_view    ← after navigating away, then go back to step 1
-
-── CHOOSING max_pages ─────────────────────────────────────────────────────────
-  • Short page / desktop app: max_pages=1 (default 10 is fine too)
-  • Long webpage / settings panel: max_pages=5 to max_pages=10
-  • When in doubt: leave at default; the tool stops early when content repeats.
 
 The tool scrolls DOWN during scanning and automatically scrolls BACK UP when done.`),
 		mcp.WithNumber("x", mcp.Description("Left edge of the scan region in pixels (default: 0 / full screen).")),
@@ -61,21 +53,26 @@ Returns {"learned":false} if learn_screen has not been called yet.`),
 	), handleGetLearnedView)
 
 	mcpServer.AddTool(mcp.NewTool("get_annotated_view",
-		mcp.WithDescription(`Capture a screenshot of the current viewport and overlay visual IDs from the last scan.
+		mcp.WithDescription(`VISUAL ANCHOR TOOL — Capture a screenshot (live or historical) and overlay numeric IDs.
+This is the HIGHEST PRECISION interaction flow. It returns an image with ID markers
+(e.g. [5], [12]) overlaid on every discovered element.
 
-This is the HIGH-PRECISION visual exploration tool. It returns an image with bounding
-boxes and ID markers (e.g. [5], [12]) overlaid on every discovered element.
+── USAGE MODES ─────────────────────────────────────────────────────────────
+1. LIVE VIEWPORT (Default): Omitting page_index captures a fresh screenshot of
+   the current screen and overlays IDs from the last scan.
+2. PAGE HISTORY: Passing page_index (e.g. 1, 2) returns the STORED screenshot
+   captured during the last learn_screen session, annotated at that time.
+   Use this to see "off-screen" content without scrolling back.
 
-WORKFLOW:
-1. Call learn_screen or find_elements first to discover elements.
-2. Call get_annotated_view to see the visual "Set-of-Marks".
-3. Use the ID badge numbers you see in the image to call click_at(id=N).
-
-Parameters (x, y, width, height) are optional and default to full screen.`),
-		mcp.WithNumber("x", mcp.Description("X coordinate of region to capture (default: 0).")),
-		mcp.WithNumber("y", mcp.Description("Y coordinate of region to capture (default: 0).")),
-		mcp.WithNumber("width", mcp.Description("Width of region to capture (default: full screen).")),
-		mcp.WithNumber("height", mcp.Description("Height of region to capture (default: full screen).")),
+── WORKFLOW ────────────────────────────────────────────────────────────────
+1. Call learn_screen first to map the screen (optionally with max_pages > 1).
+2. Call get_annotated_view to see the visual "ID badges".
+3. Use the ID badge numbers in the image to call click_at(id=N).`),
+		mcp.WithNumber("page_index", mcp.Description("Optional: The scroll-page index (0, 1, 2...) from the last learn_screen session. If omitted, captures the live viewport.")),
+		mcp.WithNumber("x", mcp.Description("X coordinate of region (live mode only, default: 0).")),
+		mcp.WithNumber("y", mcp.Description("Y coordinate of region (live mode only, default: 0).")),
+		mcp.WithNumber("width", mcp.Description("Width of region (live mode only, default: full screen).")),
+		mcp.WithNumber("height", mcp.Description("Height of region (live mode only, default: full screen).")),
 	), handleGetAnnotatedView)
 
 	mcpServer.AddTool(mcp.NewTool("clear_learned_view",

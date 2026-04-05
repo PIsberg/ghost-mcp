@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/ghost-mcp/internal/learner"
+	"github.com/ghost-mcp/internal/logging"
 	"github.com/go-vgo/robotgo"
 	"golang.org/x/image/font"
 	"golang.org/x/image/font/basicfont"
@@ -19,8 +20,14 @@ import (
 // AnnotateImage draws bounding boxes and numeric ID badges on an image,
 // facilitating AI visual reasoning (Set-of-Marks).
 // offsetX and offsetY are the top-left coordinates of the src image in absolute screen space.
-func AnnotateImage(src image.Image, elements []learner.Element, offsetX, offsetY int) image.Image {
+// dpiScale is used to thicken borders and badges on high-DPI displays.
+func AnnotateImage(src image.Image, elements []learner.Element, offsetX, offsetY int, dpiScale float64) image.Image {
+	if dpiScale <= 0 {
+		dpiScale = 1.0
+	}
 	bounds := src.Bounds()
+	logging.Info("[VISUAL] Annotating image: bounds=%v, offset=(%d,%d), scale=%.2f, elements=%d", bounds, offsetX, offsetY, dpiScale, len(elements))
+
 	// Create an RGBA copy so we can draw safely.
 	dst := image.NewRGBA(bounds)
 	draw.Draw(dst, bounds, src, bounds.Min, draw.Src)
@@ -36,19 +43,30 @@ func AnnotateImage(src image.Image, elements []learner.Element, offsetX, offsetY
 		Face: basicfont.Face7x13,
 	}
 
-	for _, e := range elements {
+	thickness := int(math.Max(1.0, math.Round(dpiScale)))
+
+	for i, e := range elements {
 		// Normalize coordinates to the image's local space
+		// relX is relative to the start of the screenshot (offsetX)
 		relX := e.X - offsetX
 		relY := e.Y - offsetY
 
+		// Convert to absolute pixel space in the destination image
+		absX := relX + bounds.Min.X
+		absY := relY + bounds.Min.Y
+
 		// Skip if the element is completely outside the capture region
-		if relX+e.Width < bounds.Min.X || relX > bounds.Max.X ||
-			relY+e.Height < bounds.Min.Y || relY > bounds.Max.Y {
+		if absX+e.Width < bounds.Min.X || absX > bounds.Max.X ||
+			absY+e.Height < bounds.Min.Y || absY > bounds.Max.Y {
 			continue
 		}
 
-		// 1. Draw element bounding box (1px outline)
-		drawOutline(dst, relX, relY, e.Width, e.Height, boxColor)
+		if i < 5 {
+			logging.Debug("[VISUAL] Element %d: ID=%d, screen=(%d,%d), local_rel=(%d,%d), dest_abs=(%d,%d)", i, e.ID, e.X, e.Y, relX, relY, absX, absY)
+		}
+
+		// 1. Draw element bounding box
+		drawOutline(dst, absX, absY, e.Width, e.Height, thickness, boxColor)
 
 		// 2. Prepare the ID badge string
 		idStr := strconv.Itoa(e.ID)
@@ -56,18 +74,29 @@ func AnnotateImage(src image.Image, elements []learner.Element, offsetX, offsetY
 		badgeW := textWidth + 6
 		badgeH := 16
 
+		// Use larger badge if on high-DPI
+		if dpiScale > 1.25 {
+			badgeW = int(float64(badgeW) * dpiScale)
+			badgeH = int(float64(badgeH) * dpiScale)
+		}
+
 		// 3. Draw badge background (positioned at top-left of element)
-		badgeRect := image.Rect(relX, relY-badgeH, relX+badgeW, relY)
+		badgeRect := image.Rect(absX, absY-badgeH, absX+badgeW, absY)
 		// If at the very top of the image region, move badge inside the box
-		if relY-badgeH < bounds.Min.Y {
-			badgeRect = image.Rect(relX, relY, relX+badgeW, relY+badgeH)
+		if absY-badgeH < bounds.Min.Y {
+			badgeRect = image.Rect(absX, absY, absX+badgeW, absY+badgeH)
 		}
 		draw.Draw(dst, badgeRect, image.NewUniform(badgeColor), image.Point{}, draw.Over)
 
 		// 4. Draw the numeric ID
+		// Center the text in the badge
+		dotY := badgeRect.Min.Y + 12
+		if dpiScale > 1.25 {
+			dotY = badgeRect.Min.Y + (badgeH+13)/2 - 2
+		}
 		d.Dot = fixed.Point26_6{
-			X: fixed.I(badgeRect.Min.X + 3),
-			Y: fixed.I(badgeRect.Min.Y + 12),
+			X: fixed.I(badgeRect.Min.X + (badgeRect.Dx()-textWidth)/2),
+			Y: fixed.I(dotY),
 		}
 		d.DrawString(idStr)
 	}
@@ -75,17 +104,23 @@ func AnnotateImage(src image.Image, elements []learner.Element, offsetX, offsetY
 	return dst
 }
 
-// drawOutline draws a 1-pixel rectangle outline.
-func drawOutline(dst *image.RGBA, x, y, w, h int, c color.Color) {
-	// Top and bottom
-	for xOff := 0; xOff < w; xOff++ {
-		dst.Set(x+xOff, y, c)
-		dst.Set(x+xOff, y+h-1, c)
-	}
-	// Left and right
-	for yOff := 0; yOff < h; yOff++ {
-		dst.Set(x, y+yOff, c)
-		dst.Set(x+w-1, y+yOff, c)
+// drawOutline draws a rectangle outline with a given thickness.
+func drawOutline(dst *image.RGBA, x, y, w, h, thickness int, c color.Color) {
+	for t := 0; t < thickness; t++ {
+		tx, ty, tw, th := x+t, y+t, w-2*t, h-2*t
+		if tw <= 0 || th <= 0 {
+			break
+		}
+		// Top and bottom
+		for xOff := 0; xOff < tw; xOff++ {
+			dst.Set(tx+xOff, ty, c)
+			dst.Set(tx+xOff, ty+th-1, c)
+		}
+		// Left and right
+		for yOff := 0; yOff < th; yOff++ {
+			dst.Set(tx, ty+yOff, c)
+			dst.Set(tx+tw-1, ty+yOff, c)
+		}
 	}
 }
 

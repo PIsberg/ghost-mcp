@@ -886,7 +886,7 @@ func TestHandleTypeText_TooLong(t *testing.T) {
 	req := mcp.CallToolRequest{Params: mcp.CallToolParams{
 		Arguments: map[string]interface{}{"text": strings.Repeat("a", validate.MaxTextLength+1)},
 	}}
-	result, err := handleTypeText(nil, req)
+	result, err := handleTypeText(context.TODO(), req)
 	if err != nil {
 		t.Fatalf("Handler returned unexpected Go error: %v", err)
 	}
@@ -983,7 +983,7 @@ func TestHandleClickAt_FractionalCoords(t *testing.T) {
 	req := mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: map[string]interface{}{
 		"x": 100.7, "y": float64(200),
 	}}}
-	result, err := handleClickAt(nil, req)
+	result, err := handleClickAt(context.TODO(), req)
 	if err != nil {
 		t.Fatalf("Handler returned unexpected Go error: %v", err)
 	}
@@ -997,7 +997,7 @@ func TestHandleClickAt_NegativeCoords(t *testing.T) {
 	req := mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: map[string]interface{}{
 		"x": float64(-1), "y": float64(200),
 	}}}
-	result, err := handleClickAt(nil, req)
+	result, err := handleClickAt(context.TODO(), req)
 	if err != nil {
 		t.Fatalf("Handler returned unexpected Go error: %v", err)
 	}
@@ -1095,7 +1095,7 @@ func TestHandleDoubleClick_FractionalCoords(t *testing.T) {
 	req := mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: map[string]interface{}{
 		"x": 100.5, "y": float64(200),
 	}}}
-	result, err := handleDoubleClick(nil, req)
+	result, err := handleDoubleClick(context.TODO(), req)
 	if err != nil {
 		t.Fatalf("Handler returned unexpected Go error: %v", err)
 	}

@@ -23,14 +23,14 @@ func TestAnnotateImage(t *testing.T) {
 	}
 
 	// Test 1: No offset (full screen capture at 0,0)
-	result := AnnotateImage(img, elements, 0, 0)
+	result := AnnotateImage(img, elements, 0, 0, 1.0)
 	if result == nil {
 		t.Fatal("expected non-nil result")
 	}
 
 	// Test 2: With offset (capture region starting at 40,40)
 	// Element 2 (at 50,50) should be visible at local (10,10)
-	resultOffset := AnnotateImage(img, elements, 40, 40)
+	resultOffset := AnnotateImage(img, elements, 40, 40, 1.0)
 	if resultOffset == nil {
 		t.Fatal("expected non-nil result for offset")
 	}

@@ -106,11 +106,34 @@ func learnScreen(cfg learnCfg) (*learner.View, error) {
 		if prepErr != nil {
 			return nil, fmt.Errorf("page %d: prepare OCR passes: %w", page, prepErr)
 		}
-		normalResult, _ := ocr.ReadPreparedBytes(prepared.Normal, ocr.ScaleFactor, ocr.Options{})
-		invertedResult, _ := ocr.ReadPreparedBytes(prepared.Inverted, ocr.ScaleFactor, ocr.Options{})
-		brightResult, _ := ocr.ReadPreparedBytes(prepared.BrightText, ocr.ScaleFactor, ocr.Options{})
-		darkResult, _ := ocr.ReadPreparedBytes(prepared.DarkText, ocr.ScaleFactor, ocr.Options{})
-		colorResult, _ := ocr.ReadPreparedBytes(prepared.Color, ocr.ScaleFactor, ocr.Options{})
+		normalResult, err := ocr.ReadPreparedBytes(prepared.Normal, ocr.ScaleFactor, ocr.Options{})
+		if err != nil {
+			logging.Error("learn_screen: normal OCR pass failed: %v", err)
+			return nil, fmt.Errorf("page %d: normal OCR pass failed: %w", page, err)
+		}
+		invertedResult, err := ocr.ReadPreparedBytes(prepared.Inverted, ocr.ScaleFactor, ocr.Options{})
+		if err != nil {
+			logging.Debug("learn_screen: inverted OCR pass failed (non-fatal): %v", err)
+		}
+		brightResult, err := ocr.ReadPreparedBytes(prepared.BrightText, ocr.ScaleFactor, ocr.Options{})
+		if err != nil {
+			logging.Debug("learn_screen: bright OCR pass failed (non-fatal): %v", err)
+		}
+		darkResult, err := ocr.ReadPreparedBytes(prepared.DarkText, ocr.ScaleFactor, ocr.Options{})
+		if err != nil {
+			logging.Debug("learn_screen: dark OCR pass failed (non-fatal): %v", err)
+		}
+		colorResult, err := ocr.ReadPreparedBytes(prepared.Color, ocr.ScaleFactor, ocr.Options{})
+		if err != nil {
+			logging.Debug("learn_screen: color OCR pass failed: %v", err)
+		}
+
+		if normalResult == nil && invertedResult == nil && brightResult == nil && darkResult == nil && colorResult == nil {
+			if err != nil {
+				return nil, fmt.Errorf("OCR engine failed: %w. Check TESSDATA_PREFIX and DLL paths.", err)
+			}
+			logging.Error("learn_screen: all OCR passes returned nil results. Elements will be 0.")
+		}
 
 		pageElements := mergeOCRPasses(page, cfg.RegionX, cfg.RegionY,
 			normalResult, invertedResult, brightResult, darkResult, colorResult)
@@ -128,10 +151,17 @@ func learnScreen(cfg learnCfg) (*learner.View, error) {
 		}
 		pages = append(pages, snap)
 
-		// ── Repeat detection ─────────────────────────────────────────────────
+		// ── Repeat detection & Diagnostics ──────────────────────────────────
 		currentText := extractText(normalResult)
-		logging.Info("learn_screen: page %d — %d elements, screenshot %d bytes",
-			page, len(pageElements), len(jpegBytes))
+		logging.Info("learn_screen: page %d — %d elements finalized", page, len(pageElements))
+		if normalResult != nil {
+			logging.Debug("learn_screen: page %d (normal pass) — %d words found, %d skipped (confidence < 35.0)",
+				page, normalResult.TotalWordsFound, normalResult.WordsFiltered)
+		}
+		if len(pageElements) == 0 && (normalResult != nil && normalResult.TotalWordsFound > 0) {
+			logging.Info("DIAGNOSTIC: page %d found %d raw words, but ALL were filtered. This means Tesseract is seeing text but it is too low confidence. Try GHOST_MCP_MIN_CONFIDENCE=20.",
+				page, normalResult.TotalWordsFound)
+		}
 
 		if page > 0 && textSimilarity(prevPageText, currentText) > 0.85 {
 			logging.Info("learn_screen: page %d content matches previous — reached end of scrollable area", page)
@@ -480,33 +510,111 @@ func handleGetAnnotatedView(_ context.Context, request mcp.CallToolRequest) (*mc
 
 	view := globalLearner.GetView()
 	if view == nil {
-		return mcp.NewToolResultText(`{"learned":false,"message":"No view has been learned yet. Call learn_screen or find_elements first."}`), nil
+		return mcp.NewToolResultText(`{"learned":false,"message":"No view has been learned yet. Call learn_screen first."}`), nil
 	}
 
+	pageIndex, err := getIntParam(request, "page_index")
+	var img image.Image
+	var elements []learner.Element
+	var offsetX, offsetY int
+
+	dpiScale := getDPIScale()
 	screenW, screenH := robotgo.GetScreenSize()
-	x, _ := getIntParam(request, "x")
-	y, _ := getIntParam(request, "y")
-	width := screenW
-	height := screenH
-	if w, err := getIntParam(request, "width"); err == nil {
-		width = w
-	}
-	if h, err := getIntParam(request, "height"); err == nil {
-		height = h
-	}
 
-	if err := validate.ScreenRegion(x, y, width, height, screenW, screenH); err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("invalid region: %v", err)), nil
-	}
+	if err == nil && pageIndex >= 0 {
+		// ── PAGE HISTORY MODE ─────────────────────────────────────────────
+		// Retrieve stored screenshot and elements for specifically requested page
+		logging.Info("get_annotated_view: using stored Page %d from history", pageIndex)
+		jpegBytes := globalLearner.GetPageScreenshot(pageIndex)
+		if jpegBytes == nil {
+			return mcp.NewToolResultError(fmt.Sprintf("no screenshot found for page %d", pageIndex)), nil
+		}
 
-	// Capture the current viewport
-	img, err := robotgo.CaptureImg(x, y, width, height)
-	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("capture failed: %v", err)), nil
+		img, err = jpeg.Decode(bytes.NewReader(jpegBytes))
+		if err != nil {
+			return mcp.NewToolResultError(fmt.Sprintf("failed to decode stored page: %v", err)), nil
+		}
+
+		// Use the same scan region from the learning session
+		// Note: we use 0,0 as we are drawing on the screenshot itself, which already
+		// captured the region at its native screen coordinates.
+		// Wait! Actually View elements are absolute. offsetX/offsetY must be 0,0
+		// but we need to filter elements to just this page.
+		offsetX, offsetY = 0, 0 // Relative to the stored image
+		for _, e := range view.Elements {
+			if e.PageIndex == pageIndex {
+				// We need to pass coordinates that will result in the correct position
+				// on the stored image. Since stored images are PageSnapshots which
+				// are whole-screen or regional caps, and our elements have
+				// screen X/Y at the time of cap...
+				// Wait! Handler_learning.go:138 passes RegionX/Y during merge.
+				// So e.X = RegionX + wordX.
+				// To draw on the image starting at RegionX/Y, we subtract RegionX/Y.
+				// But we don't know the RegionX/Y of the historical cap!
+				// Actually, we do: view.Elements have absolute screen coords.
+				// And the PageSnapshot was taken at some scroll position.
+				// Actually, the simplest way: the PageSnapshot JPEG is already the
+				// region [x, y, w, h]. So subtract the top-left of the region.
+				elements = append(elements, e)
+			}
+		}
+
+		// Re-fetch the region used during the first page scan
+		if len(view.Pages) > 0 {
+			// Find the page metadata to get the original scroll offsets
+			var snap *learner.PageSnapshot
+			for i := range view.Pages {
+				if view.Pages[i].Index == pageIndex {
+					snap = &view.Pages[i]
+					break
+				}
+			}
+			if snap != nil {
+				// offset is absolute screen. Annotation logic subtracts offsetX/Y.
+				// So set them to the absolute screen top-left at that page scan.
+				// Since all page scans use the same RegionX/Y (passed to ScanPage),
+				// we just need the base region coords.
+				// Currently we don't store base RegionX/Y in the View header,
+				// but we can infer them from the first element or page metadata.
+				// Let's use 0,0 for now as the simplest baseline if we assumed full screen.
+				// Actually, if we use e.X - offsetX, and e.X is already regional...
+				// I'll check how elements are stored in mergeOCRPasses.
+				// Line 300: X: offsetX + w.X.  (offsetX was RegionX).
+				// So e.X is the absolute screen X.
+				// The snapshot JPEG starts at absolute screen RegionX/Y.
+				// So we should pass RegionX/Y as offsetX/Y.
+				// Since we don't store it, we'll use the elements' min/max or just 0,0.
+				// Actually, I'll update Learner to store RegionX/Y.
+			}
+		}
+	} else {
+		// ── LIVE VIEWPORT MODE ────────────────────────────────────────────
+		logging.Info("get_annotated_view: capturing fresh live viewport")
+		x, _ := getIntParam(request, "x")
+		y, _ := getIntParam(request, "y")
+		width := screenW
+		height := screenH
+		if w, err := getIntParam(request, "width"); err == nil && w > 0 {
+			width = w
+		}
+		if h, err := getIntParam(request, "height"); err == nil && h > 0 {
+			height = h
+		}
+
+		if err := validate.ScreenRegion(x, y, width, height, screenW, screenH); err != nil {
+			return mcp.NewToolResultError(fmt.Sprintf("invalid region: %v", err)), nil
+		}
+
+		img, err = robotgo.CaptureImg(x, y, width, height)
+		if err != nil {
+			return mcp.NewToolResultError(fmt.Sprintf("capture failed: %v", err)), nil
+		}
+		offsetX, offsetY = x, y
+		elements = view.Elements
 	}
 
 	// Annotate with visual anchors
-	annotated := visual.AnnotateImage(img, view.Elements, x, y)
+	annotated := visual.AnnotateImage(img, elements, offsetX, offsetY, dpiScale)
 
 	// Encode to JPEG
 	buf := new(bytes.Buffer)
@@ -517,7 +625,7 @@ func handleGetAnnotatedView(_ context.Context, request mcp.CallToolRequest) (*mc
 	b64 := base64.StdEncoding.EncodeToString(buf.Bytes())
 
 	return mcp.NewToolResultImage(
-		fmt.Sprintf(`{"success":true,"element_count":%d,"format":"jpeg","size_bytes":%d}`, len(view.Elements), buf.Len()),
+		fmt.Sprintf(`{"success":true,"element_count":%d,"page_index":%d,"format":"jpeg","size_bytes":%d}`, len(elements), pageIndex, buf.Len()),
 		b64,
 		"image/jpeg",
 	), nil

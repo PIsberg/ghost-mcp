@@ -24,6 +24,9 @@ If the text is unique and unambiguous, you can omit element_type.
 For best performance, call learn_screen first — subsequent calls use the cached element
 location (10–25× faster). For a single one-off click, find_and_click works without learn_screen.
 
+🎯 FOR HIGHEST PRECISION: Call learn_screen then get_annotated_view first. This gives you
+numeric ID badges (e.g. [5], [12]). Use these IDs with click_at(id=N) for 100% precision.
+
 WHEN TO USE:
 - Click a single button, link, or menu item by its visible text label.
 - Text can be partial: "save" matches "Save", "SAVE ALL", "Auto-save".
@@ -119,113 +122,31 @@ RESPONSE: {success, text, visible, waited_ms} or {error: "timeout..."}`),
 	), handleWaitForText)
 
 	mcpServer.AddTool(mcp.NewTool("find_elements",
-		mcp.WithDescription(`READ ALL VISIBLE TEXT ON SCREEN with coordinates, types, and bounding boxes.
+		mcp.WithDescription(`QUICK EXPLORATION TOOL — Read all visible text on screen with coordinates, types, and bounding boxes.
 
-⚠️ CRITICAL: ALWAYS SET element_type WHEN USER ASKS FOR SPECIFIC ELEMENT TYPES
-When the user asks for buttons, checkboxes, inputs, links, labels, headings, dropdowns, sliders, toggles, radio buttons, or values —
-YOU MUST set element_type to the matching value. Examples:
-  - "find all buttons" → {"element_type": "button"}
-  - "what checkboxes are there" → {"element_type": "checkbox"}
-  - "find input fields" → {"element_type": "input"}
-  - "show me links" → {"element_type": "link"}
-  - "what labels are on this form" → {"element_type": "label"}
-  - "find all headings" → {"element_type": "heading"}
-  - "show dropdowns" → {"element_type": "dropdown"}
-  - "find sliders" → {"element_type": "slider"}
-  - "find toggles/switches" → {"element_type": "toggle"}
-  - "find radio buttons" → {"element_type": "radio"}
-  - "show me prices/values" → {"element_type": "value"}
-Only omit element_type when the user asks a general question like "what's on screen?" or "what text do you see?"
+── EXPLORATION HIERARCHY ──────────────────────────────────────────────────────
+  1. learn_screen    ← PRIMARY: full-interface map + visual IDs (best for workflows)
+  2. find_elements   ← SECONDARY: fast text-only dump (best for quick checks)
+  3. take_screenshot ← TERTIARY: only if OCR misses icon-only elements
 
-EXPLORATION HIERARCHY — use tools in this order when encountering an unknown screen:
-  1. find_elements            ← PRIMARY: fast text dump, always try this first
-  2. take_screenshot          ← SECONDARY: only if find_elements misses icon-only elements
-  3. learn_screen             ← TERTIARY: only if the page scrolls and you need below-fold content
-  4. find_elements(scan_pages=5) ← SINGLE-CALL FULL-PAGE: replaces learn_screen → get_learned_view
+Use find_elements when:
+- You need a quick, text-only inventory of the current viewport.
+- You want to check if a specific label exists without a full-screen scan.
+- You need center_x/center_y coordinates for a one-off click_at.
 
-FULL-PAGE SCAN (scan_pages > 1): automatically scrolls and discovers all elements
-across N pages in one call. Elements from scroll pages include page_index so you
-know how far down they are. This eliminates the blind scroll loop — one call
-replaces 10+ individual scroll operations.
+For any task involving 2+ steps, PREFER learn_screen followed by get_annotated_view.
+This gives you numeric ID badges that you can use with click_at(id=N) for 100% precision.
 
 RESPONSE STRUCTURE:
-- actionable_elements: buttons, inputs, checkboxes, links, etc. sorted by confidence.
-  Start here — this is the short list of what you can actually click or type into.
-- elements: complete list including headings, labels, and body text.
-- labels: field label text (words ending with ":") for use as find_click_and_type targets.
-- learned_off_page_elements: elements from scroll pages below the viewport (when learning
-  mode is on and a multi-page view exists).
-- scan_pages_info: when scan_pages > 1, includes pages_scanned and total_elements.
-
-WHEN TO USE:
-- First tool to call on any unknown screen.
-- find_and_click failed — check here to see what OCR actually detected.
-- You need center_x/center_y coordinates for click_at.
-- Use scan_pages=5 for a complete page inventory instead of blind scrolling.
-
-LIMITATIONS:
-- Detects TEXT ONLY — not icons or images without text labels.
-- Only shows what is CURRENTLY VISIBLE (use scan_pages or learn_screen to see below-fold).
-
-DO NOT use to look up a button before clicking — call find_and_click directly.
-
-EXAMPLE: Find all buttons on screen
-{"element_type": "button"}
-
-EXAMPLE: Full-page exploration (replaces learn_screen + get_learned_view):
-{"scan_pages": 5, "element_type": "button"}
-
-// Response includes all elements from all pages:
-{
-  "success": true,
-  "element_count": 15,
-  "scan_pages_info": {"pages_scanned": 5, "total_elements": 45, "viewport_elements": 15, "off_page_elements": 30},
-  "elements": [
-    {"text": "Primary", "type": "button", "center_x": 174, "center_y": 770, "page_index": 0},
-    {"text": "Success", "type": "button", "center_x": 425, "center_y": 770, "page_index": 0},
-    {"text": "Click Me", "type": "button", "center_x": 200, "center_y": 1200, "page_index": 2}
-  ]
-}
-
-TIPS:
-- Use region parameters to scan specific areas (10x faster than full screen)
-- Elements filtered by confidence (min 40%) and size (min 15x8px)
-- center_x/center_y are ready to use with click_at or move_mouse
-- All coordinates use logical pixels
-- FILTER BY TYPE: Use element_type parameter when looking for specific elements:
-  - element_type="button" for buttons
-  - element_type="input" for text input fields
-  - element_type="checkbox" for checkboxes
-  - element_type="radio" for radio buttons
-  - element_type="dropdown" for dropdown menus
-  - element_type="toggle" for on/off switches
-  - element_type="slider" for sliders/range controls
-  - element_type="label" for field labels
-- Element types: button, input, checkbox, radio, dropdown, toggle, slider, label, heading, link, value, text
-- width/height help identify element type (wide+short = likely button)
-
-EXAMPLE: Find form elements:
-// Response includes type field for each element:
-{
-  "elements": [
-    {"text": "Email:", "type": "label", "center_x": 100, "center_y": 100},
-    {"text": "Enter your email", "type": "input", "center_x": 250, "center_y": 100},
-    {"text": "☑ I agree", "type": "checkbox", "center_x": 150, "center_y": 150},
-    {"text": "Volume 50%", "type": "slider", "center_x": 200, "center_y": 200},
-    {"text": "Submit", "type": "button", "center_x": 200, "center_y": 250}
-  ]
-}
-// Then interact:
-// - Click checkbox: {"tool": "click_at", "arguments": {"x": 150, "y": 150}}
-// - Type in input: {"tool": "find_click_and_type", "arguments": {"text": "Email:", "type_text": "user@example.com"}}
-// - Adjust slider: {"tool": "click_at", "arguments": {"x": 200, "y": 200}} (then drag)
-// - Click button: {"tool": "find_and_click", "arguments": {"text": "Submit"}}`),
+- actionable_elements: focusable items like buttons, inputs, links.
+- elements: complete list including headings and body text.
+- labels: text ending with ":" (useful for find_click_and_type).`),
 		mcp.WithNumber("x", mcp.Description("X coordinate of region to scan (default: 0 = full screen).")),
 		mcp.WithNumber("y", mcp.Description("Y coordinate of region to scan (default: 0 = full screen).")),
 		mcp.WithNumber("width", mcp.Description("Width of region to scan (default: full screen width).")),
 		mcp.WithNumber("height", mcp.Description("Height of region to scan (default: full screen height).")),
-		mcp.WithString("element_type", mcp.Description("REQUIRED when user asks for specific UI elements. Use 'button' for buttons, 'input' for text fields, 'checkbox' for checkboxes, 'radio' for radio buttons, 'dropdown' for select menus, 'toggle' for switches, 'slider' for range controls, 'label' for field labels, 'heading' for titles, 'link' for hyperlinks, 'value' for numbers/prices, 'text' for body text. EXAMPLE: User says 'find all buttons' → set element_type='button'. User says 'what's on screen?' → omit this parameter.")),
-		mcp.WithNumber("scan_pages", mcp.Description("Number of scroll pages to scan (default: 1 = current viewport only). Set >1 to auto-scroll and discover elements across multiple pages. Each page scrolls the default ScrollAmount (5) ticks. Elements from non-zero pages include page_index in the response.")),
+		mcp.WithString("element_type", mcp.Description("Filter to specific types: 'button', 'input', 'checkbox', 'radio', 'dropdown', 'toggle', 'slider', 'label', 'link', 'heading', 'value', 'text'.")),
+		mcp.WithNumber("scan_pages", mcp.Description("Number of scroll pages to scan (default: 1).")),
 	), handleFindElements)
 
 	mcpServer.AddTool(mcp.NewTool("find_click_and_type",

@@ -93,11 +93,40 @@ var (
 	uiGetScreenSize = robotgo.GetScreenSize
 	uiMoveMouse     = func(x, y int) { robotgo.Move(x, y) }
 	uiScrollDir     = func(amount int, direction string) { robotgo.ScrollDir(amount, direction) }
-	uiCaptureImage  = func(x, y, width, height int) (image.Image, error) { return robotgo.CaptureImg(x, y, width, height) }
+	uiCaptureImage  = func(x, y, w, h int) (image.Image, error) {
+		img, err := robotgo.CaptureImg(x, y, w, h)
+		if err != nil {
+			return nil, err
+		}
+
+		// Detect blank/failed screenshots
+		if isUniform(img) {
+			logging.Error("uiCaptureImage: Captured image is completely uniform (all pixels same color). This often indicates a screen capture failure or per-app protection.")
+		}
+
+		return img, nil
+	}
 	uiReadImage     = ocr.ReadImage
 	uiCheckFailsafe = checkFailsafe
 	uiFindText      = parallelFindText
 )
+
+func isUniform(img image.Image) bool {
+	bounds := img.Bounds()
+	if bounds.Empty() {
+		return true
+	}
+	r0, g0, b0, a0 := img.At(bounds.Min.X, bounds.Min.Y).RGBA()
+	for py := bounds.Min.Y; py < bounds.Max.Y; py++ {
+		for px := bounds.Min.X; px < bounds.Max.X; px++ {
+			r, g, b, a := img.At(px, py).RGBA()
+			if r != r0 || g != g0 || b != b0 || a != a0 {
+				return false
+			}
+		}
+	}
+	return true
+}
 
 // =============================================================================
 // FAILSAFE
@@ -679,6 +708,29 @@ func handleClickAndType(ctx context.Context, request mcp.CallToolRequest) (*mcp.
 		return mcp.NewToolResultError(fmt.Sprintf("invalid coordinates: %v", err)), nil
 	}
 
+	// Visual Anchor Support: if an ID is provided, look up its coordinates.
+	// This overrides any x/y provided in the request.
+	if id, err := getIntParam(request, "id"); err == nil && id > 0 {
+		view := globalLearner.GetView()
+		if view != nil {
+			found := false
+			for _, e := range view.Elements {
+				if e.ID == id {
+					x = e.X + e.Width/2
+					y = e.Y + e.Height/2
+					logging.Info("VISUAL ANCHOR (ClickAndType): mapped ID %d to pixel (%d, %d)", id, x, y)
+					found = true
+					break
+				}
+			}
+			if !found {
+				return mcp.NewToolResultError(fmt.Sprintf("element ID %d not found in the current learned view", id)), nil
+			}
+		} else {
+			return mcp.NewToolResultError("click_and_type by ID requires an active learned view; call learn_screen or find_elements first"), nil
+		}
+	}
+
 	pressEnter := getBoolParam(request, "press_enter", false)
 
 	logging.Info("ACTION: Moving mouse to (%d, %d) for click and type", x, y)
@@ -987,9 +1039,9 @@ Use this tool only when you have already moved the mouse to exact coordinates an
 	mcpServer.AddTool(mcp.NewTool("click_at",
 		mcp.WithDescription(`Move the mouse to (x, y) and click in one atomic operation. Preferred over separate move_mouse + click calls.
 
-⚠️ VISUAL ANCHOR SUPPORT: If you have called get_annotated_view and see ID badges on the image, you can pass the "id" parameter instead of coordinates for 100% precision.
+🎯 FOR HIGHEST PRECISION: Always consider calling get_annotated_view FIRST. If you see ID badges on the image (e.g. [5], [12]), pass that "id" parameter here instead of coordinates. This bypasses OCR drift and ensures you hit exactly the element you see.
 
-Use click_at with "id" for perfect target alignment. Use click_at with (x, y) only when you already have exact pixel coordinates (e.g. center_x/center_y from find_elements).`),
+Only use (x, y) coordinates as a fallback when Visual IDs are not available.`),
 		mcp.WithNumber("x", mcp.Description("X coordinate in pixels from the left edge of the screen. Required if 'id' is not provided.")),
 		mcp.WithNumber("y", mcp.Description("Y coordinate in pixels from the top edge of the screen. Required if 'id' is not provided.")),
 		mcp.WithNumber("id", mcp.Description("Optional: The Visual ID badge number (from get_annotated_view or get_learned_view). If provided, x/y are ignored.")),
@@ -1085,14 +1137,17 @@ For special characters or control sequences (Enter, Tab, Ctrl+C), use press_key 
 	), handleTypeText)
 
 	mcpServer.AddTool(mcp.NewTool("click_and_type",
-		mcp.WithDescription(`Move the mouse to (x, y), click to focus, and then type text. This is a single atomic operation that replaces separate click_at and type_text calls.
+		mcp.WithDescription(`Move the mouse to (x, y), click to focus, and then type text.
 
-Use this tool when you already have the absolute pixel coordinates (e.g. from find_elements) and need to interact with an input field. Do not guess coordinates.`),
-		mcp.WithNumber("x", mcp.Description("X coordinate in pixels from the left edge of the screen."), mcp.Required()),
-		mcp.WithNumber("y", mcp.Description("Y coordinate in pixels from the top edge of the screen."), mcp.Required()),
+🎯 FOR HIGHEST PRECISION: Always consider calling get_annotated_view FIRST. If you see ID badges
+on the image (e.g. [5], [12]), pass that "id" parameter here instead of coordinates. This
+ensures 100% precision.`),
+		mcp.WithNumber("x", mcp.Description("X coordinate in pixels. Required if 'id' is not provided.")),
+		mcp.WithNumber("y", mcp.Description("Y coordinate in pixels. Required if 'id' is not provided.")),
+		mcp.WithNumber("id", mcp.Description("Optional: The Visual ID badge number (from get_annotated_view). If provided, x/y are ignored.")),
 		mcp.WithString("text", mcp.Description("The exact text string to type. Supports Unicode."), mcp.Required()),
-		mcp.WithBoolean("press_enter", mcp.Description("If true, automatically presses the Enter key immediately after the text is typed (default: false).")),
-		mcp.WithNumber("delay_ms", mcp.Description("Milliseconds to wait after the click before typing begins. This gives the UI time to focus the input field (default: 100). Max: 10000.")),
+		mcp.WithBoolean("press_enter", mcp.Description("If true, automatically presses Enter after typing (default: false).")),
+		mcp.WithNumber("delay_ms", mcp.Description("Wait after click before typing (default: 100). Max: 10000.")),
 	), handleClickAndType)
 
 	mcpServer.AddTool(mcp.NewTool("press_key",
@@ -1177,13 +1232,25 @@ func min(a, b int) int {
 	return b
 }
 
-// =============================================================================
-// MAIN
-// =============================================================================
-
 func main() {
 	logging.Info("Starting %s v%s...", ServerName, ServerVersion)
 	logging.Info("Platform: %s/%s", runtime.GOOS, runtime.GOARCH)
+
+	// Step 1: Initialize environment (auto-configure Tesseract/DLLs on Windows)
+	SetupWindowsEnv()
+
+	// Step 2: Check Tesseract health (lite check)
+	if version, err := ocr.CheckTesseract(); err != nil {
+		logging.Error("OCR engine initialization check failed: %v", err)
+		logging.Error("OCR tools (find_and_click, learn_screen, etc.) will not work correctly.")
+	} else {
+		logging.Info("OCR engine initialized: Tesseract %s (OK)", version)
+		// Warm the client pool in the background to avoid startup hang
+		go func() {
+			// Triggering ReadAllPasses on a dummy image will prime the pool
+			_, _ = ocr.ReadAllPasses(image.NewGray(image.Rect(0, 0, 1, 1)))
+		}()
+	}
 
 	token, err := validateStartupToken()
 	if err != nil {

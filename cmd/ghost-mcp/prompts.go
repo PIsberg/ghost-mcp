@@ -77,180 +77,89 @@ Ghost MCP has **built-in safeguards** to prevent infinite retry loops and runawa
 
 | What you need to do | Best tool |
 |---|---|
+| **Map the interface for the first time** | ` + "`learn_screen`" + ` |
+| **Visually see elements and their IDs** | ` + "`get_annotated_view`" + ` |
+| **Click an element by its visual ID badge** | ` + "`click_at(id=N)`" + ` |
+| **Focus and type into a field by its ID** | ` + "`click_and_type(id=N)`" + ` |
 | Click a button or link by its visible label | ` + "`find_and_click`" + ` |
-| Click multiple distinct elements atomically | ` + "`find_and_click_all`" + ` |
 | Click a field and type into it | ` + "`find_click_and_type`" + ` |
-| Read every visible text element + coordinates | ` + "`find_elements`" + ` |
+| Read all visible text + coordinates quickly | ` + "`find_elements`" + ` |
 | Wait for a UI change before proceeding | ` + "`wait_for_text`" + ` |
-| Click coordinates and wait for confirmation text | ` + "`click_until_text_appears`" + ` |
 | Run multiple sequential steps on one screen | ` + "`execute_workflow`" + ` |
-| Map a scrollable or complex interface first | ` + "`learn_screen`" + ` |
-| Automate many steps after mapping the screen | ` + "`learn_screen`" + ` → cached ` + "`find_and_click`" + ` |
 | Learn screen + click in one convenience call | ` + "`smart_click`" + ` |
-| **High-Precision Visual Map (Set-of-Marks)** | ` + "`get_annotated_view`" + ` |
-| **Click an element by its ID badge** | ` + "`click_at(id=N)`" + ` |
 | Inspect what learn_screen found / debug misses | ` + "`get_learned_view`" + ` |
-| Type at the current cursor position | ` + "`type_text`" + ` |
-| Press a keyboard shortcut | ` + "`press_key`" + ` |
 | Scroll and search for text | ` + "`scroll_until_text`" + ` |
-| Take a screenshot for visual inspection | ` + "`take_screenshot`" + ` |
-| Get screen size / DPI | ` + "`get_screen_size`" + ` |
+| Take a raw screenshot (visual-only) | ` + "`take_screenshot`" + ` |
 
-**Avoid:** using ` + "`take_screenshot`" + ` to read text — use ` + "`find_elements`" + ` instead (10× faster, machine-readable).
+**Avoid:** using ` + "`take_screenshot`" + ` to read text — use ` + "`get_annotated_view`" + ` instead to see labels AND IDs.
 
 ---
 
 ## 2. Optimal Tool Paths by Scenario
 
-### Scenario A — Click a single button
+### Scenario A — First Time on a Screen (REQUIRED FIRST STEP)
+
+Always start with a learning scan to understand the layout and gain visual IDs:
+
+` + "```" + `json
+{"tool": "learn_screen", "arguments": {"max_pages": 1}}
+{"tool": "get_annotated_view", "arguments": {}}
+` + "```" + `
+
+Now you can see the screen with numeric ID badges (e.g. ` + "`[5]`" + `, ` + "`[12]`" + `). Use these IDs for 100% click precision:
+
+` + "```" + `json
+{"tool": "click_at", "arguments": {"id": 12}}
+` + "```" + `
+
+### Scenario B — Click a button by label (Quick Task)
+
+If you only need one quick click and the UI is familiar:
 
 ` + "```" + `json
 {"tool": "find_and_click", "arguments": {"text": "Save"}}
 ` + "```" + `
 
-If you are unsure the click succeeded, chain with ` + "`wait_for_text`" + `:
+### Scenario C — Fill a complex form
 
-` + "```" + `json
-{"tool": "find_and_click", "arguments": {"text": "Save"}}
-{"tool": "wait_for_text",  "arguments": {"text": "Saved successfully", "visible": true, "timeout_ms": 5000}}
-` + "```" + `
-
-### Scenario B — Fill a simple form
+1. Map the screen once: ` + "`learn_screen`" + `
+2. Act on elements using the cached map (10× faster):
 
 ` + "```" + `json
 {"tool": "find_click_and_type", "arguments": {"text": "Username", "type_text": "alice@example.com"}}
 {"tool": "find_click_and_type", "arguments": {"text": "Password", "type_text": "hunter2"}}
 {"tool": "find_and_click",      "arguments": {"text": "Sign in"}}
-{"tool": "wait_for_text",       "arguments": {"text": "Dashboard", "visible": true, "timeout_ms": 8000}}
 ` + "```" + `
 
-Or in one call using ` + "`execute_workflow`" + ` (screen is learned once; all steps share that cached map):
+---
+
+## 3. Exploration Hierarchy — How to Discover the UI
+
+When encountering an unknown interface, follow this strict priority:
+
+1. **Primary — Learn & Annotate:** ` + "`learn_screen`" + ` followed by ` + "`get_annotated_view`" + `. This gives you a machine-readable map AND a visual confirmation with precise IDs.
+2. **Secondary — Fast Text Dump:** ` + "`find_elements`" + ` only if you need a quick, non-image list of visible text.
+3. **Tertiary — Raw Visual:** ` + "`take_screenshot`" + ` only if OCR fails to find icon-only buttons.
 
 ` + "```" + `json
-{
-  "tool": "execute_workflow",
-  "arguments": {
-    "steps": [
-      {"action": "type",  "text": "Username", "value": "alice@example.com"},
-      {"action": "type",  "text": "Password", "value": "hunter2"},
-      {"action": "click", "text": "Sign in"}
-    ]
-  }
-}
-` + "```" + `
-
-> ` + "`execute_workflow`" + ` does not support ` + "`wait_for_text`" + `. To verify post-login navigation, call
-> ` + "`wait_for_text`" + ` as a separate tool call after the workflow completes.
-
-### Scenario C — Multiple instructions given at once (batch, same screen)
-
-Batch Actions (Same Screen): ALWAYS use ` + "`execute_workflow`" + `. It caches the screen map once,
-running 3–6× faster than individual calls. Constraint: all steps MUST be on the same page.
-If spanning multiple pages, use individual calls and call ` + "`clear_learned_view`" + ` between pages.
-
-` + "```" + `json
-{
-  "tool": "execute_workflow",
-  "arguments": {
-    "steps": [
-      {"action": "click", "text": "Accept"},
-      {"action": "type",  "text": "Name", "value": "Bob"},
-      {"action": "click", "text": "Submit"}
-    ]
-  }
-}
-` + "```" + `
-
-### Scenario D — Click multiple distinct elements atomically
-
-` + "`find_and_click_all`" + ` clicks every element in the list in a single call.
-Use it when you need to click several known, distinct targets that are all
-present on screen — for example, checking three checkboxes or clicking a
-sequence of toolbar buttons. Do NOT use it to try alternative labels for one
-target; use ` + "`find_and_click`" + ` with ` + "`select_best=true`" + ` for fuzzy matching instead.
-
-` + "```" + `json
-{
-  "tool": "find_and_click_all",
-  "arguments": {"texts": "[\"Enable logging\", \"Enable metrics\", \"Enable tracing\"]"}
-}
-` + "```" + `
-
-To dismiss a dialog where you know only one label will match:
-
-` + "```" + `json
-{"tool": "find_and_click", "arguments": {"text": "OK"}}
-` + "```" + `
-
-### Scenario E — Scroll and find content
-
-` + "```" + `json
-{"tool": "scroll_until_text", "arguments": {"text": "Privacy Policy", "direction": "down", "max_scrolls": 10}}
-` + "```" + `
-
-Or use ` + "`find_and_click`" + ` with scroll parameters when you also want to click it:
-
-` + "```" + `json
-{"tool": "find_and_click", "arguments": {"text": "Privacy Policy", "scroll_direction": "down", "max_scrolls": 10}}
-` + "```" + `
-
-### Scenario F — Verify the UI changed before acting
-
-Always use ` + "`wait_for_text`" + ` rather than a fixed delay:
-
-` + "```" + `json
-{"tool": "find_and_click", "arguments": {"text": "Delete"}}
-{"tool": "wait_for_text",  "arguments": {"text": "Are you sure?", "visible": true, "timeout_ms": 3000}}
-{"tool": "find_and_click", "arguments": {"text": "Confirm"}}
-{"tool": "wait_for_text",  "arguments": {"text": "Deleted", "visible": true, "timeout_ms": 5000}}
-` + "```" + `
-
-### Scenario G — Complex app with many elements / deep scrolling
-
-Invest in learning once; all subsequent find operations use the cached map:
-
-` + "```" + `json
-{"tool": "learn_screen",        "arguments": {"max_pages": 5}}
-{"tool": "get_learned_view",    "arguments": {}}
-{"tool": "find_and_click",      "arguments": {"text": "Settings"}}
-{"tool": "find_click_and_type", "arguments": {"text": "API Key", "type_text": "abc123"}}
-{"tool": "find_and_click",      "arguments": {"text": "Save"}}
-{"tool": "clear_learned_view",  "arguments": {}}
-` + "```" + `
-
-` + "`learn_screen`" + ` scans the full interface across scroll positions. ` + "`get_learned_view`" + ` returns the
-element list — inspect it to verify OCR found the targets. ` + "`find_and_click`" + ` uses the cached
-bounding box (fast — no full-screen scan). ` + "`clear_learned_view`" + ` discards after navigation to
-avoid stale positions.
-
-### Scenario H — Unknown interface (first time seeing it)
-
-Use a strict hierarchy to explore before acting:
-
-1. **Primary — fast text dump:** ` + "`find_elements`" + ` returns all visible text with coordinates and types.
-
-` + "```" + `json
-{"tool": "find_elements", "arguments": {}}
-` + "```" + `
-
-2. **Secondary — visual inspection:** Only if ` + "`find_elements`" + ` misses visual cues (icons without text),
-   use ` + "`take_screenshot`" + ` to visually inspect.
-
-` + "```" + `json
-{"tool": "take_screenshot", "arguments": {}}
-` + "```" + `
-
-3. **Tertiary — scrollable/long page:** Only if the page scrolls and you need below-fold elements,
-   use ` + "`learn_screen`" + `.
-
-` + "```" + `json
-{"tool": "learn_screen", "arguments": {"max_pages": 5}}
+{"tool": "learn_screen",        "arguments": {"max_pages": 3}}
+{"tool": "get_annotated_view",  "arguments": {}}
 ` + "```" + `
 
 After ` + "`find_elements`" + ` returns results:
 - If you see the target element → use ` + "`find_and_click`" + ` or ` + "`find_click_and_type`" + ` directly
-- If the interface is large or scrollable → proceed to ` + "`learn_screen`" + `
-- If you need to act on many elements → switch to ` + "`execute_workflow`" + ` or ` + "`learn_screen`" + ` path
+- If the screen is COMPLEX (many buttons/fields) → use ` + "`get_annotated_view`" + ` then ` + "`click_at(id=N)`" + `
+
+**OFF-SCREEN ELEMENTS (MULTI-PAGE):**
+- If the target is likely below the fold, use ` + "`learn_screen(max_pages=3)`" + ` to scan everything.
+- To see IDs for lower sections, use ` + "`get_annotated_view(page_index=1)`" + ` (for the second page).
+- **IMPORTANT**: To click an ID on another page, you MUST scroll there first before calling ` + "`click_at(id=N)`" + `.
+
+### SCENARIO A: First Time on a New Screen
+1. ` + "`learn_screen(max_pages=2)`" + ` → map the current interface.
+2. ` + "`get_annotated_view`" + ` → see visual ID badges for the top section.
+3. (Optional) ` + "`get_annotated_view(page_index=1)`" + ` → see visual ID badges for below the fold.
+4. ` + "`click_at(id=5)`" + ` → 100% precise interaction.
 
 ### Scenario I — One-off click on a new screen (convenience)
 
