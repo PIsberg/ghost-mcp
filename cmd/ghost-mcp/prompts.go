@@ -93,26 +93,16 @@ Ghost MCP has **built-in safeguards** to prevent infinite retry loops and runawa
 
 ## 2. Optimal Tool Paths by Scenario
 
-### Scenario A — First Time on a New Screen (COMPLETE PRECISION FLOW)
+### Scenario A — First Time on a New Screen (MANDATORY PRECISION FLOW)
 
-You MUST follow this 4-step sequence for guaranteed precision:
+You MUST follow this 4-step sequence. Skipping ANY step is a failure:
 
-1. **Scan**: ` + "```" + `json {"tool": "learn_screen", "arguments": {"max_pages": 1}} ` + "```" + `
-2. **Search Map**: ` + "```" + `json {"tool": "get_learned_view", "arguments": {}} ` + "```" + ` (See which IDs map to which text labels)
-3. **Verify UI**: ` + "```" + `json {"tool": "get_annotated_view", "arguments": {}} ` + "```" + ` (See the numeric ID badges on the interface)
-4. **Interact**: Use IDs discovered in Step 2 and confirmed in Step 3 for 100% reliable automation.
+1. **Scan**: ` + "```" + `json {"tool": "learn_screen", "arguments": {"max_pages": 1}} ` + "```" + ` (Capture)
+2. **Read Map**: ` + "```" + `json {"tool": "get_learned_view", "arguments": {}} ` + "```" + ` (**REQUIRED**: Load ID mappings)
+3. **Verify UI**: ` + "```" + `json {"tool": "get_annotated_view", "arguments": {}} ` + "```" + ` (**REQUIRED**: See the ID badges)
+4. **Interact**: Use IDs from Step 2 confirmed in Step 3 for 100% reliable automation.
 
-**PRO TIP:** Once you have mapped the screen, you can use these **ID-ready tools** for all subsequent actions:
-
-| Action | Tool | Description |
-|---|---|---|
-| **Hover** | ` + "`move_mouse(id=N)`" + ` | Safest way to hover or prepare for drag. |
-| **Click** | ` + "`click_at(id=N)`" + ` | Precision clicking for buttons/menus. |
-| **Double Click** | ` + "`double_click(id=N)`" + ` | Open files/folders by their ID. |
-| **Type** | ` + "`click_and_type(id=N)`" + ` | Focuses the field and types automatically. |
-
-### The Visual ID Ecosystem
-IDs are universal and durable. Once you have seen ` + "`[N]`" + ` in an annotated view, that ID remains valid for any of the tools above until you call ` + "`clear_learned_view`" + ` or navigative to a new screen.
+**CRITICAL:** NEVER use ` + "`take_screenshot`" + ` to identify IDs or read labels. ` + "`get_annotated_view`" + ` is the ONLY tool that provides the visual ID badges required for interaction.
 
 ### Scenario B — Click a button by label (Quick Task)
 

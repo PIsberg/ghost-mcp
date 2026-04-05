@@ -1096,26 +1096,22 @@ Common uses: 'enter' to confirm/submit, 'tab' to move between fields, 'esc' to c
 	), handlePressKey)
 
 	mcpServer.AddTool(mcp.NewTool("take_screenshot",
-		mcp.WithDescription(`Capture the screen and return it as an image.
+		mcp.WithDescription(`Capture a raw, un-annotated screenshot of the screen.
 
-🚫 DO NOT take a screenshot before clicking — use find_and_click instead.
-🚫 DO NOT take a screenshot after every click to verify — use wait_for_text instead.
-🚫 DO NOT take a screenshot to find a button's coordinates — use find_and_click or find_elements instead.
-🚫 FOR TEXT FIELDS, NEVER call take_screenshot before trying find_click_and_type, find_elements, or scroll_until_text.
+⚠️ WARNING: NOT FOR UI ANALYSIS. Do NOT use this tool to read text, find buttons, 
+or identify IDs. You will fail because it provides no numeric badges.
 
-WHEN TO USE take_screenshot:
-- The task explicitly requires seeing the visual layout (e.g. "describe the screen", "what color is the button").
-- The target has no text (icon, image, progress bar) so OCR cannot locate it.
-- Debugging: find_and_click or find_elements returned unexpected results and you need to see what is on screen.
+── WHEN TO USE ────────────────────────────────────────────────────────────────
+- To verify visual appearance only (colors, alignment, graphics).
+- When learn_screen + get_annotated_view failed to find an icon-only button.
 
-SPEED TIPS:
-- Use quality=85 (JPEG) for a ~10× smaller image — much faster for the model to process.
-- Use region parameters (x, y, width, height) to capture only the relevant area.`),
+For all interaction tasks, use get_annotated_view instead. It provides the 
+essential ID badges required for click_at(id=N).`),
 		mcp.WithNumber("x", mcp.Description("X coordinate of the top-left corner of the capture region in pixels (default: 0).")),
 		mcp.WithNumber("y", mcp.Description("Y coordinate of the top-left corner of the capture region in pixels (default: 0).")),
 		mcp.WithNumber("width", mcp.Description("Width of the capture region in pixels (default: full screen width).")),
 		mcp.WithNumber("height", mcp.Description("Height of the capture region in pixels (default: full screen height).")),
-		mcp.WithNumber("quality", mcp.Description("Image quality: 0 = PNG lossless (default, largest, slowest for model to process). 1–100 = JPEG at that quality (85 recommended — ~10× smaller than PNG, significantly faster). Use PNG when you need to read small text; use JPEG=85 for general visual confirmation.")),
+		mcp.WithNumber("quality", mcp.Description("Image quality: 0 = PNG (fastest), 1-100 = JPEG (recommended 85 for speed).")),
 	), handleTakeScreenshot)
 
 	registerOCRTools(mcpServer)

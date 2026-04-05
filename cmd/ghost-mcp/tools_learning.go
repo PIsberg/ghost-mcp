@@ -47,26 +47,23 @@ After calling this, use get_annotated_view to visually confirm the IDs.`),
 	), handleGetLearnedView)
 
 	mcpServer.AddTool(mcp.NewTool("get_annotated_view",
-		mcp.WithDescription(`VISUAL ANCHOR TOOL — Capture a screenshot (live or historical) and overlay numeric IDs.
-This is the HIGHEST PRECISION interaction flow. It returns an image with ID markers
-(e.g. [5], [12]) overlaid on every discovered element.
+		mcp.WithDescription(`VISUAL ID MAP — Returns a screenshot with numeric ID badges for all elements.
+This tool is the ONLY way to see the [5], [12] badges required for precision clicking.
 
-── USAGE MODES ─────────────────────────────────────────────────────────────
-1. LIVE VIEWPORT (Default): Omitting page_index captures a fresh screenshot of
-   the current screen and overlays IDs from the last scan.
-2. PAGE HISTORY: Passing page_index (e.g. 1, 2) returns the STORED screenshot
-   captured during the last learn_screen session, annotated at that time.
-   Use this to see "off-screen" content without scrolling back.
+🎯 MANDATORY STEP: Call this after learn_screen + get_learned_view to visually 
+verify the interface and identify the correct IDs for interaction.
 
-── WORKFLOW ────────────────────────────────────────────────────────────────
-1. Call learn_screen first to map the screen (optionally with max_pages > 1).
-2. Call get_annotated_view to see the visual "ID badges".
-3. Use the ID badge numbers in the image to call click_at(id=N).`),
-		mcp.WithNumber("page_index", mcp.Description("Optional: The scroll-page index (0, 1, 2...) from the last learn_screen session. If omitted, captures the live viewport.")),
-		mcp.WithNumber("x", mcp.Description("X coordinate of region (live mode only, default: 0).")),
-		mcp.WithNumber("y", mcp.Description("Y coordinate of region (live mode only, default: 0).")),
-		mcp.WithNumber("width", mcp.Description("Width of region (live mode only, default: full screen).")),
-		mcp.WithNumber("height", mcp.Description("Height of region (live mode only, default: full screen).")),
+── WHY CALL THIS? ─────────────────────────────────────────────────────────────
+- It provides numeric badges (e.g. [5]) overlaid on every button/input.
+- It is the ONLY source for the 'id' parameter used in click_at(id=N).
+- It allows you to confirm that the OCR correctly identified the target.
+
+If the page is long, use the 'page_index' parameter to see IDs for lower sections.`),
+		mcp.WithNumber("page_index", mcp.Description("Optional: The scroll-page index (0, 1, 2...) from the last scan.")),
+		mcp.WithNumber("x", mcp.Description("X coordinate (live mode only, default: 0).")),
+		mcp.WithNumber("y", mcp.Description("Y coordinate (live mode only, default: 0).")),
+		mcp.WithNumber("width", mcp.Description("Width (live mode only, default: full screen).")),
+		mcp.WithNumber("height", mcp.Description("Height (live mode only, default: full screen).")),
 	), handleGetAnnotatedView)
 
 	mcpServer.AddTool(mcp.NewTool("clear_learned_view",
