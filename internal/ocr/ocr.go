@@ -515,8 +515,8 @@ func ReadAllPasses(img image.Image) (*Result, error) {
 			}
 			key := wordKey{
 				text: strings.ToLower(strings.TrimSpace(w.Text)),
-				x:    (w.X / 10) * 10,
-				y:    (w.Y / 10) * 10,
+				x:    (w.X / 20) * 20, // 20 px grid — large enough to merge sub-pixel
+				y:    (w.Y / 20) * 20, // variations across passes without losing nearby words
 			}
 			if seen[key] {
 				continue
