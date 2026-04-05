@@ -171,16 +171,16 @@ func handleMoveMouse(_ context.Context, request mcp.CallToolRequest) (*mcp.CallT
 
 	x, errX := getIntParam(request, "x")
 	y, errY := getIntParam(request, "y")
-	id, errID := getIntParam(request, "id")
+	vid, errVID := getIntParam(request, "visual_id")
 
-	if errID == nil {
-		foundX, foundY, found := globalLearner.GetElementCoords(id)
+	if errVID == nil {
+		foundX, foundY, found := globalLearner.GetElementCoords(vid)
 		if !found {
-			return mcp.NewToolResultError(fmt.Sprintf("ID %d not found in current view", id)), nil
+			return mcp.NewToolResultError(fmt.Sprintf("visual_id %d not found in current view", vid)), nil
 		}
 		x, y = foundX, foundY
 	} else if errX != nil || errY != nil {
-		return mcp.NewToolResultError("either 'id' or both 'x' and 'y' must be provided"), nil
+		return mcp.NewToolResultError("either 'visual_id' or both 'x' and 'y' must be provided"), nil
 	}
 
 	screenW, screenH := robotgo.GetScreenSize()
@@ -233,16 +233,16 @@ func handleClickAt(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallT
 
 	x, errX := getIntParam(request, "x")
 	y, errY := getIntParam(request, "y")
-	id, errID := getIntParam(request, "id")
+	vid, errVID := getIntParam(request, "visual_id")
 
-	if errID == nil {
-		foundX, foundY, found := globalLearner.GetElementCoords(id)
+	if errVID == nil {
+		foundX, foundY, found := globalLearner.GetElementCoords(vid)
 		if !found {
-			return mcp.NewToolResultError(fmt.Sprintf("ID %d not found in current view", id)), nil
+			return mcp.NewToolResultError(fmt.Sprintf("visual_id %d not found in current view", vid)), nil
 		}
 		x, y = foundX, foundY
 	} else if errX != nil || errY != nil {
-		return mcp.NewToolResultError("either 'id' or both 'x' and 'y' must be provided"), nil
+		return mcp.NewToolResultError("either 'visual_id' or both 'x' and 'y' must be provided"), nil
 	}
 
 	button, err := getStringParam(request, "button")
@@ -308,16 +308,16 @@ func handleDoubleClick(_ context.Context, request mcp.CallToolRequest) (*mcp.Cal
 
 	x, errX := getIntParam(request, "x")
 	y, errY := getIntParam(request, "y")
-	id, errID := getIntParam(request, "id")
+	vid, errVID := getIntParam(request, "visual_id")
 
-	if errID == nil {
-		foundX, foundY, found := globalLearner.GetElementCoords(id)
+	if errVID == nil {
+		foundX, foundY, found := globalLearner.GetElementCoords(vid)
 		if !found {
-			return mcp.NewToolResultError(fmt.Sprintf("ID %d not found in current view", id)), nil
+			return mcp.NewToolResultError(fmt.Sprintf("visual_id %d not found in current view", vid)), nil
 		}
 		x, y = foundX, foundY
 	} else if errX != nil || errY != nil {
-		return mcp.NewToolResultError("either 'id' or both 'x' and 'y' must be provided"), nil
+		return mcp.NewToolResultError("either 'visual_id' or both 'x' and 'y' must be provided"), nil
 	}
 
 	screenW, screenH := robotgo.GetScreenSize()
@@ -636,16 +636,16 @@ func handleClickAndType(ctx context.Context, request mcp.CallToolRequest) (*mcp.
 
 	x, errX := getIntParam(request, "x")
 	y, errY := getIntParam(request, "y")
-	id, errID := getIntParam(request, "id")
+	vid, errVID := getIntParam(request, "visual_id")
 
-	if errID == nil {
-		foundX, foundY, found := globalLearner.GetElementCoords(id)
+	if errVID == nil {
+		foundX, foundY, found := globalLearner.GetElementCoords(vid)
 		if !found {
-			return mcp.NewToolResultError(fmt.Sprintf("ID %d not found in current view", id)), nil
+			return mcp.NewToolResultError(fmt.Sprintf("visual_id %d not found in current view", vid)), nil
 		}
 		x, y = foundX, foundY
 	} else if errX != nil || errY != nil {
-		return mcp.NewToolResultError("either 'id' or both 'x' and 'y' must be provided"), nil
+		return mcp.NewToolResultError("either 'visual_id' or both 'x' and 'y' must be provided"), nil
 	}
 
 	text, err := getStringParam(request, "text")
@@ -951,14 +951,14 @@ Returns {width, height, scale_factor}.
 	), handleGetScreenSize)
 
 	mcpServer.AddTool(mcp.NewTool("move_mouse",
-		mcp.WithDescription(`Move the mouse cursor to absolute screen coordinates or a Visual ID.
+		mcp.WithDescription(`Move the mouse cursor to absolute screen coordinates or a visual_id badge.
 
-🎯 FOR HIGHEST PRECISION: If you see ID badges on the annotated image (e.g. [5], [12]), 
-pass that "id" parameter here instead of coordinates. This ensures you hover exactly 
-over the target element.`),
-		mcp.WithNumber("x", mcp.Description("X coordinate in pixels. Required if 'id' is not provided.")),
-		mcp.WithNumber("y", mcp.Description("Y coordinate in pixels. Required if 'id' is not provided.")),
-		mcp.WithNumber("id", mcp.Description("Optional: The Visual ID badge number (from get_annotated_view or get_learned_view). If provided, x/y are ignored.")),
+Two modes:
+- Coordinates: move_mouse(x=350, y=780)
+- Badge ID:    move_mouse(visual_id=12) — read the badge number from the get_annotated_view image.`),
+		mcp.WithNumber("x", mcp.Description("X coordinate in pixels. Required if 'visual_id' is not provided.")),
+		mcp.WithNumber("y", mcp.Description("Y coordinate in pixels. Required if 'visual_id' is not provided.")),
+		mcp.WithNumber("visual_id", mcp.Description("The badge number you see in the get_annotated_view image (e.g. [12] means visual_id=12). If provided, x/y are ignored.")),
 	), handleMoveMouse)
 
 	mcpServer.AddTool(mcp.NewTool("click",
@@ -972,28 +972,30 @@ Use this tool only when you have already moved the mouse to exact coordinates an
 	), handleClick)
 
 	mcpServer.AddTool(mcp.NewTool("click_at",
-		mcp.WithDescription(`Move the mouse to (x, y) and click in one atomic operation. Preferred over separate move_mouse + click calls.
+		mcp.WithDescription(`Move the mouse and click in one atomic operation.
 
-🎯 FOR HIGHEST PRECISION: Always consider calling get_annotated_view FIRST. If you see ID badges on the image (e.g. [5], [12]), pass that "id" parameter here instead of coordinates. This bypasses OCR drift and ensures you hit exactly the element you see.
+Two modes:
+- Coordinates: click_at(x=350, y=780) — use when get_learned_view found the element.
+- Badge ID:    click_at(visual_id=12)  — use when you read badge [12] from the get_annotated_view image.
 
-Only use (x, y) coordinates as a fallback when Visual IDs are not available.`),
-		mcp.WithNumber("x", mcp.Description("X coordinate in pixels from the left edge of the screen. Required if 'id' is not provided.")),
-		mcp.WithNumber("y", mcp.Description("Y coordinate in pixels from the top edge of the screen. Required if 'id' is not provided.")),
-		mcp.WithNumber("id", mcp.Description("Optional: The Visual ID badge number (from get_annotated_view or get_learned_view). If provided, x/y are ignored.")),
+Choose coordinates when OCR found your target. Choose visual_id when you identified
+the badge number by looking at the annotated screenshot.`),
+		mcp.WithNumber("x", mcp.Description("X coordinate in pixels. Required if 'visual_id' is not provided.")),
+		mcp.WithNumber("y", mcp.Description("Y coordinate in pixels. Required if 'visual_id' is not provided.")),
+		mcp.WithNumber("visual_id", mcp.Description("The badge number you see in the get_annotated_view image (e.g. [12] means visual_id=12). If provided, x/y are ignored.")),
 		mcp.WithString("button", mcp.Description("Mouse button: 'left' (default), 'right', or 'middle'.")),
 		mcp.WithNumber("delay_ms", mcp.Description("Milliseconds to wait after the click for the UI to update (default: 100). Set to 0 to skip. Max: 10000.")),
 	), handleClickAt)
 
 	mcpServer.AddTool(mcp.NewTool("double_click",
-		mcp.WithDescription(`Move the mouse to (x, y) or a Visual ID and perform a double-click.
-Use for opening files, activating items, or any UI that requires double-click.
+		mcp.WithDescription(`Move the mouse and double-click. Use for opening files or activating items.
 
-🎯 FOR HIGHEST PRECISION: If you see ID badges on the annotated image (e.g. [5], [12]), 
-FOR HIGHEST PRECISION: If you see ID badges on the annotated image (e.g. [5], [12]), 
-pass that "id" parameter here instead of coordinates.`),
-		mcp.WithNumber("x", mcp.Description("X coordinate in pixels. Required if 'id' is not provided.")),
-		mcp.WithNumber("y", mcp.Description("Y coordinate in pixels. Required if 'id' is not provided.")),
-		mcp.WithNumber("id", mcp.Description("Optional: The Visual ID badge number (from get_annotated_view). If provided, x/y are ignored.")),
+Two modes:
+- Coordinates: double_click(x=350, y=780)
+- Badge ID:    double_click(visual_id=12) — read the badge number from the get_annotated_view image.`),
+		mcp.WithNumber("x", mcp.Description("X coordinate in pixels. Required if 'visual_id' is not provided.")),
+		mcp.WithNumber("y", mcp.Description("Y coordinate in pixels. Required if 'visual_id' is not provided.")),
+		mcp.WithNumber("visual_id", mcp.Description("The badge number you see in the get_annotated_view image (e.g. [12] means visual_id=12). If provided, x/y are ignored.")),
 		mcp.WithNumber("delay_ms", mcp.Description("Wait after double-click (default: 100). Max: 10000.")),
 	), handleDoubleClick)
 
@@ -1056,13 +1058,14 @@ NORMAL WORKFLOW:
 	), handleTypeText)
 
 	mcpServer.AddTool(mcp.NewTool("click_and_type",
-		mcp.WithDescription(`Move the mouse to (x, y), click to focus, and then type text.
+		mcp.WithDescription(`Click to focus a field and type text.
 
-🎯 VISUAL ID SUPPORT: If you see ID badges on the annotated image (e.g. [5], [12]), 
-pass that "id" parameter here instead of coordinates for 100% precision.`),
-		mcp.WithNumber("x", mcp.Description("X coordinate in pixels. Required if 'id' is not provided.")),
-		mcp.WithNumber("y", mcp.Description("Y coordinate in pixels. Required if 'id' is not provided.")),
-		mcp.WithNumber("id", mcp.Description("Optional: The Visual ID badge number (from get_annotated_view). If provided, x/y are ignored.")),
+Two modes:
+- Coordinates: click_and_type(x=350, y=780, text="hello")
+- Badge ID:    click_and_type(visual_id=12, text="hello") — read [12] from the annotated image.`),
+		mcp.WithNumber("x", mcp.Description("X coordinate in pixels. Required if 'visual_id' is not provided.")),
+		mcp.WithNumber("y", mcp.Description("Y coordinate in pixels. Required if 'visual_id' is not provided.")),
+		mcp.WithNumber("visual_id", mcp.Description("The badge number you see in the get_annotated_view image (e.g. [12] means visual_id=12). If provided, x/y are ignored.")),
 		mcp.WithString("text", mcp.Description("The exact text string to type."), mcp.Required()),
 		mcp.WithBoolean("press_enter", mcp.Description("If true, automatically presses Enter after typing (default: false).")),
 		mcp.WithNumber("delay_ms", mcp.Description("Wait after click before typing (default: 100).")),

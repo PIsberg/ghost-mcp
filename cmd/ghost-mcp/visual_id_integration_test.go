@@ -64,25 +64,25 @@ func TestVisualIDWorkflow(t *testing.T) {
 
 	var learnedData struct {
 		Elements []struct {
-			ID   int    `json:"id"`
-			Text string `json:"text"`
+			OcrID int    `json:"ocr_id"`
+			Text  string `json:"text"`
 		} `json:"elements"`
 	}
 	if err := json.Unmarshal([]byte(learnedViewJSON), &learnedData); err != nil {
 		t.Fatalf("Failed to parse learned view JSON: %v", err)
 	}
 
-	// Helper to find ID by text
+	// Helper to find element's internal ID by text (ocr_id maps to visual_id internally)
 	findID := func(text string) int {
 		for _, e := range learnedData.Elements {
 			if strings.Contains(strings.ToLower(e.Text), strings.ToLower(text)) {
-				return e.ID
+				return e.OcrID
 			}
 		}
 		return -1
 	}
 
-	// 4. Interaction - Buttons (Click by ID)
+	// 4. Interaction - Buttons (Click by visual_id)
 	buttons := []struct {
 		label    string
 		expected string
@@ -100,12 +100,12 @@ func TestVisualIDWorkflow(t *testing.T) {
 			continue
 		}
 
-		t.Logf("Clicking %q using Visual ID %d...", btn.label, id)
+		t.Logf("Clicking %q using visual_id %d...", btn.label, id)
 		_, err := client.CallToolString(ctx, "click_at", map[string]interface{}{
-			"id": id,
+			"visual_id": id,
 		})
 		if err != nil {
-			t.Errorf("click_at(id=%d) failed: %v", id, err)
+			t.Errorf("click_at(visual_id=%d) failed: %v", id, err)
 			continue
 		}
 
@@ -113,16 +113,16 @@ func TestVisualIDWorkflow(t *testing.T) {
 		time.Sleep(200 * time.Millisecond)
 	}
 
-	// 5. Interaction - Input (Type by ID)
+	// 5. Interaction - Input (Type by visual_id)
 	inputID := findID("Type here")
 	if inputID != -1 {
-		t.Logf("Typing into input field using Visual ID %d...", inputID)
+		t.Logf("Typing into input field using visual_id %d...", inputID)
 		_, err := client.CallToolString(ctx, "click_and_type", map[string]interface{}{
-			"id":   inputID,
-			"text": "ID-based typing works!",
+			"visual_id": inputID,
+			"text":      "ID-based typing works!",
 		})
 		if err != nil {
-			t.Errorf("click_and_type(id=%d) failed: %v", inputID, err)
+			t.Errorf("click_and_type(visual_id=%d) failed: %v", inputID, err)
 		} else {
 			verifyLastAction(t, ctx, client, "Typed")
 		}
@@ -130,15 +130,15 @@ func TestVisualIDWorkflow(t *testing.T) {
 		t.Error("Could not find ID for text input")
 	}
 
-	// 6. Interaction - Hover (Hover by ID)
+	// 6. Interaction - Hover (Hover by visual_id)
 	hoverID := findID("Move mouse over this")
 	if hoverID != -1 {
-		t.Logf("Hovering over zone using Visual ID %d...", hoverID)
+		t.Logf("Hovering over zone using visual_id %d...", hoverID)
 		_, err := client.CallToolString(ctx, "move_mouse", map[string]interface{}{
-			"id": hoverID,
+			"visual_id": hoverID,
 		})
 		if err != nil {
-			t.Errorf("move_mouse(id=%d) failed: %v", hoverID, err)
+			t.Errorf("move_mouse(visual_id=%d) failed: %v", hoverID, err)
 		} else {
 			time.Sleep(500 * time.Millisecond)
 			verifyLastAction(t, ctx, client, "Mouse in hover zone")

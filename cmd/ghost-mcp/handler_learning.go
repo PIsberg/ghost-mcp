@@ -434,7 +434,7 @@ func handleGetLearnedView(_ context.Context, _ mcp.CallToolRequest) (*mcp.CallTo
 	}
 
 	type elementJSON struct {
-		ID         int     `json:"id"`
+		OcrID      int     `json:"ocr_id"`
 		Text       string  `json:"text"`
 		X          int     `json:"x"`
 		Y          int     `json:"y"`
@@ -449,7 +449,7 @@ func handleGetLearnedView(_ context.Context, _ mcp.CallToolRequest) (*mcp.CallTo
 	elems := make([]elementJSON, len(view.Elements))
 	for i, e := range view.Elements {
 		elems[i] = elementJSON{
-			ID: e.ID, Text: e.Text, X: e.X, Y: e.Y,
+			OcrID: e.ID, Text: e.Text, X: e.X, Y: e.Y,
 			Width: e.Width, Height: e.Height,
 			Confidence: e.Confidence, PageIndex: e.PageIndex,
 			Type: string(e.Type), OcrPass: string(e.OcrPass),

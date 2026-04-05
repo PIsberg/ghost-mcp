@@ -35,11 +35,11 @@ Ghost MCP allows AI assistants like Claude to control your computer's mouse, key
 | `click` | Click mouse at current cursor position. Use `move_mouse` first. | `button` (left/right/middle) | — |
 | `click_at` | Move mouse to coordinates or **Visual ID** and click in one operation. | `x`, `y`, `id`, `button` | — |
 | `double_click` | Move mouse to coordinates or **Visual ID** and double-click. | `x`, `y`, `id` | — |
-| `scroll` | Move mouse to coordinates and scroll the wheel. | `x`, `y`, `direction`, `amount` | — |
+| `scroll` | Move mouse to (x, y) and scroll. 🚫 **NO-PEEK RULE**: Do not use for peeking after `learn_screen`. | `x`, `y`, `direction`, `amount` | — |
 | `type_text` | Type text via keyboard into focused element. | `text`, `press_enter` | — |
 | `click_and_type` | Move mouse to coordinates or **Visual ID**, click, and type. | `x`, `y`, `id`, `text`, `button`, `delay_ms`, `press_enter` | — |
 | `press_key` | Press a single key or shortcut (e.g. Enter, Tab, Ctrl+C). | `key` | — |
-| `take_screenshot` | Capture screen as base64 PNG. Use for visual inspection only — prefer `find_elements` to read text. | `x`, `y`, `width`, `height`, `quality` | — |
+| `take_screenshot` | Capture raw screenshot. **Visual-only tasks**. 🚫 NOT FOR UI ANALYSIS. Use `get_annotated_view` for IDs. | `x`, `y`, `width`, `height`, `quality` | — |
 | `scroll_until_text` | Scroll in one bounded call until OCR finds the target text or `max_scrolls` is reached. | `text`, `direction`, `amount`, `max_scrolls`, `scroll_x`, `scroll_y`, `x`, `y`, `width`, `height`, `nth`, `grayscale`, `element_type` | ✓ |
 | `find_elements` | Read all visible text elements with coordinates and types. Fast alternative to screenshots for understanding screen content. | `x`, `y`, `width`, `height`, `element_type` | ✓ |
 | `find_and_click` | Find text on screen and click its center. Smart matching, auto-cached regions (10–25× faster on repeat), loop protection (max 25 calls/session). | `text`, `button`, `nth`, `x`, `y`, `width`, `height`, `element_type`, `scroll_direction`, `max_scrolls`, `next_page_keys`, `max_pages`, `select_best` | ✓ |
@@ -48,9 +48,9 @@ Ghost MCP allows AI assistants like Claude to control your computer's mouse, key
 | `wait_for_text` | Wait for text to appear or disappear. Always use this after actions that trigger a UI change instead of fixed delays. | `text`, `visible`, `timeout_ms`, `x`, `y`, `width`, `height`, `element_type` | ✓ |
 | `click_until_text_appears` | Click coordinates and retry until confirmation text appears or `max_clicks` is reached. Prevents infinite click loops. | `x`, `y`, `wait_for_text`, `button`, `timeout_ms`, `max_clicks` | ✓ |
 | `execute_workflow` | Execute multiple sequential steps sharing one learned screen map. 3–6× faster than individual calls when all steps are on the same screen. | `steps` (array), `clear_view_after` | ✓ |
-| `learn_screen` | Scan the full interface across scroll positions, run OCR, and cache the element map. Required before fast cached lookups. | `x`, `y`, `width`, `height`, `max_pages`, `scroll_amount` | ✓ |
-| `get_learned_view` | Return the **Machine-Map** (text/ID pairs) from the last `learn_screen`. | None | — |
-| `get_annotated_view` | Capture a screenshot and overlay **Visual ID badges** for 100% precision. | `page_index`, `x`, `y`, `width`, `height` | ✓ |
+| `learn_screen` | **Scan UI**: Index full interface (all scroll pages) and cache element map. **Default max_pages: 3**. | `x`, `y`, `width`, `height`, `max_pages`, `scroll_amount` | ✓ |
+| `get_learned_view` | **Map Text/IDs**: Return machine-readable inventory of all elements (on and off-screen). | None | — |
+| `get_annotated_view` | **Verify IDs**: Return screenshot with [ID] badges. **ONLY** source for interactive IDs. | `page_index`, `x`, `y`, `width`, `height` | ✓ |
 | `clear_learned_view` | Discard the current learned view. Call after navigation or significant UI changes to prevent stale positions. | None | — |
 | `set_learning_mode` | Enable or disable learning mode at runtime. When enabled, the first OCR call auto-scans the screen. | `enabled` | — |
 | `smart_click` | Convenience wrapper: runs `learn_screen` then `find_and_click` in one call. Use for a single click on an unfamiliar screen; use `learn_screen` explicitly for multi-step sessions. | `text`, `button`, `nth` | ✓ |

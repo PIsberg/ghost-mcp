@@ -30,44 +30,59 @@ The server will then automatically reach any ID for you.`),
 	), handleLearnScreen)
 
 	mcpServer.AddTool(mcp.NewTool("get_learned_view",
-		mcp.WithDescription(`MACHINE-READABLE MAP — Retrieve the full JSON element list from the last scan.
-Includes all discovered text, classified element types, coordinates, and numeric IDs.
+		mcp.WithDescription(`OCR ELEMENT INDEX — Returns a JSON list of all text elements found by OCR.
 
-🎯 ESSENTIAL STEP: Call this immediately after learn_screen to populate your context
-with the searchable text and IDs of every UI element.
+Each element has text, coordinates, type, and page_index. Use this to find
+elements by their text content and click them by coordinates.
 
-── WHY CALL THIS? ─────────────────────────────────────────────────────────────
-- 🚀 UNIVERSAL DISCOVERY: It returns IDs for ALL elements found across 
-  all scroll pages. You now know the ID of every button, even those off-screen.
-- It provides the 'id' parameter required for precision interaction.
-- After calling this, use get_annotated_view to visually confirm the IDs.
+EXAMPLE OUTPUT:
+  {"elements": [
+    {"ocr_id": 1, "text": "Home",    "type": "link",   "page_index": 0, "x": 100, "y": 50},
+    {"ocr_id": 2, "text": "Submit",  "type": "button", "page_index": 0, "x": 350, "y": 780},
+    {"ocr_id": 3, "text": "INFO",    "type": "button", "page_index": 1, "x": 200, "y": 400}
+  ]}
 
-🚫 NO-PEEK RULE: Do NOT use "Scroll -> take_screenshot" when learning mode is active.
-Always use learn_screen to index, then get_learned_view to retrieve data.`),
+WORKFLOW:
+1. Search the elements array for your target text.
+2. If found: click_at(x=200, y=400) using the coordinates from the JSON.
+3. If NOT found: call get_annotated_view and look at the image to find
+   your target. Read the visual_id number from the overlay and use click_at(visual_id=N).
+
+Note: ocr_id is just an internal sequence number. It is NOT a visual_id.
+The visual_id comes ONLY from reading the annotated screenshot image.`),
 	), handleGetLearnedView)
 
+
 	mcpServer.AddTool(mcp.NewTool("get_annotated_view",
-		mcp.WithDescription(`VISUAL ID MAP — Returns a screenshot with numeric ID badges for all elements.
-This tool is the ONLY way to see the [5], [12] badges required for precision clicking.
+		mcp.WithDescription(`ANNOTATED SCREENSHOT — Returns a screenshot of your UI with visual_id overlays.
 
-🎯 MANDATORY STEP: Call this after learn_screen + get_learned_view to visually 
-verify the interface and identify the correct IDs for interaction.
+The image shows the actual UI PLUS small solid-colored rectangles placed on
+every detected element. The white number inside each rectangle IS the visual_id.
 
-── WHY CALL THIS? ─────────────────────────────────────────────────────────────
-- It provides numeric badges (e.g. [5]) overlaid on every button/input.
-- It is the ONLY source for the 'id' parameter used in click_at(id=N).
-- ⚡ PAGE HISTORY: Use 'page_index' (0, 1, 2...) to see elements from the last 
-  learn_screen session. This allows you to inspect off-screen content WITHOUT 
-  manually scrolling there.
+WHAT THE OVERLAYS LOOK LIKE:
+- A small solid-colored rectangle (blue, green, red, etc.) with a white number.
+- Placed at the top-left corner of the element it labels.
+- Example: a rectangle showing "12" on the "INFO" button means visual_id=12.
 
-🚫 NO-PEEK RULE: Do NOT "Scroll -> get_annotated_view" repeatedly. 
-Instead, call learn_screen(max_pages: 3) once, then use page_index to inspect.`),
-		mcp.WithNumber("page_index", mcp.Description("Optional: The scroll-page index (0, 1, 2...) from the last scan.")),
+HOW TO USE THIS IMAGE:
+1. Scan the image for the UI element you need (e.g. the "INFO" button).
+2. Look at the overlay on or near that element. Read the number inside it.
+3. Call click_at(visual_id=12) using that number.
+
+IMPORTANT: visual_id ONLY comes from reading overlay numbers in THIS image.
+It is NOT the same as ocr_id from get_learned_view. Never confuse them.
+
+WHEN TO CALL:
+- After get_learned_view did NOT find your target text (OCR missed it).
+- When the UI has icon-only buttons with no text for OCR to find.
+- Use page_index to view a specific scroll page from the last learn_screen scan.`),
+		mcp.WithNumber("page_index", mcp.Description("The scroll-page index (0, 1, 2...) from the last learn_screen scan.")),
 		mcp.WithNumber("x", mcp.Description("X coordinate (live mode only, default: 0).")),
 		mcp.WithNumber("y", mcp.Description("Y coordinate (live mode only, default: 0).")),
 		mcp.WithNumber("width", mcp.Description("Width (live mode only, default: full screen).")),
 		mcp.WithNumber("height", mcp.Description("Height (live mode only, default: full screen).")),
 	), handleGetAnnotatedView)
+
 
 	mcpServer.AddTool(mcp.NewTool("clear_learned_view",
 		mcp.WithDescription(`Discard the current learned view so the next learn_screen builds a fresh one.

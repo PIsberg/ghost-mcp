@@ -1,330 +1,207 @@
+<!-- This file mirrors the MCP prompt in cmd/ghost-mcp/prompts.go. Keep in sync. -->
+
 # Ghost MCP — Tool Routing Guide
 
 Ghost MCP gives you OS-level UI automation via mouse, keyboard, screen capture,
-and OCR. This guide tells you which tool to reach for first, how to chain tools
-together, and when to invest in Learning Mode for complex sessions.
-
-> This document is also delivered automatically to AI clients as the `ghost_mcp_guide`
-> MCP prompt on connect. The server instructs the AI to read it before taking any actions.
+and OCR. Follow this guide exactly. Do not improvise tool sequences.
 
 ---
 
-## 0. CRITICAL RULES — Read Before Acting
+## 0. CRITICAL SAFETY RULES
 
-These rules override everything else. Violating them can cause data loss or runaway loops.
+These rules override everything else. Violating them causes data loss or crashes.
 
-1. **Failsafe — NEVER move the mouse to (0, 0).** Moving to top-left triggers an emergency
-   shutdown. Do not do this unless the goal is to stop the server.
-
-2. **Loop protection — 25-call limit.** `find_and_click` enforces a 25-call-per-session
-   limit. If you are approaching it, switch to `execute_workflow` for remaining steps.
-
-3. **Stale view — clear after navigation.** After any click that navigates to a new page,
-   opens a dialog, or causes significant UI change, call `clear_learned_view` immediately.
-   Stale positions cause mis-clicks on the wrong elements.
-
-4. **Verify destructive actions.** After delete, submit, or confirm, always call
-   `wait_for_text` to verify the outcome before proceeding.
+1. **NEVER move the mouse to (0, 0).** This triggers emergency shutdown.
+2. **25-call limit.** `find_and_click` stops after 25 calls per session.
+3. **Clear after navigation.** After ANY click that changes the screen (new page,
+   dialog, modal), call `clear_learned_view` immediately. Stale data = mis-clicks.
+4. **Verify destructive actions.** After delete/submit/confirm, call `wait_for_text`
+   to verify the outcome before proceeding.
 
 ---
 
-## 1. Quick-Reference Decision Table
+## 1. THE PRIMARY WORKFLOW
 
-| What you need to do | Best tool |
-|---|---|
-| **1. SCAN (Capture UI)** | `learn_screen` |
-| **2. MAP (Searchable Text/IDs)** | `get_learned_view` |
-| **3. VERIFY (Visual ID Badges)** | `get_annotated_view` |
-| **4. ACT (Precision Click)** | `click_at(id=N)` |
-| **4. ACT (Focus & Type)** | `click_and_type(id=N, text="...")` |
-| **4. ACT (Hover/Drag Start)** | `move_mouse(id=N)` |
-| **4. ACT (Open/Activate)** | `double_click(id=N)` |
+Every UI interaction follows this pattern: scan once, then use the fastest path.
 
-**CRITICAL FLOW:** You must call `get_learned_view` to load the text-to-ID mappings into your context window, followed by `get_annotated_view` to visually confirm where those IDs are located.
+```
+Step 1:  learn_screen(max_pages: 3)          // Capture the full interface
+Step 2:  get_learned_view()                  // Search JSON for target text
+         ├─ FOUND?   → click_at(x, y)       // Path A: use coordinates from JSON
+         └─ MISSING?                         // Path B: look at annotated screenshot
+              → get_annotated_view()         //   the image has numbered overlays
+              → find your target element     //   on each UI element (buttons, links, etc.)
+              → read the overlay number      //   e.g. the number "12" on the INFO button
+              → click_at(visual_id=12)       //   pass that number as visual_id
+```
 
-**Avoid:** using `take_screenshot` to read text — use the 1-2-3-4 flow above instead.
+### Step 1 — SCAN: `learn_screen`
+Indexes the full interface. **Always use max_pages: 3** as your default.
+Use max_pages: 5-10 for long forms/lists.
+
+```json
+{"tool": "learn_screen", "arguments": {"max_pages": 3}}
+```
+
+### Step 2 — SEARCH: `get_learned_view`
+Returns a JSON list of all elements found by OCR with their coordinates.
+**Search this JSON for your target text.**
+
+```json
+{"tool": "get_learned_view", "arguments": {}}
+```
+
+Example output:
+```json
+{"elements": [
+  {"ocr_id": 1, "text": "Home",   "type": "link",   "x": 100, "y": 50,  "page_index": 0},
+  {"ocr_id": 2, "text": "Submit", "type": "button", "x": 350, "y": 780, "page_index": 0}
+]}
+```
+
+(`ocr_id` is just a sequence number — it is NOT a visual badge ID.)
 
 ---
 
-## 2. Optimal Tool Paths by Scenario
+### Path A — Target FOUND in JSON (use coordinates)
 
-### Scenario A — First Time on a New Screen (MANDATORY PRECISION FLOW)
-
-You MUST follow this 4-step sequence. Skipping ANY step is a failure:
-
-1. **Scan**: `json {"tool": "learn_screen", "arguments": {"max_pages": 1}} ` (Capture)
-2. **Read Map**: `json {"tool": "get_learned_view", "arguments": {}} ` (**REQUIRED**: Load ID mappings)
-3. **Verify UI**: `json {"tool": "get_annotated_view", "arguments": {}} ` (**REQUIRED**: See the ID badges)
-4. **Interact**: Use IDs from Step 2 confirmed in Step 3 for 100% reliable automation.
-
-**CRITICAL:** NEVER use `take_screenshot` to identify IDs or read labels. `get_annotated_view` is the ONLY tool that provides the visual ID badges required for interaction.
-
-### Scenario B — Click a button by label (Quick Task)
-
-If you only need one quick click and the UI is familiar:
+If you found your target text in the JSON, click it using the x/y coordinates:
 
 ```json
-{"tool": "find_and_click", "arguments": {"text": "Save"}}
+{"tool": "click_at", "arguments": {"x": 350, "y": 780}}
 ```
 
-### Scenario C — Fill a complex form
-
-1. Map the screen once: `learn_screen`
-2. Act on elements using the cached map (10× faster):
-
-```json
-{"tool": "find_click_and_type", "arguments": {"text": "Username", "type_text": "alice@example.com"}}
-{"tool": "find_click_and_type", "arguments": {"text": "Password", "type_text": "hunter2"}}
-{"tool": "find_and_click",      "arguments": {"text": "Sign in"}}
-```
-
-### Scenario D — Multiple instructions given at once (batch, same screen)
-
-Batch Actions (Same Screen): ALWAYS use `execute_workflow`. It caches the screen map once,
-running 3–6× faster than individual calls. Constraint: all steps MUST be on the same page.
-If spanning multiple pages, use individual calls and call `clear_learned_view` between pages.
-
-```json
-{
-  "tool": "execute_workflow",
-  "arguments": {
-    "steps": [
-      {"action": "click", "text": "Accept"},
-      {"action": "type",  "text": "Name", "value": "Bob"},
-      {"action": "click", "text": "Submit"}
-    ]
-  }
-}
-```
-
-### Scenario E — Scroll and find content
-
-```json
-{"tool": "scroll_until_text", "arguments": {"text": "Privacy Policy", "direction": "down", "max_scrolls": 10}}
-```
-
-### Scenario F — Verify the UI changed before acting
-
-Always use `wait_for_text` rather than a fixed delay:
-
-```json
-{"tool": "find_and_click", "arguments": {"text": "Delete"}}
-{"tool": "wait_for_text",  "arguments": {"text": "Are you sure?", "visible": true, "timeout_ms": 3000}}
-{"tool": "find_and_click", "arguments": {"text": "Confirm"}}
-{"tool": "wait_for_text",  "arguments": {"text": "Deleted", "visible": true, "timeout_ms": 5000}}
-```
-
-### Scenario G — Complex app with many elements / deep scrolling
-
-Invest in learning once; all subsequent find operations use the cached map:
-
-```json
-{"tool": "learn_screen",        "arguments": {"max_pages": 5}}
-{"tool": "get_learned_view",    "arguments": {}}
-{"tool": "find_and_click",      "arguments": {"text": "Settings"}}
-{"tool": "find_click_and_type", "arguments": {"text": "API Key", "type_text": "abc123"}}
-{"tool": "find_and_click",      "arguments": {"text": "Save"}}
-{"tool": "clear_learned_view",  "arguments": {}}
-```
-
-### Scenario H — Exploration Hierarchy — How to Discover the UI
-
-When encountering an unknown interface, follow this strict priority:
-
-1. **Primary — Capture & Map:** `learn_screen` followed by `get_learned_view`. This gives you a machine-readable JSON inventory of every element and its ID.
-2. **Secondary — Visual Anchor:** `get_annotated_view`. This gives you a visual "Set-of-Marks" screenshot to confirm the ID badges.
-3. **Tertiary — Raw Visual:** `take_screenshot` only if OCR failed to find icon-only buttons.
-
-### Scenario I — One-off click on a new screen (convenience)
-
-`smart_click` combines `learn_screen` + `find_and_click` in a single call.
-Use it when you need one click on an unfamiliar screen and don't want to manage
-the learn/act/clear lifecycle manually:
-
-```json
-{"tool": "smart_click", "arguments": {"text": "Submit"}}
-```
-
-For more than one action on the same screen, use `learn_screen` explicitly so
-you control when `clear_learned_view` is called.
-
-### Scenario J — High-Precision Visual Anchors
-
-When standard OCR matching fails or the UI is icon-heavy, use **Visual Anchors** (also known as Set-of-Marks) for 100% click precision.
-
-### Mandatory 4-Step Workflow
-
-For maximum reliability, always follow this sequence:
-
-1.  **Scan**: Call `learn_screen` to capture the interface.
-2.  **Map**: Call `get_learned_view` to load the **Machine-Map** (the list of text labels and their numeric IDs).
-3.  **Verify**: Call `get_annotated_view`. This returns an image with numeric **ID badges** (e.g., `[5]`, `[12]`) overlaid on every element.
-4.  **Act**: Look at the ID badge in the image and use one of the **ID-ready tools**:
-    -   `click_at({"id": N})`
-    -   `click_and_type({"id": N, "text": "..."})`
-    -   `move_mouse({"id": N})`
-    -   `double_click({"id": N})`
-
-This eliminates "pixel drift" and ensures you interact with exactly what you see.
-
-### Tool: get_annotated_view
-
-Captures the current viewport and overlays visual IDs from the last scan. Use `page_index` to see IDs for elements discovered during a multi-page scroll.
-
-**Arguments** (all optional):
-- `page_index`: The scroll-page index (0, 1, 2...) from the last scan.
-- `x`, `y`: Top-left of capture region (logical pixels).
-- `width`, `height`: Dimensions of region.
-
-**Returns**: JSON metadata + JPEG image:
-```json
-{ "success": true, "element_count": 42, "format": "jpeg", "size_bytes": 125400 }
-```
+This is the fast path. No image parsing needed.
 
 ---
 
-## 3. Learning Mode — When and Why
+### Path B — Target NOT FOUND in JSON (use annotated image)
 
-**Learning mode is ON by default.** The first OCR call (`find_and_click`, `find_elements`, etc.)
-automatically runs `learn_screen` if no cached view exists yet. You do not need to call
-`set_learning_mode` or `learn_screen` manually to get this benefit.
-
-**Call `learn_screen` explicitly when:**
-- You want to control exactly when the scan happens (before a burst of actions).
-- The page is long/scrollable and you need `max_pages > 1`.
-- The view is stale after navigation (after `clear_learned_view`).
-
-**Call `clear_learned_view` when:**
-- You navigate to a new page, open a dialog, or close a modal.
-- `find_and_click` starts mis-clicking (stale cached coordinates).
-- You want to force a fresh scan of the current screen.
-
-**Lifecycle:**
+If OCR missed your target (the text is not in the JSON), you must fall back
+to the annotated screenshot. Call:
 
 ```json
-{"tool": "learn_screen",        "arguments": {}}
-{"tool": "find_and_click",      "arguments": {"text": "..."}}
-{"tool": "find_click_and_type", "arguments": {"text": "...", "type_text": "..."}}
-{"tool": "clear_learned_view",  "arguments": {}}
+{"tool": "get_annotated_view", "arguments": {"page_index": 0}}
 ```
 
-**Performance:** After `learn_screen`, each `find_and_click` narrows its OCR scan
-to a small bounding box — typically 10–25× faster than a full-screen scan.
+This returns a screenshot of the UI. **On top of the normal UI, the image has
+numbered overlays placed on every detected element.** These overlays are called
+**badges**. Here is exactly what they look like:
 
-**Debugging:** If `find_and_click` fails to find an element after `learn_screen`,
-call `get_learned_view` to see the full element list. If the target is missing,
-OCR did not detect it — try `take_screenshot` to check visibility, or re-run
-`learn_screen` with a higher `max_pages` value.
+- Each badge is a **small solid-colored rectangle** (blue, green, red, etc.)
+  with a **white number** printed inside it.
+- Each badge is placed at the **top-left corner** of the UI element it labels,
+  such as a button, input field, link, or icon.
+- Every badge has a **unique number** like 1, 5, 12, 23, etc.
+
+**How to use the image:**
+
+1. **Scan the image** for the UI element you want to interact with.
+   For example: you are looking for a button labeled "INFO".
+2. **Find that element** in the image. You will see the "INFO" button rendered
+   as part of the normal UI.
+3. **Look at the badge** placed on or near the "INFO" button. It will be a small
+   colored rectangle. Read the number inside it. Suppose it says **12**.
+4. **That number is the `visual_id`.** Call:
+
+```json
+{"tool": "click_at", "arguments": {"visual_id": 12}}
+```
+
+**Important:** The `visual_id` parameter ONLY comes from reading these badge
+numbers in the `get_annotated_view` image. It is NOT the `ocr_id` from the JSON.
+They are completely different numbers. Never use `ocr_id` as `visual_id`.
 
 ---
 
-## 3a. Element Type Filtering — Precision Targeting
+### Action tools that accept coordinates OR visual_id
 
-All OCR search tools support an `element_type` parameter to filter results to specific UI component types.
+| Action | By coordinates (Path A) | By badge (Path B) |
+|--------|------------------------|-------------------|
+| Click | `click_at(x, y)` | `click_at(visual_id=N)` |
+| Type | `click_and_type(x, y, text="...")` | `click_and_type(visual_id=N, text="...")` |
+| Hover | `move_mouse(x, y)` | `move_mouse(visual_id=N)` |
+| Open | `double_click(x, y)` | `double_click(visual_id=N)` |
 
-**Valid types:** `button`, `input`, `checkbox`, `radio`, `dropdown`, `toggle`, `slider`, `label`, `heading`, `link`, `value`, `text`
-
-### When to Use Element Type Filtering
-
-**Use `element_type` when:**
-- Multiple elements share the same text but have different types
-  - Example: "Submit" appears as both a button AND a heading — use `element_type: "button"` to target the button
-- You want to discover all elements of a specific type
-  - Example: Find all input fields on a form before filling them
-- You need to avoid false matches on non-actionable elements
-  - Example: Don't click a "Save" label when looking for the "Save" button
-
-### Element Type Decision Guide
-
-| Target | element_type | Example |
-|--------|--------------|---------|
-| Clickable buttons | `button` | Submit, Save, Cancel, OK |
-| Text input fields | `input` | Username, Email, Search |
-| Checkboxes | `checkbox` | "I agree", "Remember me" |
-| Radio buttons | `radio` | Option selections |
-| Dropdown menus | `dropdown` | Select menus |
-| Field labels | `label` | "Email:", "Name:" |
-| Page/section titles | `heading` | "Dashboard", "Settings" |
-| Navigation links | `link` | "Home", "Profile" |
-| Numeric displays | `value` | Prices, scores, counts |
-
-### Examples
-
-```json
-// Click only the button, ignoring labels with same text
-{"tool": "find_and_click", "arguments": {"text": "Submit", "element_type": "button"}}
-
-// Get all input fields to understand form structure
-{"tool": "find_elements", "arguments": {"element_type": "input"}}
-
-// Wait for a success label to appear
-{"tool": "wait_for_text", "arguments": {"text": "Saved!", "element_type": "label"}}
-
-// Find and type into an input field
-{"tool": "find_click_and_type", "arguments": {"text": "Email:", "type_text": "user@example.com", "element_type": "input"}}
-```
-
-### Important Notes
-
-- Element types are **inferred** from text patterns, dimensions, and context — not explicitly tagged in the UI
-- If you specify an `element_type` and no matching element is found, the tool returns "not found"
-- You can omit `element_type` to search all types (default behavior)
-- Works with all search features: scrolling, multi-page, and region caching
-
----
-
-## 4. Troubleshooting & Fallbacks
-
-UI agents fail frequently due to dynamic loading, OCR misses, or timing issues.
-When a tool returns an error or unexpected result, follow these recovery paths:
-
-### `wait_for_text` times out
-
-Do NOT blindly retry. First assess the actual UI state:
-
-```json
-{"tool": "find_elements", "arguments": {}}
-```
-
-Or take a screenshot to visually inspect:
-
-```json
-{"tool": "take_screenshot", "arguments": {}}
-```
-
-Only retry after confirming what is actually on screen.
-
-### `find_and_click` fails (element not found)
-
-The error response includes `candidates` (what OCR actually parsed) and a `suggestion` field:
-
-- `"scroll_may_help"` → add `scroll_direction: "down"` to the same call
-- `"try_different_search_term"` → call `find_elements` to see the real OCR text, then use the
-  exact string it returned
-- `"no_matches_found"` → the element may not be on screen; check with `take_screenshot`
-
-Do NOT retry the exact same text. Try a shorter or different term, or use `find_elements` first:
-
-```json
-{"tool": "find_elements", "arguments": {}}
-```
-
-If still failing after two attempts with different terms, re-run `learn_screen` to rebuild
-the cached view.
-
-### Action succeeds but the UI does not change
-
-The button may be disabled or the click may have missed. Steps:
-
-1. Call `wait_for_text` with a short timeout to see if a delayed response arrives.
-2. Call `find_elements` to confirm the button exists and check its label exactly.
-3. If the button appears disabled, look for an enabling condition (required field, checkbox).
-
-### `find_and_click` returns stale coordinates (mis-click)
-
-The learned view is out of date. Call `clear_learned_view` then `learn_screen` before retrying:
+### After navigation — RESET
+When a click changes the screen (new page, dialog opens, modal closes):
 
 ```json
 {"tool": "clear_learned_view", "arguments": {}}
-{"tool": "learn_screen",       "arguments": {}}
 ```
+
+Then go back to Step 1.
+
+---
+
+## 2. SHORTCUTS (use only when appropriate)
+
+These are acceptable ONLY for simple, single-action tasks on screens you
+do not need to explore. If the shortcut fails, fall back to the Primary Workflow.
+
+| Shortcut | When to use |
+|----------|-------------|
+| `find_and_click(text="Save")` | Single known-label click. |
+| `smart_click(text="Submit")` | One-off click on unfamiliar screen (auto-scans). |
+| `find_click_and_type(text="Username", type_text="alice")` | Quick text entry by label. |
+| `execute_workflow(steps=[...])` | Batch multiple steps on one screen (3-6x faster). |
+
+**If a shortcut fails or the screen is complex, switch to the Primary Workflow immediately.**
+
+---
+
+## 3. LONG PAGES AND OFF-SCREEN ELEMENTS
+
+If the target might be below the fold, increase `max_pages`:
+
+```json
+{"tool": "learn_screen", "arguments": {"max_pages": 5}}
+{"tool": "get_learned_view", "arguments": {}}
+```
+
+- `get_learned_view` returns elements from ALL pages at once.
+- If the element is not found, call `get_annotated_view(page_index: N)` to
+  visually inspect a specific page and read the badge number.
+- `click_at(visual_id=N)` works for any indexed element. The server scrolls for you.
+
+**NEVER** manually scroll + screenshot to find things. Index once, then act.
+
+---
+
+## 4. TROUBLESHOOTING
+
+### Element not found after scan
+1. Call `get_learned_view` to see what OCR actually detected.
+2. If the target is missing, re-run `learn_screen` with higher `max_pages`.
+3. If still missing, use `get_annotated_view` to visually find it and read its badge.
+
+### Click did not work (UI unchanged)
+1. Call `wait_for_text` with a short timeout — the UI may be loading.
+2. Call `get_learned_view` to confirm the button's exact label.
+3. If the button is disabled, look for an enabling condition (required field, checkbox).
+
+### Stale coordinates (clicking wrong element)
+The learned view is out of date. Reset and re-scan:
+
+```json
+{"tool": "clear_learned_view", "arguments": {}}
+{"tool": "learn_screen", "arguments": {"max_pages": 3}}
+{"tool": "get_learned_view", "arguments": {}}
+```
+
+### Consecutive failures (3 strikes)
+If `find_and_click` fails 3 times on the same text, STOP. Switch to the
+Primary Workflow.
+
+---
+
+## 5. COMMON MISTAKES
+
+| Mistake | Why it fails | Fix |
+|---------|-------------|-----|
+| Calling `take_screenshot` to find elements | No badges, no coordinates | Use `get_learned_view` or `get_annotated_view` |
+| Paging through `get_annotated_view` blindly | Wastes calls. Use `get_learned_view` to narrow the page first | Search JSON first, then view ONE page |
+| Using `ocr_id` as `visual_id` | They are different. `ocr_id` is a JSON counter. `visual_id` is a badge from the image. | Read badge numbers from the annotated screenshot |
+| Scrolling + peeking repeatedly | Wastes tool calls, slow | Use `learn_screen(max_pages: 5)` once |
+| Skipping `get_learned_view` | You have no text map — you're guessing | Always call it after `learn_screen` |
+| Not clearing after navigation | Stale data points to wrong elements | Call `clear_learned_view` immediately |
