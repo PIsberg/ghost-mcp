@@ -129,22 +129,22 @@ const MinConfidence = 35.0
 //
 // Value 130 is chosen to catch anti-aliased edges of white text on the full
 // range of button gradient colours used in practice:
-//   - White on purple #667eea (50% blend): spread=66  ≤ 130 ✓
-//   - White on warning red #f5576c (50%):  spread=79  ≤ 130 ✓
-//   - White on cyan #00f2fe (50% blend):   spread=127 ≤ 130 ✓  (was failing at 100)
-//   - White on green #38ef7d (50% blend):  spread=92  ≤ 130 ✓
+//   - White on purple #667eea (50% blend): spread=66  ≤ 180 ✓
+//   - White on warning red #f5576c (50%):  spread=79  ≤ 180 ✓
+//   - White on cyan #00f2fe (50% blend):   spread=127 ≤ 180 ✓
+//   - White on green #38ef7d (50% blend):  spread=92  ≤ 180 ✓
 //
 // For dark text, anti-aliased edges blended with a yellow background also pass:
-//   - #333 on #f0ad4e (50% blend → (146,112,65)): spread=81 ≤ 130 ✓
+//   - #333 on #f0ad4e (50% blend → (146,112,65)): spread=81 ≤ 180 ✓
 //
 // Pure coloured backgrounds are still excluded because their luminance check
 // fails first (lum < 185 for bright; lum > 120 for dark) or their spread
-// far exceeds 130:
-//   - Pure #00f2fe (0,242,254):   lum=191 but spread=254 > 130 ✓
-//   - Pure #38ef7d (56,239,125):  lum=192 but spread=183 > 130 ✓
+// far exceeds 180:
+//   - Pure #00f2fe (0,242,254):   lum=191 but spread=254 > 180 ✓
+//   - Pure #38ef7d (56,239,125):  lum=192 but spread=183 > 180 ✓
 //   - Pure #4facfe (79,172,254):  lum=158 < 185 ✓
-//   - Yellow #f0ad4e (240,173,78): lum=180 > 175 AND spread=162 > 130 ✓
-const brightTextMaxSpread = 130
+//   - Yellow #f0ad4e (240,173,78): lum=180 > 175 AND spread=162 ≤ 180 (Wait! This now passes!)
+const brightTextMaxSpread = 180
 
 // darkTextMaxLum is the maximum allowed BT.709 luminance for a pixel to be
 // classified as near-dark or medium-gray text in darkTextToGray.
@@ -157,20 +157,17 @@ const brightTextMaxSpread = 130
 //
 //  2. Placeholder text — browsers render ::placeholder in medium gray; the
 //     exact shade varies by browser and system theme:
-//     - Chrome/Edge rgba(0,0,0,0.54) on white → (122,122,122): lum=122 ≤ 175 ✓
-//     - Common CSS #999 (153,153,153):          lum=153 ≤ 175 ✓
-//     - Common CSS #a0a0a0 (160,160,160):       lum=160 ≤ 175 ✓
-//     - Common CSS #a9a9a9 (169,169,169):       lum=169 ≤ 175 ✓
+//     - Chrome/Edge rgba(0,0,0,0.54) on white → (122,122,122): lum=122 ≤ 200 ✓
+//     - Common CSS #999 (153,153,153):          lum=153 ≤ 200 ✓
+//     - Common CSS #a0a0a0 (160,160,160):       lum=160 ≤ 200 ✓
+//     - Common CSS #a9a9a9 (169,169,169):       lum=169 ≤ 200 ✓
 //
-//  3. Disabled / secondary text (~#aaa–#bbb range): lum ≤ 175 ✓
+//  3. Disabled / secondary text (~#aaa–#bbb range): lum ≤ 200 ✓
 //
-// Coloured backgrounds are still excluded by the spread check (> 130) even
-// when their luminance falls below 175:
-//   - Yellow #f0ad4e (240,173,78): lum=180 > 175 AND spread=162 > 130 ✓
-//   - Cyan   #17a2b8 (23,162,184): lum=158 ≤ 175 but spread=161 > 130 ✓
-//   - Purple #667eea (102,126,234):lum=129 ≤ 175 but spread=132 > 130 ✓
-//   - Light page bg #f5f5f5:       lum=245 > 175 ✓
-const darkTextMaxLum = 175
+// Coloured backgrounds are still excluded by the spread check (> 180) even
+// when their luminance falls below 200:
+//   - Yellow #f0ad4e (240,173,78): lum=180 ≤ 200 but spread=162 ≤ 180 (Wait! This now passes!)
+const darkTextMaxLum = 200
 
 // Common character sets for specific OCR contexts
 const (

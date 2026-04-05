@@ -7,6 +7,7 @@ import (
 	"image"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 	"sync"
@@ -2627,12 +2628,23 @@ func handleFindClickAndType(ctx context.Context, request mcp.CallToolRequest) (*
 	}
 	verified := verifyTextOnScreen(typeText, 3, 400*time.Millisecond)
 	if !verified {
-		// Retry: click again and re-type (common fix for missed focus)
-		logging.Info("find_click_and_type: verification failed, retrying click + type")
+		// Retry: click again, CLEAR field, and re-type (common fix for missed focus)
+		logging.Info("find_click_and_type: verification failed, clearing field and retrying click + type")
 		robotgo.Move(cx, cy)
 		time.Sleep(100 * time.Millisecond)
 		robotgo.Click("left", false)
 		time.Sleep(200 * time.Millisecond)
+
+		// Hard clear: select all and backspace
+		if runtime.GOOS == "darwin" {
+			robotgo.KeyTap("a", "command")
+		} else {
+			robotgo.KeyTap("a", "control")
+		}
+		time.Sleep(50 * time.Millisecond)
+		robotgo.KeyTap("backspace")
+		time.Sleep(50 * time.Millisecond)
+
 		robotgo.TypeStr(typeText)
 		if pressEnter {
 			robotgo.KeyTap("enter")
@@ -2676,8 +2688,20 @@ func verifyTextOnScreen(typeText string, maxAttempts int, delay time.Duration) b
 			continue
 		}
 		for _, w := range ocrResult.Words {
-			if strings.Contains(strings.ToLower(strings.TrimSpace(w.Text)), needle) {
-				logging.Info("verifyTextOnScreen: found %q (attempt %d/%d)", typeText, attempt+1, maxAttempts)
+			text := strings.ToLower(strings.TrimSpace(w.Text))
+			if text == "" {
+				continue
+			}
+			// Substring check (most common)
+			if strings.Contains(text, needle) {
+				logging.Info("verifyTextOnScreen: found %q (exact substring) on attempt %d/%d", typeText, attempt+1, maxAttempts)
+				return true
+			}
+			// Fuzzy check (handles "SUCCESS" -> "SUCCES!")
+			dist := levenshteinDistance(needle, text)
+			threshold := float64(len(needle)) * 0.2 // allow 20% distance
+			if float64(dist) <= threshold {
+				logging.Info("verifyTextOnScreen: found %q (fuzzy match %q, distance %d) on attempt %d/%d", typeText, w.Text, dist, attempt+1, maxAttempts)
 				return true
 			}
 		}
@@ -2692,14 +2716,47 @@ func saveScreenshotIfKept(img image.Image, prefix string) {
 	if os.Getenv("GHOST_MCP_KEEP_SCREENSHOTS") == "1" {
 		screenshotDir := os.Getenv("GHOST_MCP_SCREENSHOT_DIR")
 		if screenshotDir == "" {
-			screenshotDir = os.TempDir()
+			screenshotDir = "screenshots" // Default to project local folder
 		}
-		filename := fmt.Sprintf("%s-%d.png", prefix, time.Now().UnixNano())
+		if err := os.MkdirAll(screenshotDir, 0755); err != nil {
+			logging.Error("Failed to create screenshot directory %s: %v", screenshotDir, err)
+			return
+		}
+		filename := fmt.Sprintf("%s-%s.png", prefix, time.Now().Format("20060102-150405-000000000"))
 		fpath := filepath.Join(screenshotDir, filename)
+		if absPath, err := filepath.Abs(fpath); err == nil {
+			fpath = absPath
+		}
 		if saveErr := robotgo.SavePng(img, fpath); saveErr != nil {
 			logging.Error("Failed to keep screenshot: %v", saveErr)
 		} else {
-			logging.Info("OCR screenshot kept at: %s", fpath)
+			logging.Info("[DEBUG] screenshot saved: %s", fpath)
+			fmt.Fprintf(os.Stderr, "[DEBUG] screenshot saved: %s\n", fpath)
+		}
+	}
+}
+
+// saveScreenshotIfKeptFromBytes saves pre-compressed JPEG bytes to the screenshot directory.
+func saveScreenshotIfKeptFromBytes(jpegBytes []byte, prefix string) {
+	if os.Getenv("GHOST_MCP_KEEP_SCREENSHOTS") == "1" {
+		screenshotDir := os.Getenv("GHOST_MCP_SCREENSHOT_DIR")
+		if screenshotDir == "" {
+			screenshotDir = "screenshots" // Default to project local folder
+		}
+		if err := os.MkdirAll(screenshotDir, 0755); err != nil {
+			logging.Error("Failed to create screenshot directory %s: %v", screenshotDir, err)
+			return
+		}
+		filename := fmt.Sprintf("%s-%s.jpg", prefix, time.Now().Format("20060102-150405-000000000"))
+		fpath := filepath.Join(screenshotDir, filename)
+		if absPath, err := filepath.Abs(fpath); err == nil {
+			fpath = absPath
+		}
+		if err := os.WriteFile(fpath, jpegBytes, 0644); err != nil {
+			logging.Error("Failed to keep screenshot bytes: %v", err)
+		} else {
+			logging.Info("[DEBUG] screenshot saved: %s", fpath)
+			fmt.Fprintf(os.Stderr, "[DEBUG] screenshot saved: %s\n", fpath)
 		}
 	}
 }

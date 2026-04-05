@@ -1,0 +1,55 @@
+=== RUN   TestVisualIDWorkflow
+    integration_test.go:106: Ô£ô Attempted to focus fixture window via PowerShell
+[INFO] Starting ghost-mcp v1.0.0...
+[INFO] Platform: windows/amd64
+[INFO] Token authentication enabled (GHOST_MCP_TOKEN is set)
+[INFO] --- Configuration ---
+[INFO]   GHOST_MCP_TOKEN                = 96967b4b****
+[INFO]   GHOST_MCP_TRANSPORT            = stdio
+[INFO]   GHOST_MCP_DEBUG                = 1
+[INFO]   GHOST_MCP_VISUAL               = 1
+[INFO]   GHOST_MCP_KEEP_SCREENSHOTS     = 1
+[INFO]   GHOST_MCP_SCREENSHOT_DIR       = C:\Users\isber\AppData\Local\Temp
+[INFO]   GHOST_MCP_AUDIT_LOG            = C:\Users\isber\AppData\Roaming\ghost-mcp\audit
+[INFO]   TESSDATA_PREFIX                = C:\Users\isber\vcpkg\installed\x64-mingw-dynamic\share\tessdata
+[INFO]   GHOST_MCP_HTTP_ADDR            = localhost:8080
+[INFO]   GHOST_MCP_HTTP_BASE_URL        = 
+[INFO]   GHOST_MCP_LEARNING             = 1 (learning mode on by default; set 0 to disable)
+[INFO] ---------------------
+[INFO] Learning mode enabled (default; set GHOST_MCP_LEARNING=0 to disable)
+[INFO] Audit logging enabled: C:\Users\isber\AppData\Roaming\ghost-mcp\audit
+[DEBUG] Audit[1] event=SERVER_START tool="" client=""
+[INFO] Failsafe position: (0, 0) - Move mouse here to trigger emergency shutdown
+[INFO] Transport: stdio
+[INFO] Creating MCP server: ghost-mcp v1.0.0
+[INFO] Registering tools...
+[INFO] Registering learning mode tools...
+[INFO] Learning mode tools registered
+[INFO] Smart click tool registered
+[INFO] Workflow tool registered
+[INFO] All tools registered successfully
+[INFO] Starting stdio transport...
+[INFO] IMPORTANT: All application logs are written to stderr
+[INFO] stdout is reserved for MCP JSON-RPC protocol
+    visual_id_integration_test.go:45: STEP 1: Scanning screen with learn_screen...
+[DEBUG] Audit[2] event=TOOL_CALL tool="learn_screen" client=""
+[DEBUG] Handling learn_screen request
+[INFO] learn_screen: page 0 ÔÇö 254 elements, screenshot 153522 bytes
+[INFO] learn_screen: complete ÔÇö 247 elements across 1 pages (1 screenshots)
+[INFO] learn_screen: stored view with 247 elements in 12.9242525s
+[DEBUG] Audit[3] event=TOOL_SUCCESS tool="learn_screen" client=""
+    visual_id_integration_test.go:54: STEP 2: Loading machine-readable map (JSON)...
+[DEBUG] Audit[4] event=TOOL_CALL tool="get_learned_view" client=""
+[DEBUG] Handling get_learned_view request
+[DEBUG] Audit[5] event=TOOL_SUCCESS tool="get_learned_view" client=""
+    visual_id_integration_test.go:101: Could not find ID for button "Primary"
+    visual_id_integration_test.go:101: Could not find ID for button "Success"
+    visual_id_integration_test.go:101: Could not find ID for button "Warning"
+    visual_id_integration_test.go:101: Could not find ID for button "Info"
+    visual_id_integration_test.go:132: Could not find ID for text input
+    visual_id_integration_test.go:149: Could not find ID for hover zone
+    visual_id_integration_test.go:152: Ô£ô Comprehensive Visual ID Workflow validation complete!
+--- FAIL: TestVisualIDWorkflow (20.44s)
+FAIL
+FAIL	github.com/ghost-mcp/cmd/ghost-mcp	22.103s
+FAIL

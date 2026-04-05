@@ -48,112 +48,39 @@ These rules override everything else. Violating them causes data loss or crashes
 3. **Clear after navigation.** After ANY click that changes the screen (new page,
    dialog, modal), call ` + "`clear_learned_view`" + ` immediately. Stale data = mis-clicks.
 4. **Verify destructive actions.** After delete/submit/confirm, call ` + "`wait_for_text`" + `
-   to verify the outcome before proceeding.
+   with ` + "`visible=false`" + ` to confirm the deletion.
 
 ---
 
-## 1. THE PRIMARY WORKFLOW
+## 1. PRIMARY WORKFLOW (Recommended)
 
-Every UI interaction follows this pattern: scan once, then use the fastest path.
+Use learning mode for major tasks. It is 10-25x faster than individual OCR calls.
 
-` + "```" + `
-Step 1:  learn_screen(max_pages: 3)          // Capture the full interface
-Step 2:  get_learned_view()                  // Search JSON for target text
-         ├─ FOUND?   → click_at(x, y)       // Path A: use coordinates from JSON
-         └─ MISSING?                         // Path B: look at annotated screenshot
-              → get_annotated_view()         //   the image has numbered overlays
-              → find your target element     //   on each UI element (buttons, links, etc.)
-              → read the overlay number      //   e.g. the number "12" on the INFO button
-              → click_at(visual_id=12)       //   pass that number as visual_id
-` + "```" + `
-
-### Step 1 — SCAN: ` + "`learn_screen`" + `
-Indexes the full interface. **Always use max_pages: 3** as your default.
-Use max_pages: 5-10 for long forms/lists.
-
+### Step 1: Scan the screen
 ` + "```" + `json
-{"tool": "learn_screen", "arguments": {"max_pages": 3}}
+{"tool": "set_learning_mode", "arguments": {"enabled": true}}
+{"tool": "learn_screen", "arguments": {"max_pages": 5}}
 ` + "```" + `
 
-### Step 2 — SEARCH: ` + "`get_learned_view`" + `
-Returns a JSON list of all elements found by OCR with their coordinates.
-**Search this JSON for your target text.**
-
+### Step 2: Extract data
 ` + "```" + `json
 {"tool": "get_learned_view", "arguments": {}}
 ` + "```" + `
+*Analyzes all pages (scrolled content). Look for ` + "`ocr_id`" + ` to use Path A.*
 
-Example output:
-` + "```" + `json
-{"elements": [
-  {"ocr_id": 1, "text": "Home",   "type": "link",   "x": 100, "y": 50,  "page_index": 0},
-  {"ocr_id": 2, "text": "Submit", "type": "button", "x": 350, "y": 780, "page_index": 0}
-]}
-` + "```" + `
-
-(` + "`ocr_id`" + ` is just a sequence number — it is NOT a ` + "`visual_id`" + `.)
-
----
-
-### Path A — Target FOUND in JSON (use coordinates)
-
-If you found your target text in the JSON, click it using the x/y coordinates:
-
-` + "```" + `json
-{"tool": "click_at", "arguments": {"x": 350, "y": 780}}
-` + "```" + `
-
-This is the fast path. No image parsing needed.
-
----
-
-### Path B — Target NOT FOUND in JSON (use annotated image)
-
-If OCR missed your target (the text is not in the JSON), you must fall back
-to the annotated screenshot. Call:
-
+### Step 3: View a specific page (if Path A fails)
 ` + "```" + `json
 {"tool": "get_annotated_view", "arguments": {"page_index": 0}}
 ` + "```" + `
+*Shows numbered overlays (Path B).*
 
-This returns a screenshot of the UI. **On top of the normal UI, the image has
-numbered overlays placed on every detected element.** Each overlay shows the
-element's ` + "`visual_id`" + `. Here is exactly what they look like:
-
-- Each overlay is a **small solid-colored rectangle** (blue, green, red, etc.)
-  with a **white number** printed inside it — that number IS the ` + "`visual_id`" + `.
-- Each overlay is placed at the **top-left corner** of the UI element it labels,
-  such as a button, input field, link, or icon.
-- Every element has a **unique ` + "`visual_id`" + `** like 1, 5, 12, 23, etc.
-
-**How to use the image:**
-
-1. **Scan the image** for the UI element you want to interact with.
-   For example: you are looking for a button labeled "INFO".
-2. **Find that element** in the image. You will see the "INFO" button rendered
-   as part of the normal UI.
-3. **Look at the overlay** placed on or near the "INFO" button. It will be a
-   small colored rectangle with a white number. Suppose it says **12**.
-4. **That number is the ` + "`visual_id`" + `.** Call:
-
-` + "```" + `json
-{"tool": "click_at", "arguments": {"visual_id": 12}}
-` + "```" + `
-
-**Important:** The ` + "`visual_id`" + ` ONLY comes from reading the numbered overlays
-in the ` + "`get_annotated_view`" + ` image. It is NOT the ` + "`ocr_id`" + ` from the JSON.
-They are completely different numbers. Never use ` + "`ocr_id`" + ` as ` + "`visual_id`" + `.
-
----
-
-### Action tools that accept coordinates OR visual_id
-
+### Step 4: Interact
 | Action | By coordinates (Path A) | By visual_id (Path B) |
 |--------|------------------------|-------------------|
-| Click | ` + "`click_at(x, y)`" + ` | ` + "`click_at(visual_id=N)`" + ` |
-| Type | ` + "`click_and_type(x, y, text=\"...\")`" + ` | ` + "`click_and_type(visual_id=N, text=\"...\")`" + ` |
-| Hover | ` + "`move_mouse(x, y)`" + ` | ` + "`move_mouse(visual_id=N)`" + ` |
-| Open | ` + "`double_click(x, y)`" + ` | ` + "`double_click(visual_id=N)`" + ` |
+| Click  | ` + "`click_at(x, y)`" + ` | ` + "`click_at(visual_id=N)`" + ` |
+| Type   | ` + "`click_and_type(x, y, text=\"...\")`" + ` | ` + "`click_and_type(visual_id=N, text=\"...\")`" + ` |
+| Hover  | ` + "`move_mouse(x, y)`" + ` | ` + "`move_mouse(visual_id=N)`" + ` |
+| Open   | ` + "`double_click(x, y)`" + ` | ` + "`double_click(visual_id=N)`" + ` |
 
 ### After navigation — RESET
 When a click changes the screen (new page, dialog opens, modal closes):
@@ -190,6 +117,17 @@ If the target might be below the fold, increase ` + "`max_pages`" + `:
 {"tool": "learn_screen", "arguments": {"max_pages": 5}}
 {"tool": "get_learned_view", "arguments": {}}
 ` + "```" + `
+
+── FIELD RE-TYPES & ERRORS ──────────────────────────────────────────────────
+If a ` + "`type_text`" + ` or ` + "`click_and_type`" + ` call returns a verification error:
+- ALWAYS use ` + "`find_and_clear`" + ` (or ` + "`Ctrl+A`" + ` then ` + "`Backspace`" + `) before retrying.
+- Failure to clear creates duplicated/corrupted field values (e.g. "oldnew").
+
+── CLICK-AND-TYPE ACCURACY ──────────────────────────────────────────────────
+If text doesn't appear after typing:
+- Check if the field was actually focused (look for a flashing cursor in get_annotated_view).
+- If focus was missed, the tool will automatically try one clear-and-retry.
+- If it still fails, the target might be a "phantom" element (visible but not focusable).
 
 - ` + "`get_learned_view`" + ` returns elements from ALL pages at once.
 - If the element is not found, call ` + "`get_annotated_view(page_index: N)`" + ` to

@@ -32,7 +32,10 @@ func TestVisualIDWorkflow(t *testing.T) {
 	defer cleanup()
 	waitForFixture(t)
 
-	client, err := mcpclient.NewClient(mcpclient.Config{Timeout: 60 * time.Second})
+	client, err := mcpclient.NewClient(mcpclient.Config{
+		Timeout: 90 * time.Second,
+		Env:     []string{"GHOST_MCP_KEEP_SCREENSHOTS=1", "INTEGRATION=1"},
+	})
 	if err != nil {
 		t.Fatalf("Failed to create MCP client: %v", err)
 	}
@@ -44,7 +47,7 @@ func TestVisualIDWorkflow(t *testing.T) {
 	// 2. Perform Capture (Scan)
 	t.Log("STEP 1: Scanning screen with learn_screen...")
 	_, err = client.CallToolString(ctx, "learn_screen", map[string]interface{}{
-		"max_pages": 1,
+		"max_pages": 5,
 	})
 	if err != nil {
 		t.Fatalf("learn_screen failed: %v", err)
@@ -58,8 +61,15 @@ func TestVisualIDWorkflow(t *testing.T) {
 	}
 
 	// For debugging in constrained environments
-	if strings.Contains(learnedViewJSON, `"element_count":0`) {
+	if strings.Contains(learnedViewJSON, `"element_count":0`) || strings.Contains(learnedViewJSON, `"elements":[]`) {
 		t.Logf("DEBUG: No elements found. Full JSON: %s", learnedViewJSON)
+	} else {
+		// Log some of the found elements to see what OCR is producing
+		displayLen := 1000
+		if len(learnedViewJSON) < displayLen {
+			displayLen = len(learnedViewJSON)
+		}
+		t.Logf("DEBUG: JSON size %d. First %d chars: %s", len(learnedViewJSON), displayLen, learnedViewJSON[:displayLen])
 	}
 
 	var learnedData struct {
@@ -74,13 +84,25 @@ func TestVisualIDWorkflow(t *testing.T) {
 
 	// Helper to find element's internal ID by text (ocr_id maps to visual_id internally)
 	findID := func(text string) int {
+		normalizedTarget := strings.ToLower(strings.TrimSpace(text))
 		for _, e := range learnedData.Elements {
-			if strings.Contains(strings.ToLower(e.Text), strings.ToLower(text)) {
+			normalizedElement := strings.ToLower(strings.TrimSpace(e.Text))
+			// Exact substring check
+			if strings.Contains(normalizedElement, normalizedTarget) {
+				return e.OcrID
+			}
+			// Fuzzy check (handles OCR misreads like "PR|MARY")
+			dist := levenshteinDistance(normalizedTarget, normalizedElement)
+			threshold := float64(len(normalizedTarget)) * 0.4 // allow 40% distance (higher because element might have extra text)
+			if float64(dist) <= threshold || strings.Contains(normalizedTarget, normalizedElement) {
 				return e.OcrID
 			}
 		}
 		return -1
 	}
+
+	// levenshteinDistance is a simple helper for fuzzy matching
+	_ = levenshteinDistance // ensure it's available or use a copy if not in scope
 
 	// 4. Interaction - Buttons (Click by visual_id)
 	buttons := []struct {

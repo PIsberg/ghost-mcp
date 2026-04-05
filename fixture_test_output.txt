@@ -1,0 +1,850 @@
+=== RUN   TestFixture_Button_Primary
+[INFO] Starting ghost-mcp v1.0.0...
+[INFO] Platform: windows/amd64
+[INFO] Token authentication enabled (GHOST_MCP_TOKEN is set)
+[INFO] --- Configuration ---
+[INFO]   GHOST_MCP_TOKEN                = 96967b4b****
+[INFO]   GHOST_MCP_TRANSPORT            = stdio
+[INFO]   GHOST_MCP_DEBUG                = 1
+[INFO]   GHOST_MCP_VISUAL               = 1
+[INFO]   GHOST_MCP_KEEP_SCREENSHOTS     = 1
+[INFO]   GHOST_MCP_SCREENSHOT_DIR       = C:\Users\isber\AppData\Local\Temp
+[INFO]   GHOST_MCP_AUDIT_LOG            = C:\Users\isber\AppData\Roaming\ghost-mcp\audit
+[INFO]   TESSDATA_PREFIX                = C:\Users\isber\vcpkg\installed\x64-mingw-dynamic\share\tessdata
+[INFO]   GHOST_MCP_HTTP_ADDR            = localhost:8080
+[INFO]   GHOST_MCP_HTTP_BASE_URL        = 
+[INFO]   GHOST_MCP_LEARNING             = 1 (learning mode on by default; set 0 to disable)
+[INFO] ---------------------
+[INFO] Learning mode enabled (default; set GHOST_MCP_LEARNING=0 to disable)
+[INFO] Audit logging enabled: C:\Users\isber\AppData\Roaming\ghost-mcp\audit
+[DEBUG] Audit[1] event=SERVER_START tool="" client=""
+[INFO] Failsafe position: (0, 0) - Move mouse here to trigger emergency shutdown
+[INFO] Transport: stdio
+[INFO] Creating MCP server: ghost-mcp v1.0.0
+[INFO] Registering tools...
+[INFO] Registering learning mode tools...
+[INFO] Learning mode tools registered
+[INFO] Smart click tool registered
+[INFO] Workflow tool registered
+[INFO] All tools registered successfully
+[INFO] Starting stdio transport...
+[INFO] IMPORTANT: All application logs are written to stderr
+[INFO] stdout is reserved for MCP JSON-RPC protocol
+[DEBUG] Audit[2] event=TOOL_CALL tool="find_and_click" client=""
+[DEBUG] Handling find_and_click request
+[INFO] REGION CACHE MISS: "primary" (misses=1)
+[INFO] learning mode: auto-learning screen before first tool call
+    integration_fixture_test.go:98: Failed to click Primary button: timeout waiting for response
+--- FAIL: TestFixture_Button_Primary (35.68s)
+=== RUN   TestFixture_Button_Success
+[INFO] Starting ghost-mcp v1.0.0...
+[INFO] Platform: windows/amd64
+[INFO] Token authentication enabled (GHOST_MCP_TOKEN is set)
+[INFO] --- Configuration ---
+[INFO]   GHOST_MCP_TOKEN                = 96967b4b****
+[INFO]   GHOST_MCP_TRANSPORT            = stdio
+[INFO]   GHOST_MCP_DEBUG                = 1
+[INFO]   GHOST_MCP_VISUAL               = 1
+[INFO]   GHOST_MCP_KEEP_SCREENSHOTS     = 1
+[INFO]   GHOST_MCP_SCREENSHOT_DIR       = C:\Users\isber\AppData\Local\Temp
+[INFO]   GHOST_MCP_AUDIT_LOG            = C:\Users\isber\AppData\Roaming\ghost-mcp\audit
+[INFO]   TESSDATA_PREFIX                = C:\Users\isber\vcpkg\installed\x64-mingw-dynamic\share\tessdata
+[INFO]   GHOST_MCP_HTTP_ADDR            = localhost:8080
+[INFO]   GHOST_MCP_HTTP_BASE_URL        = 
+[INFO]   GHOST_MCP_LEARNING             = 1 (learning mode on by default; set 0 to disable)
+[INFO] ---------------------
+[INFO] Learning mode enabled (default; set GHOST_MCP_LEARNING=0 to disable)
+[INFO] Audit logging enabled: C:\Users\isber\AppData\Roaming\ghost-mcp\audit
+[DEBUG] Audit[1] event=SERVER_START tool="" client=""
+[INFO] Failsafe position: (0, 0) - Move mouse here to trigger emergency shutdown
+[INFO] Transport: stdio
+[INFO] Creating MCP server: ghost-mcp v1.0.0
+[INFO] Registering tools...
+[INFO] Registering learning mode tools...
+[INFO] Learning mode tools registered
+[INFO] Smart click tool registered
+[INFO] Workflow tool registered
+[INFO] All tools registered successfully
+[INFO] Starting stdio transport...
+[INFO] IMPORTANT: All application logs are written to stderr
+[INFO] stdout is reserved for MCP JSON-RPC protocol
+[DEBUG] Audit[2] event=TOOL_CALL tool="find_and_click" client=""
+[DEBUG] Handling find_and_click request
+[INFO] REGION CACHE MISS: "success" (misses=1)
+[INFO] learning mode: auto-learning screen before first tool call
+    integration_fixture_test.go:115: Failed to click Success button: timeout waiting for response
+--- FAIL: TestFixture_Button_Success (35.67s)
+=== RUN   TestFixture_Button_Warning
+[INFO] Starting ghost-mcp v1.0.0...
+[INFO] Platform: windows/amd64
+[INFO] Token authentication enabled (GHOST_MCP_TOKEN is set)
+[INFO] --- Configuration ---
+[INFO]   GHOST_MCP_TOKEN                = 96967b4b****
+[INFO]   GHOST_MCP_TRANSPORT            = stdio
+[INFO]   GHOST_MCP_DEBUG                = 1
+[INFO]   GHOST_MCP_VISUAL               = 1
+[INFO]   GHOST_MCP_KEEP_SCREENSHOTS     = 1
+[INFO]   GHOST_MCP_SCREENSHOT_DIR       = C:\Users\isber\AppData\Local\Temp
+[INFO]   GHOST_MCP_AUDIT_LOG            = C:\Users\isber\AppData\Roaming\ghost-mcp\audit
+[INFO]   TESSDATA_PREFIX                = C:\Users\isber\vcpkg\installed\x64-mingw-dynamic\share\tessdata
+[INFO]   GHOST_MCP_HTTP_ADDR            = localhost:8080
+[INFO]   GHOST_MCP_HTTP_BASE_URL        = 
+[INFO]   GHOST_MCP_LEARNING             = 1 (learning mode on by default; set 0 to disable)
+[INFO] ---------------------
+[INFO] Learning mode enabled (default; set GHOST_MCP_LEARNING=0 to disable)
+[INFO] Audit logging enabled: C:\Users\isber\AppData\Roaming\ghost-mcp\audit
+[DEBUG] Audit[1] event=SERVER_START tool="" client=""
+[INFO] Failsafe position: (0, 0) - Move mouse here to trigger emergency shutdown
+[INFO] Transport: stdio
+[INFO] Creating MCP server: ghost-mcp v1.0.0
+[INFO] Registering tools...
+[INFO] Registering learning mode tools...
+[INFO] Learning mode tools registered
+[INFO] Smart click tool registered
+[INFO] Workflow tool registered
+[INFO] All tools registered successfully
+[INFO] Starting stdio transport...
+[INFO] IMPORTANT: All application logs are written to stderr
+[INFO] stdout is reserved for MCP JSON-RPC protocol
+[DEBUG] Audit[2] event=TOOL_CALL tool="find_and_click" client=""
+[DEBUG] Handling find_and_click request
+[INFO] REGION CACHE MISS: "warning" (misses=1)
+[INFO] learning mode: auto-learning screen before first tool call
+    integration_fixture_test.go:132: Failed to click Warning button: tool error: {"error":"text \"Warning\" not found on screen (occurrence 1). Search region: x=0 y=0 width=1707 height=1067. Closest OCR matches: [\"wvcpkg\" \"New\" \"MN,\" \"Sort\" \"View\"]. TRY THESE: (a) Search for LABEL text like \"Text Input:\" or \"Email:\" (not placeholder). (b) Use find_elements to see visible text. (c) Use scroll_until_text for off-screen content. (d) Try a SHORTER substring - if \"CLICK ME!\" fails, try \"Click\" (OCR may split spaced text). ÔÜí LEARNING MODE ACTIVE: Using cached view. If screen changed, call clear_learned_view then learn_screen to refresh. ­ƒöì CLOSEST MATCHES IN LEARNED VIEW: [\"in\" (score 1) \"N\" (score 2) \"Routing\" (score 2)]. If your target isn't listed, it may not be on this page. ­ƒöÿ BUTTON-LIKE ELEMENTS DETECTED: [C:\\Users\\isber\\vcpkg\\installec (J ThisPC Users isber]. If your target isn't listed, it may use colors/styles that OCR cannot read in the current pass.","candidates":[],"suggestion":"no_matches_found","consecutive_failures":1,"remaining_calls":23}
+--- FAIL: TestFixture_Button_Warning (34.78s)
+=== RUN   TestFixture_Button_Info
+[INFO] Starting ghost-mcp v1.0.0...
+[INFO] Platform: windows/amd64
+[INFO] Token authentication enabled (GHOST_MCP_TOKEN is set)
+[INFO] --- Configuration ---
+[INFO]   GHOST_MCP_TOKEN                = 96967b4b****
+[INFO]   GHOST_MCP_TRANSPORT            = stdio
+[INFO]   GHOST_MCP_DEBUG                = 1
+[INFO]   GHOST_MCP_VISUAL               = 1
+[INFO]   GHOST_MCP_KEEP_SCREENSHOTS     = 1
+[INFO]   GHOST_MCP_SCREENSHOT_DIR       = C:\Users\isber\AppData\Local\Temp
+[INFO]   GHOST_MCP_AUDIT_LOG            = C:\Users\isber\AppData\Roaming\ghost-mcp\audit
+[INFO]   TESSDATA_PREFIX                = C:\Users\isber\vcpkg\installed\x64-mingw-dynamic\share\tessdata
+[INFO]   GHOST_MCP_HTTP_ADDR            = localhost:8080
+[INFO]   GHOST_MCP_HTTP_BASE_URL        = 
+[INFO]   GHOST_MCP_LEARNING             = 1 (learning mode on by default; set 0 to disable)
+[INFO] ---------------------
+[INFO] Learning mode enabled (default; set GHOST_MCP_LEARNING=0 to disable)
+[INFO] Audit logging enabled: C:\Users\isber\AppData\Roaming\ghost-mcp\audit
+[DEBUG] Audit[1] event=SERVER_START tool="" client=""
+[INFO] Failsafe position: (0, 0) - Move mouse here to trigger emergency shutdown
+[INFO] Transport: stdio
+[INFO] Creating MCP server: ghost-mcp v1.0.0
+[INFO] Registering tools...
+[INFO] Registering learning mode tools...
+[INFO] Learning mode tools registered
+[INFO] Smart click tool registered
+[INFO] Workflow tool registered
+[INFO] All tools registered successfully
+[INFO] Starting stdio transport...
+[INFO] IMPORTANT: All application logs are written to stderr
+[INFO] stdout is reserved for MCP JSON-RPC protocol
+[DEBUG] Audit[2] event=TOOL_CALL tool="find_and_click" client=""
+[DEBUG] Handling find_and_click request
+[INFO] REGION CACHE MISS: "info" (misses=1)
+[INFO] learning mode: auto-learning screen before first tool call
+    integration_fixture_test.go:150: Failed to click Info button: timeout waiting for response
+--- FAIL: TestFixture_Button_Info (35.66s)
+=== RUN   TestFixture_Button_AllButtons
+[INFO] Starting ghost-mcp v1.0.0...
+[INFO] Platform: windows/amd64
+[INFO] Token authentication enabled (GHOST_MCP_TOKEN is set)
+[INFO] --- Configuration ---
+[INFO]   GHOST_MCP_TOKEN                = 96967b4b****
+[INFO]   GHOST_MCP_TRANSPORT            = stdio
+[INFO]   GHOST_MCP_DEBUG                = 1
+[INFO]   GHOST_MCP_VISUAL               = 1
+[INFO]   GHOST_MCP_KEEP_SCREENSHOTS     = 1
+[INFO]   GHOST_MCP_SCREENSHOT_DIR       = C:\Users\isber\AppData\Local\Temp
+[INFO]   GHOST_MCP_AUDIT_LOG            = C:\Users\isber\AppData\Roaming\ghost-mcp\audit
+[INFO]   TESSDATA_PREFIX                = C:\Users\isber\vcpkg\installed\x64-mingw-dynamic\share\tessdata
+[INFO]   GHOST_MCP_HTTP_ADDR            = localhost:8080
+[INFO]   GHOST_MCP_HTTP_BASE_URL        = 
+[INFO]   GHOST_MCP_LEARNING             = 1 (learning mode on by default; set 0 to disable)
+[INFO] ---------------------
+[INFO] Learning mode enabled (default; set GHOST_MCP_LEARNING=0 to disable)
+[INFO] Audit logging enabled: C:\Users\isber\AppData\Roaming\ghost-mcp\audit
+[DEBUG] Audit[1] event=SERVER_START tool="" client=""
+[INFO] Failsafe position: (0, 0) - Move mouse here to trigger emergency shutdown
+[INFO] Transport: stdio
+[INFO] Creating MCP server: ghost-mcp v1.0.0
+[INFO] Registering tools...
+[INFO] Registering learning mode tools...
+[INFO] Learning mode tools registered
+[INFO] Smart click tool registered
+[INFO] Workflow tool registered
+[INFO] All tools registered successfully
+[INFO] Starting stdio transport...
+[INFO] IMPORTANT: All application logs are written to stderr
+[INFO] stdout is reserved for MCP JSON-RPC protocol
+=== RUN   TestFixture_Button_AllButtons/Primary
+[DEBUG] Audit[2] event=TOOL_CALL tool="find_and_click" client=""
+[DEBUG] Handling find_and_click request
+[INFO] REGION CACHE MISS: "primary" (misses=1)
+[INFO] learning mode: auto-learning screen before first tool call
+    integration_fixture_test.go:176: Failed to click Primary: timeout waiting for response
+=== RUN   TestFixture_Button_AllButtons/Success
+    integration_fixture_test.go:176: Failed to click Success: failed to parse response: invalid character 'r' looking for beginning of value
+=== RUN   TestFixture_Button_AllButtons/Warning
+    integration_fixture_test.go:176: Failed to click Warning: failed to parse response: invalid character '\x00' looking for beginning of value
+=== RUN   TestFixture_Button_AllButtons/Info
+    integration_fixture_test.go:176: Failed to click Info: tool error: {"error":"LABELS ON SCREEN: [Call: chore: fixes: \"arguments\": id\":] USE ONE OF THESE AS YOUR SEARCH TERM! text \"Info\" not found on screen (occurrence 1). Search region: x=0 y=0 width=1707 height=1067. Closest OCR matches: [\"in\" \"i\" \"Go\" \"it\" \"is\"]. TRY THESE: (a) Search for LABEL text like \"Text Input:\" or \"Email:\" (not placeholder). (b) Use find_elements to see visible text. (c) Use scroll_until_text for off-screen content. (d) Try a SHORTER substring - if \"CLICK ME!\" fails, try \"Click\" (OCR may split spaced text). ÔÜí LEARNING MODE ACTIVE: Using cached view. If screen changed, call clear_learned_view then learn_screen to refresh. ­ƒöì CLOSEST MATCHES IN LEARNED VIEW: [\"in\" (score -2) \"O\" (score -1) \"i\" (score -1)]. If your target isn't listed, it may not be on this page. ­ƒöÿ BUTTON-LIKE ELEMENTS DETECTED: [File Edit Selection View Go]. If your target isn't listed, it may use colors/styles that OCR cannot read in the current pass.","candidates":[],"suggestion":"no_matches_found","consecutive_failures":1,"remaining_calls":17}
+--- FAIL: TestFixture_Button_AllButtons (46.38s)
+    --- FAIL: TestFixture_Button_AllButtons/Primary (30.00s)
+    --- FAIL: TestFixture_Button_AllButtons/Success (3.51s)
+    --- FAIL: TestFixture_Button_AllButtons/Warning (3.81s)
+    --- FAIL: TestFixture_Button_AllButtons/Info (3.39s)
+=== RUN   TestFixture_Input_TextField
+[INFO] Starting ghost-mcp v1.0.0...
+[INFO] Platform: windows/amd64
+[INFO] Token authentication enabled (GHOST_MCP_TOKEN is set)
+[INFO] --- Configuration ---
+[INFO]   GHOST_MCP_TOKEN                = 96967b4b****
+[INFO]   GHOST_MCP_TRANSPORT            = stdio
+[INFO]   GHOST_MCP_DEBUG                = 1
+[INFO]   GHOST_MCP_VISUAL               = 1
+[INFO]   GHOST_MCP_KEEP_SCREENSHOTS     = 1
+[INFO]   GHOST_MCP_SCREENSHOT_DIR       = C:\Users\isber\AppData\Local\Temp
+[INFO]   GHOST_MCP_AUDIT_LOG            = C:\Users\isber\AppData\Roaming\ghost-mcp\audit
+[INFO]   TESSDATA_PREFIX                = C:\Users\isber\vcpkg\installed\x64-mingw-dynamic\share\tessdata
+[INFO]   GHOST_MCP_HTTP_ADDR            = localhost:8080
+[INFO]   GHOST_MCP_HTTP_BASE_URL        = 
+[INFO]   GHOST_MCP_LEARNING             = 1 (learning mode on by default; set 0 to disable)
+[INFO] ---------------------
+[INFO] Learning mode enabled (default; set GHOST_MCP_LEARNING=0 to disable)
+[INFO] Audit logging enabled: C:\Users\isber\AppData\Roaming\ghost-mcp\audit
+[DEBUG] Audit[1] event=SERVER_START tool="" client=""
+[INFO] Failsafe position: (0, 0) - Move mouse here to trigger emergency shutdown
+[INFO] Transport: stdio
+[INFO] Creating MCP server: ghost-mcp v1.0.0
+[INFO] Registering tools...
+[INFO] Registering learning mode tools...
+[INFO] Learning mode tools registered
+[INFO] Smart click tool registered
+[INFO] Workflow tool registered
+[INFO] All tools registered successfully
+[INFO] Starting stdio transport...
+[INFO] IMPORTANT: All application logs are written to stderr
+[INFO] stdout is reserved for MCP JSON-RPC protocol
+[DEBUG] Audit[2] event=TOOL_CALL tool="find_and_click" client=""
+[DEBUG] Handling find_and_click request
+[INFO] REGION CACHE MISS: "type here" (misses=1)
+[INFO] learning mode: auto-learning screen before first tool call
+    integration_fixture_test.go:200: Failed to click text input: timeout waiting for response
+panic: runtime error: invalid memory address or nil pointer dereference
+[signal 0xc0000005 code=0x0 addr=0x20 pc=0x7ff79358d0fc]
+
+goroutine 24 [running]:
+github.com/ghost-mcp/internal/ocr.colorInvertGray({0x0, 0x0})
+	C:/dev/private/ghost-mcp/internal/ocr/ocr.go:643 +0x1c
+github.com/ghost-mcp/internal/ocr.encodeForOCR({0x0?, 0x0?}, 0x3, {0x0, 0x0, 0x0, 0x1, 0x0, {0x0, 0x0}, ...})
+	C:/dev/private/ghost-mcp/internal/ocr/ocr.go:557 +0x1bc
+github.com/ghost-mcp/internal/ocr.PrepareParallelImageSet.func1()
+	C:/dev/private/ghost-mcp/internal/ocr/ocr.go:423 +0x57
+created by github.com/ghost-mcp/internal/ocr.PrepareParallelImageSet in goroutine 13
+	C:/dev/private/ghost-mcp/internal/ocr/ocr.go:422 +0x1e5
+ObjectCache(00007ffacc4a77c0)::~ObjectCache(): WARNING! LEAK! object 00000201cb80c490 still has count 6 (id C:\Users\isber\vcpkg\installed\x64-mingw-dynamic\share\tessdata/eng.traineddatalstm-punc-dawg)
+ObjectCache(00007ffacc4a77c0)::~ObjectCache(): WARNING! LEAK! object 00000201cb80c960 still has count 6 (id C:\Users\isber\vcpkg\installed\x64-mingw-dynamic\share\tessdata/eng.traineddatalstm-word-dawg)
+ObjectCache(00007ffacc4a77c0)::~ObjectCache(): WARNING! LEAK! object 00000201cb80cc00 still has count 6 (id C:\Users\isber\vcpkg\installed\x64-mingw-dynamic\share\tessdata/eng.traineddatalstm-number-dawg)
+--- FAIL: TestFixture_Input_TextField (31.79s)
+=== RUN   TestFixture_FindClickAndType
+[INFO] Starting ghost-mcp v1.0.0...
+[INFO] Platform: windows/amd64
+[INFO] Token authentication enabled (GHOST_MCP_TOKEN is set)
+[INFO] --- Configuration ---
+[INFO]   GHOST_MCP_TOKEN                = 96967b4b****
+[INFO]   GHOST_MCP_TRANSPORT            = stdio
+[INFO]   GHOST_MCP_DEBUG                = 1
+[INFO]   GHOST_MCP_VISUAL               = 1
+[INFO]   GHOST_MCP_KEEP_SCREENSHOTS     = 1
+[INFO]   GHOST_MCP_SCREENSHOT_DIR       = C:\Users\isber\AppData\Local\Temp
+[INFO]   GHOST_MCP_AUDIT_LOG            = C:\Users\isber\AppData\Roaming\ghost-mcp\audit
+[INFO]   TESSDATA_PREFIX                = C:\Users\isber\vcpkg\installed\x64-mingw-dynamic\share\tessdata
+[INFO]   GHOST_MCP_HTTP_ADDR            = localhost:8080
+[INFO]   GHOST_MCP_HTTP_BASE_URL        = 
+[INFO]   GHOST_MCP_LEARNING             = 1 (learning mode on by default; set 0 to disable)
+[INFO] ---------------------
+[INFO] Learning mode enabled (default; set GHOST_MCP_LEARNING=0 to disable)
+[INFO] Audit logging enabled: C:\Users\isber\AppData\Roaming\ghost-mcp\audit
+[DEBUG] Audit[1] event=SERVER_START tool="" client=""
+[INFO] Failsafe position: (0, 0) - Move mouse here to trigger emergency shutdown
+[INFO] Transport: stdio
+[INFO] Creating MCP server: ghost-mcp v1.0.0
+[INFO] Registering tools...
+[INFO] Registering learning mode tools...
+[INFO] Learning mode tools registered
+[INFO] Smart click tool registered
+[INFO] Workflow tool registered
+[INFO] All tools registered successfully
+[INFO] Starting stdio transport...
+[INFO] IMPORTANT: All application logs are written to stderr
+[INFO] stdout is reserved for MCP JSON-RPC protocol
+[DEBUG] Audit[2] event=TOOL_CALL tool="find_and_click" client=""
+[DEBUG] Handling find_and_click request
+[INFO] REGION CACHE MISS: "clear" (misses=1)
+[INFO] learning mode: auto-learning screen before first tool call
+    integration_fixture_test.go:232: Failed find_click_and_type: timeout waiting for response
+--- FAIL: TestFixture_FindClickAndType (68.73s)
+=== RUN   TestFixture_Input_TextArea
+[INFO] Starting ghost-mcp v1.0.0...
+[INFO] Platform: windows/amd64
+[INFO] Token authentication enabled (GHOST_MCP_TOKEN is set)
+[INFO] --- Configuration ---
+[INFO]   GHOST_MCP_TOKEN                = 96967b4b****
+[INFO]   GHOST_MCP_TRANSPORT            = stdio
+[INFO]   GHOST_MCP_DEBUG                = 1
+[INFO]   GHOST_MCP_VISUAL               = 1
+[INFO]   GHOST_MCP_KEEP_SCREENSHOTS     = 1
+[INFO]   GHOST_MCP_SCREENSHOT_DIR       = C:\Users\isber\AppData\Local\Temp
+[INFO]   GHOST_MCP_AUDIT_LOG            = C:\Users\isber\AppData\Roaming\ghost-mcp\audit
+[INFO]   TESSDATA_PREFIX                = C:\Users\isber\vcpkg\installed\x64-mingw-dynamic\share\tessdata
+[INFO]   GHOST_MCP_HTTP_ADDR            = localhost:8080
+[INFO]   GHOST_MCP_HTTP_BASE_URL        = 
+[INFO]   GHOST_MCP_LEARNING             = 1 (learning mode on by default; set 0 to disable)
+[INFO] ---------------------
+[INFO] Learning mode enabled (default; set GHOST_MCP_LEARNING=0 to disable)
+[INFO] Audit logging enabled: C:\Users\isber\AppData\Roaming\ghost-mcp\audit
+[DEBUG] Audit[1] event=SERVER_START tool="" client=""
+[INFO] Failsafe position: (0, 0) - Move mouse here to trigger emergency shutdown
+[INFO] Transport: stdio
+[INFO] Creating MCP server: ghost-mcp v1.0.0
+[INFO] Registering tools...
+[INFO] Registering learning mode tools...
+[INFO] Learning mode tools registered
+[INFO] Smart click tool registered
+[INFO] Workflow tool registered
+[INFO] All tools registered successfully
+[INFO] Starting stdio transport...
+[INFO] IMPORTANT: All application logs are written to stderr
+[INFO] stdout is reserved for MCP JSON-RPC protocol
+[DEBUG] Audit[2] event=TOOL_CALL tool="find_and_click" client=""
+[DEBUG] Handling find_and_click request
+[INFO] REGION CACHE MISS: "multi-line" (misses=1)
+[INFO] learning mode: auto-learning screen before first tool call
+    integration_fixture_test.go:250: Failed to click textarea: timeout waiting for response
+--- FAIL: TestFixture_Input_TextArea (35.67s)
+=== RUN   TestFixture_Input_Clear
+[INFO] Starting ghost-mcp v1.0.0...
+[INFO] Platform: windows/amd64
+[INFO] Token authentication enabled (GHOST_MCP_TOKEN is set)
+[INFO] --- Configuration ---
+[INFO]   GHOST_MCP_TOKEN                = 96967b4b****
+[INFO]   GHOST_MCP_TRANSPORT            = stdio
+[INFO]   GHOST_MCP_DEBUG                = 1
+[INFO]   GHOST_MCP_VISUAL               = 1
+[INFO]   GHOST_MCP_KEEP_SCREENSHOTS     = 1
+[INFO]   GHOST_MCP_SCREENSHOT_DIR       = C:\Users\isber\AppData\Local\Temp
+[INFO]   GHOST_MCP_AUDIT_LOG            = C:\Users\isber\AppData\Roaming\ghost-mcp\audit
+[INFO]   TESSDATA_PREFIX                = C:\Users\isber\vcpkg\installed\x64-mingw-dynamic\share\tessdata
+[INFO]   GHOST_MCP_HTTP_ADDR            = localhost:8080
+[INFO]   GHOST_MCP_HTTP_BASE_URL        = 
+[INFO]   GHOST_MCP_LEARNING             = 1 (learning mode on by default; set 0 to disable)
+[INFO] ---------------------
+[INFO] Learning mode enabled (default; set GHOST_MCP_LEARNING=0 to disable)
+[INFO] Audit logging enabled: C:\Users\isber\AppData\Roaming\ghost-mcp\audit
+[DEBUG] Audit[1] event=SERVER_START tool="" client=""
+[INFO] Failsafe position: (0, 0) - Move mouse here to trigger emergency shutdown
+[INFO] Transport: stdio
+[INFO] Creating MCP server: ghost-mcp v1.0.0
+[INFO] Registering tools...
+[INFO] Registering learning mode tools...
+[INFO] Learning mode tools registered
+[INFO] Smart click tool registered
+[INFO] Workflow tool registered
+[INFO] All tools registered successfully
+[INFO] Starting stdio transport...
+[INFO] IMPORTANT: All application logs are written to stderr
+[INFO] stdout is reserved for MCP JSON-RPC protocol
+[DEBUG] Audit[2] event=TOOL_CALL tool="find_and_click" client=""
+[DEBUG] Handling find_and_click request
+[INFO] REGION CACHE MISS: "type here" (misses=1)
+[INFO] learning mode: auto-learning screen before first tool call
+    integration_fixture_test.go:268: Failed to click text input: timeout waiting for response
+panic: runtime error: invalid memory address or nil pointer dereference
+[signal 0xc0000005 code=0x0 addr=0x20 pc=0x7ff79358d0fc]
+
+goroutine 63 [running]:
+github.com/ghost-mcp/internal/ocr.colorInvertGray({0x0, 0x0})
+	C:/dev/private/ghost-mcp/internal/ocr/ocr.go:643 +0x1c
+github.com/ghost-mcp/internal/ocr.encodeForOCR({0x0?, 0x0?}, 0x3, {0x0, 0x0, 0x0, 0x1, 0x0, {0x0, 0x0}, ...})
+	C:/dev/private/ghost-mcp/internal/ocr/ocr.go:557 +0x1bc
+github.com/ghost-mcp/internal/ocr.PrepareParallelImageSet.func1()
+	C:/dev/private/ghost-mcp/internal/ocr/ocr.go:423 +0x57
+created by github.com/ghost-mcp/internal/ocr.PrepareParallelImageSet in goroutine 13
+	C:/dev/private/ghost-mcp/internal/ocr/ocr.go:422 +0x1e5
+ObjectCache(00007ffacc4a77c0)::~ObjectCache(): WARNING! LEAK! object 00000165eb899430 still has count 6 (id C:\Users\isber\vcpkg\installed\x64-mingw-dynamic\share\tessdata/eng.traineddatalstm-punc-dawg)
+ObjectCache(00007ffacc4a77c0)::~ObjectCache(): WARNING! LEAK! object 00000165eb8995f0 still has count 6 (id C:\Users\isber\vcpkg\installed\x64-mingw-dynamic\share\tessdata/eng.traineddatalstm-word-dawg)
+ObjectCache(00007ffacc4a77c0)::~ObjectCache(): WARNING! LEAK! object 00000165eb898ef0 still has count 6 (id C:\Users\isber\vcpkg\installed\x64-mingw-dynamic\share\tessdata/eng.traineddatalstm-number-dawg)
+--- FAIL: TestFixture_Input_Clear (33.47s)
+=== RUN   TestFixture_Checkbox_Option1
+[INFO] Starting ghost-mcp v1.0.0...
+[INFO] Platform: windows/amd64
+[INFO] Token authentication enabled (GHOST_MCP_TOKEN is set)
+[INFO] --- Configuration ---
+[INFO]   GHOST_MCP_TOKEN                = 96967b4b****
+[INFO]   GHOST_MCP_TRANSPORT            = stdio
+[INFO]   GHOST_MCP_DEBUG                = 1
+[INFO]   GHOST_MCP_VISUAL               = 1
+[INFO]   GHOST_MCP_KEEP_SCREENSHOTS     = 1
+[INFO]   GHOST_MCP_SCREENSHOT_DIR       = C:\Users\isber\AppData\Local\Temp
+[INFO]   GHOST_MCP_AUDIT_LOG            = C:\Users\isber\AppData\Roaming\ghost-mcp\audit
+[INFO]   TESSDATA_PREFIX                = C:\Users\isber\vcpkg\installed\x64-mingw-dynamic\share\tessdata
+[INFO]   GHOST_MCP_HTTP_ADDR            = localhost:8080
+[INFO]   GHOST_MCP_HTTP_BASE_URL        = 
+[INFO]   GHOST_MCP_LEARNING             = 1 (learning mode on by default; set 0 to disable)
+[INFO] ---------------------
+[INFO] Learning mode enabled (default; set GHOST_MCP_LEARNING=0 to disable)
+[INFO] Audit logging enabled: C:\Users\isber\AppData\Roaming\ghost-mcp\audit
+[DEBUG] Audit[1] event=SERVER_START tool="" client=""
+[INFO] Failsafe position: (0, 0) - Move mouse here to trigger emergency shutdown
+[INFO] Transport: stdio
+[INFO] Creating MCP server: ghost-mcp v1.0.0
+[INFO] Registering tools...
+[INFO] Registering learning mode tools...
+[INFO] Learning mode tools registered
+[INFO] Smart click tool registered
+[INFO] Workflow tool registered
+[INFO] All tools registered successfully
+[INFO] Starting stdio transport...
+[INFO] IMPORTANT: All application logs are written to stderr
+[INFO] stdout is reserved for MCP JSON-RPC protocol
+[DEBUG] Audit[2] event=TOOL_CALL tool="find_and_click" client=""
+[DEBUG] Handling find_and_click request
+[INFO] REGION CACHE MISS: "option 1" (misses=1)
+[INFO] learning mode: auto-learning screen before first tool call
+    integration_fixture_test.go:299: Failed to click Option 1 checkbox: timeout waiting for response
+panic: runtime error: invalid memory address or nil pointer dereference
+[signal 0xc0000005 code=0x0 addr=0x20 pc=0x7ff79358d0fc]
+
+goroutine 71 [running]:
+github.com/ghost-mcp/internal/ocr.colorInvertGray({0x0, 0x0})
+	C:/dev/private/ghost-mcp/internal/ocr/ocr.go:643 +0x1c
+github.com/ghost-mcp/internal/ocr.encodeForOCR({0x0?, 0x0?}, 0x3, {0x0, 0x0, 0x0, 0x1, 0x0, {0x0, 0x0}, ...})
+	C:/dev/private/ghost-mcp/internal/ocr/ocr.go:557 +0x1bc
+github.com/ghost-mcp/internal/ocr.PrepareParallelImageSet.func1()
+	C:/dev/private/ghost-mcp/internal/ocr/ocr.go:423 +0x57
+created by github.com/ghost-mcp/internal/ocr.PrepareParallelImageSet in goroutine 11
+	C:/dev/private/ghost-mcp/internal/ocr/ocr.go:422 +0x1e5
+ObjectCache(00007ffacc4a77c0)::~ObjectCache(): WARNING! LEAK! object 0000013071b97310 still has count 6 (id C:\Users\isber\vcpkg\installed\x64-mingw-dynamic\share\tessdata/eng.traineddatalstm-punc-dawg)
+ObjectCache(00007ffacc4a77c0)::~ObjectCache(): WARNING! LEAK! object 0000013071b971c0 still has count 6 (id C:\Users\isber\vcpkg\installed\x64-mingw-dynamic\share\tessdata/eng.traineddatalstm-word-dawg)
+ObjectCache(00007ffacc4a77c0)::~ObjectCache(): WARNING! LEAK! object 0000013071b96ba0 still has count 6 (id C:\Users\isber\vcpkg\installed\x64-mingw-dynamic\share\tessdata/eng.traineddatalstm-number-dawg)
+--- FAIL: TestFixture_Checkbox_Option1 (32.42s)
+=== RUN   TestFixture_Checkbox_AllOptions
+[INFO] Starting ghost-mcp v1.0.0...
+[INFO] Platform: windows/amd64
+[INFO] Token authentication enabled (GHOST_MCP_TOKEN is set)
+[INFO] --- Configuration ---
+[INFO]   GHOST_MCP_TOKEN                = 96967b4b****
+[INFO]   GHOST_MCP_TRANSPORT            = stdio
+[INFO]   GHOST_MCP_DEBUG                = 1
+[INFO]   GHOST_MCP_VISUAL               = 1
+[INFO]   GHOST_MCP_KEEP_SCREENSHOTS     = 1
+[INFO]   GHOST_MCP_SCREENSHOT_DIR       = C:\Users\isber\AppData\Local\Temp
+[INFO]   GHOST_MCP_AUDIT_LOG            = C:\Users\isber\AppData\Roaming\ghost-mcp\audit
+[INFO]   TESSDATA_PREFIX                = C:\Users\isber\vcpkg\installed\x64-mingw-dynamic\share\tessdata
+[INFO]   GHOST_MCP_HTTP_ADDR            = localhost:8080
+[INFO]   GHOST_MCP_HTTP_BASE_URL        = 
+[INFO]   GHOST_MCP_LEARNING             = 1 (learning mode on by default; set 0 to disable)
+[INFO] ---------------------
+[INFO] Learning mode enabled (default; set GHOST_MCP_LEARNING=0 to disable)
+[INFO] Audit logging enabled: C:\Users\isber\AppData\Roaming\ghost-mcp\audit
+[DEBUG] Audit[1] event=SERVER_START tool="" client=""
+[INFO] Failsafe position: (0, 0) - Move mouse here to trigger emergency shutdown
+[INFO] Transport: stdio
+[INFO] Creating MCP server: ghost-mcp v1.0.0
+[INFO] Registering tools...
+[INFO] Registering learning mode tools...
+[INFO] Learning mode tools registered
+[INFO] Smart click tool registered
+[INFO] Workflow tool registered
+[INFO] All tools registered successfully
+[INFO] Starting stdio transport...
+[INFO] IMPORTANT: All application logs are written to stderr
+[INFO] stdout is reserved for MCP JSON-RPC protocol
+=== RUN   TestFixture_Checkbox_AllOptions/Option_1
+[DEBUG] Audit[2] event=TOOL_CALL tool="find_and_click" client=""
+[DEBUG] Handling find_and_click request
+[INFO] REGION CACHE MISS: "option 1" (misses=1)
+[INFO] learning mode: auto-learning screen before first tool call
+    integration_fixture_test.go:322: Failed to click Option 1: timeout waiting for response
+=== RUN   TestFixture_Checkbox_AllOptions/Option_2
+[INFO] tryTextVariations: trying word: "Option"
+panic: runtime error: invalid memory address or nil pointer dereference
+[signal 0xc0000005 code=0x0 addr=0x20 pc=0x7ff79358caa5]
+
+goroutine 60 [running]:
+github.com/ghost-mcp/internal/ocr.encodeForOCR({0x0, 0x0}, 0x3, {0x1, 0x0, 0x0, 0x0, 0x0, {0x0, 0x0}, ...})
+	C:/dev/private/ghost-mcp/internal/ocr/ocr.go:560 +0xa5
+github.com/ghost-mcp/internal/ocr.PrepareParallelImageSet.func1()
+	C:/dev/private/ghost-mcp/internal/ocr/ocr.go:423 +0x57
+created by github.com/ghost-mcp/internal/ocr.PrepareParallelImageSet in goroutine 12
+	C:/dev/private/ghost-mcp/internal/ocr/ocr.go:422 +0x1e5
+ObjectCache(00007ffacc4a77c0)::~ObjectCache(): WARNING! LEAK! object 0000020f2493e370 still has count 7 (id C:\Users\isber\vcpkg\installed\x64-mingw-dynamic\share\tessdata/eng.traineddatalstm-punc-dawg)
+ObjectCache(00007ffacc4a77c0)::~ObjectCache(): WARNING! LEAK! object 0000020f2493e0d0 still has count 7 (id C:\Users\isber\vcpkg\installed\x64-mingw-dynamic\share\tessdata/eng.traineddatalstm-word-dawg)
+ObjectCache(00007ffacc4a77c0)::~ObjectCache(): WARNING! LEAK! object 0000020f2493df10 still has count 7 (id C:\Users\isber\vcpkg\installed\x64-mingw-dynamic\share\tessdata/eng.traineddatalstm-number-dawg)
+    integration_fixture_test.go:322: Failed to click Option 2: no response from server: %!w(<nil>)
+=== RUN   TestFixture_Checkbox_AllOptions/Option_3
+    integration_fixture_test.go:322: Failed to click Option 3: failed to write request: write |1: The pipe is being closed.
+--- FAIL: TestFixture_Checkbox_AllOptions (32.96s)
+    --- FAIL: TestFixture_Checkbox_AllOptions/Option_1 (30.00s)
+    --- FAIL: TestFixture_Checkbox_AllOptions/Option_2 (2.29s)
+    --- FAIL: TestFixture_Checkbox_AllOptions/Option_3 (0.00s)
+=== RUN   TestFixture_Radio_AllChoices
+[INFO] Starting ghost-mcp v1.0.0...
+[INFO] Platform: windows/amd64
+[INFO] Token authentication enabled (GHOST_MCP_TOKEN is set)
+[INFO] --- Configuration ---
+[INFO]   GHOST_MCP_TOKEN                = 96967b4b****
+[INFO]   GHOST_MCP_TRANSPORT            = stdio
+[INFO]   GHOST_MCP_DEBUG                = 1
+[INFO]   GHOST_MCP_VISUAL               = 1
+[INFO]   GHOST_MCP_KEEP_SCREENSHOTS     = 1
+[INFO]   GHOST_MCP_SCREENSHOT_DIR       = C:\Users\isber\AppData\Local\Temp
+[INFO]   GHOST_MCP_AUDIT_LOG            = C:\Users\isber\AppData\Roaming\ghost-mcp\audit
+[INFO]   TESSDATA_PREFIX                = C:\Users\isber\vcpkg\installed\x64-mingw-dynamic\share\tessdata
+[INFO]   GHOST_MCP_HTTP_ADDR            = localhost:8080
+[INFO]   GHOST_MCP_HTTP_BASE_URL        = 
+[INFO]   GHOST_MCP_LEARNING             = 1 (learning mode on by default; set 0 to disable)
+[INFO] ---------------------
+[INFO] Learning mode enabled (default; set GHOST_MCP_LEARNING=0 to disable)
+[INFO] Audit logging enabled: C:\Users\isber\AppData\Roaming\ghost-mcp\audit
+[DEBUG] Audit[1] event=SERVER_START tool="" client=""
+[INFO] Failsafe position: (0, 0) - Move mouse here to trigger emergency shutdown
+[INFO] Transport: stdio
+[INFO] Creating MCP server: ghost-mcp v1.0.0
+[INFO] Registering tools...
+[INFO] Registering learning mode tools...
+[INFO] Learning mode tools registered
+[INFO] Smart click tool registered
+[INFO] Workflow tool registered
+[INFO] All tools registered successfully
+[INFO] Starting stdio transport...
+[INFO] IMPORTANT: All application logs are written to stderr
+[INFO] stdout is reserved for MCP JSON-RPC protocol
+=== RUN   TestFixture_Radio_AllChoices/Choice_A
+[DEBUG] Audit[2] event=TOOL_CALL tool="find_and_click" client=""
+[DEBUG] Handling find_and_click request
+[INFO] REGION CACHE MISS: "choice a" (misses=1)
+[INFO] learning mode: auto-learning screen before first tool call
+    integration_fixture_test.go:350: Failed to click Choice A: timeout waiting for response
+=== RUN   TestFixture_Radio_AllChoices/Choice_B
+panic: runtime error: invalid memory address or nil pointer dereference
+[signal 0xc0000005 code=0x0 addr=0x20 pc=0x7ff79358d0fc]
+
+goroutine 71 [running]:
+github.com/ghost-mcp/internal/ocr.colorInvertGray({0x0, 0x0})
+	C:/dev/private/ghost-mcp/internal/ocr/ocr.go:643 +0x1c
+github.com/ghost-mcp/internal/ocr.encodeForOCR({0x0?, 0x0?}, 0x3, {0x0, 0x0, 0x0, 0x1, 0x0, {0x0, 0x0}, ...})
+	C:/dev/private/ghost-mcp/internal/ocr/ocr.go:557 +0x1bc
+github.com/ghost-mcp/internal/ocr.PrepareParallelImageSet.func1()
+	C:/dev/private/ghost-mcp/internal/ocr/ocr.go:423 +0x57
+created by github.com/ghost-mcp/internal/ocr.PrepareParallelImageSet in goroutine 26
+	C:/dev/private/ghost-mcp/internal/ocr/ocr.go:422 +0x1e5
+ObjectCache(00007ffacc4a77c0)::~ObjectCache(): WARNING! LEAK! object 0000026daf52e050 still has count 8 (id C:\Users\isber\vcpkg\installed\x64-mingw-dynamic\share\tessdata/eng.traineddatalstm-punc-dawg)
+ObjectCache(00007ffacc4a77c0)::~ObjectCache(): WARNING! LEAK! object 0000026daf52d560 still has count 8 (id C:\Users\isber\vcpkg\installed\x64-mingw-dynamic\share\tessdata/eng.traineddatalstm-word-dawg)
+ObjectCache(00007ffacc4a77c0)::~ObjectCache(): WARNING! LEAK! object 0000026daf52dcd0 still has count 8 (id C:\Users\isber\vcpkg\installed\x64-mingw-dynamic\share\tessdata/eng.traineddatalstm-number-dawg)
+    integration_fixture_test.go:350: Failed to click Choice B: no response from server: %!w(<nil>)
+=== RUN   TestFixture_Radio_AllChoices/Choice_C
+    integration_fixture_test.go:350: Failed to click Choice C: failed to write request: write |1: The pipe is being closed.
+--- FAIL: TestFixture_Radio_AllChoices (33.19s)
+    --- FAIL: TestFixture_Radio_AllChoices/Choice_A (30.00s)
+    --- FAIL: TestFixture_Radio_AllChoices/Choice_B (2.52s)
+    --- FAIL: TestFixture_Radio_AllChoices/Choice_C (0.00s)
+=== RUN   TestFixture_Dropdown_Select
+[INFO] Starting ghost-mcp v1.0.0...
+[INFO] Platform: windows/amd64
+[INFO] Token authentication enabled (GHOST_MCP_TOKEN is set)
+[INFO] --- Configuration ---
+[INFO]   GHOST_MCP_TOKEN                = 96967b4b****
+[INFO]   GHOST_MCP_TRANSPORT            = stdio
+[INFO]   GHOST_MCP_DEBUG                = 1
+[INFO]   GHOST_MCP_VISUAL               = 1
+[INFO]   GHOST_MCP_KEEP_SCREENSHOTS     = 1
+[INFO]   GHOST_MCP_SCREENSHOT_DIR       = C:\Users\isber\AppData\Local\Temp
+[INFO]   GHOST_MCP_AUDIT_LOG            = C:\Users\isber\AppData\Roaming\ghost-mcp\audit
+[INFO]   TESSDATA_PREFIX                = C:\Users\isber\vcpkg\installed\x64-mingw-dynamic\share\tessdata
+[INFO]   GHOST_MCP_HTTP_ADDR            = localhost:8080
+[INFO]   GHOST_MCP_HTTP_BASE_URL        = 
+[INFO]   GHOST_MCP_LEARNING             = 1 (learning mode on by default; set 0 to disable)
+[INFO] ---------------------
+[INFO] Learning mode enabled (default; set GHOST_MCP_LEARNING=0 to disable)
+[INFO] Audit logging enabled: C:\Users\isber\AppData\Roaming\ghost-mcp\audit
+[DEBUG] Audit[1] event=SERVER_START tool="" client=""
+[INFO] Failsafe position: (0, 0) - Move mouse here to trigger emergency shutdown
+[INFO] Transport: stdio
+[INFO] Creating MCP server: ghost-mcp v1.0.0
+[INFO] Registering tools...
+[INFO] Registering learning mode tools...
+[INFO] Learning mode tools registered
+[INFO] Smart click tool registered
+[INFO] Workflow tool registered
+[INFO] All tools registered successfully
+[INFO] Starting stdio transport...
+[INFO] IMPORTANT: All application logs are written to stderr
+[INFO] stdout is reserved for MCP JSON-RPC protocol
+[DEBUG] Audit[2] event=TOOL_CALL tool="find_and_click" client=""
+[DEBUG] Handling find_and_click request
+[INFO] REGION CACHE MISS: "select an option" (misses=1)
+[INFO] learning mode: auto-learning screen before first tool call
+    integration_fixture_test.go:372: Failed to click dropdown: timeout waiting for response
+panic: runtime error: invalid memory address or nil pointer dereference
+[signal 0xc0000005 code=0x0 addr=0x20 pc=0x7ff79358d0fc]
+
+goroutine 87 [running]:
+github.com/ghost-mcp/internal/ocr.colorInvertGray({0x0, 0x0})
+	C:/dev/private/ghost-mcp/internal/ocr/ocr.go:643 +0x1c
+github.com/ghost-mcp/internal/ocr.encodeForOCR({0x0?, 0x0?}, 0x3, {0x0, 0x0, 0x0, 0x1, 0x0, {0x0, 0x0}, ...})
+	C:/dev/private/ghost-mcp/internal/ocr/ocr.go:557 +0x1bc
+github.com/ghost-mcp/internal/ocr.PrepareParallelImageSet.func1()
+	C:/dev/private/ghost-mcp/internal/ocr/ocr.go:423 +0x57
+created by github.com/ghost-mcp/internal/ocr.PrepareParallelImageSet in goroutine 13
+	C:/dev/private/ghost-mcp/internal/ocr/ocr.go:422 +0x1e5
+ObjectCache(00007ffacc4a77c0)::~ObjectCache(): WARNING! LEAK! object 00000236c66cc290 still has count 7 (id C:\Users\isber\vcpkg\installed\x64-mingw-dynamic\share\tessdata/eng.traineddatalstm-punc-dawg)
+ObjectCache(00007ffacc4a77c0)::~ObjectCache(): WARNING! LEAK! object 00000236c66cc0d0 still has count 7 (id C:\Users\isber\vcpkg\installed\x64-mingw-dynamic\share\tessdata/eng.traineddatalstm-word-dawg)
+ObjectCache(00007ffacc4a77c0)::~ObjectCache(): WARNING! LEAK! object 00000236c66cc760 still has count 7 (id C:\Users\isber\vcpkg\installed\x64-mingw-dynamic\share\tessdata/eng.traineddatalstm-number-dawg)
+--- FAIL: TestFixture_Dropdown_Select (32.36s)
+=== RUN   TestFixture_Slider_Keyboard
+[INFO] Starting ghost-mcp v1.0.0...
+[INFO] Platform: windows/amd64
+[INFO] Token authentication enabled (GHOST_MCP_TOKEN is set)
+[INFO] --- Configuration ---
+[INFO]   GHOST_MCP_TOKEN                = 96967b4b****
+[INFO]   GHOST_MCP_TRANSPORT            = stdio
+[INFO]   GHOST_MCP_DEBUG                = 1
+[INFO]   GHOST_MCP_VISUAL               = 1
+[INFO]   GHOST_MCP_KEEP_SCREENSHOTS     = 1
+[INFO]   GHOST_MCP_SCREENSHOT_DIR       = C:\Users\isber\AppData\Local\Temp
+[INFO]   GHOST_MCP_AUDIT_LOG            = C:\Users\isber\AppData\Roaming\ghost-mcp\audit
+[INFO]   TESSDATA_PREFIX                = C:\Users\isber\vcpkg\installed\x64-mingw-dynamic\share\tessdata
+[INFO]   GHOST_MCP_HTTP_ADDR            = localhost:8080
+[INFO]   GHOST_MCP_HTTP_BASE_URL        = 
+[INFO]   GHOST_MCP_LEARNING             = 1 (learning mode on by default; set 0 to disable)
+[INFO] ---------------------
+[INFO] Learning mode enabled (default; set GHOST_MCP_LEARNING=0 to disable)
+[INFO] Audit logging enabled: C:\Users\isber\AppData\Roaming\ghost-mcp\audit
+[DEBUG] Audit[1] event=SERVER_START tool="" client=""
+[INFO] Failsafe position: (0, 0) - Move mouse here to trigger emergency shutdown
+[INFO] Transport: stdio
+[INFO] Creating MCP server: ghost-mcp v1.0.0
+[INFO] Registering tools...
+[INFO] Registering learning mode tools...
+[INFO] Learning mode tools registered
+[INFO] Smart click tool registered
+[INFO] Workflow tool registered
+[INFO] All tools registered successfully
+[INFO] Starting stdio transport...
+[INFO] IMPORTANT: All application logs are written to stderr
+[INFO] stdout is reserved for MCP JSON-RPC protocol
+[DEBUG] Audit[2] event=TOOL_CALL tool="find_elements" client=""
+[DEBUG] Handling find_elements request
+[INFO] learning mode: auto-learning screen before first tool call
+    integration_fixture_test.go:403: find_elements failed: timeout waiting for response
+--- FAIL: TestFixture_Slider_Keyboard (35.65s)
+=== RUN   TestFixture_ColorPicker
+[INFO] Starting ghost-mcp v1.0.0...
+[INFO] Platform: windows/amd64
+[INFO] Token authentication enabled (GHOST_MCP_TOKEN is set)
+[INFO] --- Configuration ---
+[INFO]   GHOST_MCP_TOKEN                = 96967b4b****
+[INFO]   GHOST_MCP_TRANSPORT            = stdio
+[INFO]   GHOST_MCP_DEBUG                = 1
+[INFO]   GHOST_MCP_VISUAL               = 1
+[INFO]   GHOST_MCP_KEEP_SCREENSHOTS     = 1
+[INFO]   GHOST_MCP_SCREENSHOT_DIR       = C:\Users\isber\AppData\Local\Temp
+[INFO]   GHOST_MCP_AUDIT_LOG            = C:\Users\isber\AppData\Roaming\ghost-mcp\audit
+[INFO]   TESSDATA_PREFIX                = C:\Users\isber\vcpkg\installed\x64-mingw-dynamic\share\tessdata
+[INFO]   GHOST_MCP_HTTP_ADDR            = localhost:8080
+[INFO]   GHOST_MCP_HTTP_BASE_URL        = 
+[INFO]   GHOST_MCP_LEARNING             = 1 (learning mode on by default; set 0 to disable)
+[INFO] ---------------------
+[INFO] Learning mode enabled (default; set GHOST_MCP_LEARNING=0 to disable)
+[INFO] Audit logging enabled: C:\Users\isber\AppData\Roaming\ghost-mcp\audit
+[DEBUG] Audit[1] event=SERVER_START tool="" client=""
+[INFO] Failsafe position: (0, 0) - Move mouse here to trigger emergency shutdown
+[INFO] Transport: stdio
+[INFO] Creating MCP server: ghost-mcp v1.0.0
+[INFO] Registering tools...
+[INFO] Registering learning mode tools...
+[INFO] Learning mode tools registered
+[INFO] Smart click tool registered
+[INFO] Workflow tool registered
+[INFO] All tools registered successfully
+[INFO] Starting stdio transport...
+[INFO] IMPORTANT: All application logs are written to stderr
+[INFO] stdout is reserved for MCP JSON-RPC protocol
+[DEBUG] Audit[2] event=TOOL_CALL tool="find_elements" client=""
+[DEBUG] Handling find_elements request
+[INFO] learning mode: auto-learning screen before first tool call
+    integration_fixture_test.go:466: find_elements failed: no response from server: bufio.Scanner: token too long
+--- FAIL: TestFixture_ColorPicker (33.71s)
+=== RUN   TestFixture_Counter_Button
+[INFO] Starting ghost-mcp v1.0.0...
+[INFO] Platform: windows/amd64
+[INFO] Token authentication enabled (GHOST_MCP_TOKEN is set)
+[INFO] --- Configuration ---
+[INFO]   GHOST_MCP_TOKEN                = 96967b4b****
+[INFO]   GHOST_MCP_TRANSPORT            = stdio
+[INFO]   GHOST_MCP_DEBUG                = 1
+[INFO]   GHOST_MCP_VISUAL               = 1
+[INFO]   GHOST_MCP_KEEP_SCREENSHOTS     = 1
+[INFO]   GHOST_MCP_SCREENSHOT_DIR       = C:\Users\isber\AppData\Local\Temp
+[INFO]   GHOST_MCP_AUDIT_LOG            = C:\Users\isber\AppData\Roaming\ghost-mcp\audit
+[INFO]   TESSDATA_PREFIX                = C:\Users\isber\vcpkg\installed\x64-mingw-dynamic\share\tessdata
+[INFO]   GHOST_MCP_HTTP_ADDR            = localhost:8080
+[INFO]   GHOST_MCP_HTTP_BASE_URL        = 
+[INFO]   GHOST_MCP_LEARNING             = 1 (learning mode on by default; set 0 to disable)
+[INFO] ---------------------
+[INFO] Learning mode enabled (default; set GHOST_MCP_LEARNING=0 to disable)
+[INFO] Audit logging enabled: C:\Users\isber\AppData\Roaming\ghost-mcp\audit
+[DEBUG] Audit[1] event=SERVER_START tool="" client=""
+[INFO] Failsafe position: (0, 0) - Move mouse here to trigger emergency shutdown
+[INFO] Transport: stdio
+[INFO] Creating MCP server: ghost-mcp v1.0.0
+[INFO] Registering tools...
+[INFO] Registering learning mode tools...
+[INFO] Learning mode tools registered
+[INFO] Smart click tool registered
+[INFO] Workflow tool registered
+[INFO] All tools registered successfully
+[INFO] Starting stdio transport...
+[INFO] IMPORTANT: All application logs are written to stderr
+[INFO] stdout is reserved for MCP JSON-RPC protocol
+[DEBUG] Audit[2] event=TOOL_CALL tool="find_and_click" client=""
+[DEBUG] Handling find_and_click request
+[INFO] REGION CACHE MISS: "click me" (misses=1)
+[INFO] learning mode: auto-learning screen before first tool call
+    integration_fixture_test.go:536: Click 1: failed to click counter button: timeout waiting for response
+panic: runtime error: invalid memory address or nil pointer dereference
+[signal 0xc0000005 code=0x0 addr=0x20 pc=0x7ff79358d0fc]
+
+goroutine 33 [running]:
+github.com/ghost-mcp/internal/ocr.colorInvertGray({0x0, 0x0})
+	C:/dev/private/ghost-mcp/internal/ocr/ocr.go:643 +0x1c
+github.com/ghost-mcp/internal/ocr.encodeForOCR({0x0?, 0x0?}, 0x3, {0x0, 0x0, 0x0, 0x1, 0x0, {0x0, 0x0}, ...})
+	C:/dev/private/ghost-mcp/internal/ocr/ocr.go:557 +0x1bc
+github.com/ghost-mcp/internal/ocr.PrepareParallelImageSet.func1()
+	C:/dev/private/ghost-mcp/internal/ocr/ocr.go:423 +0x57
+created by github.com/ghost-mcp/internal/ocr.PrepareParallelImageSet in goroutine 13
+	C:/dev/private/ghost-mcp/internal/ocr/ocr.go:422 +0x1e5
+panic: runtime error: invalid memory address or nil pointer dereference
+[signal 0xc0000005 code=0x0 addr=0x20 pc=0x7ff79358d85f]
+
+goroutine 31 [running]:
+github.com/ghost-mcp/internal/ocr.darkTextToGray({0x0, 0x0})
+	C:/dev/private/ghost-mcp/internal/ocr/ocr.go:784 +0x1f
+github.com/ghost-mcp/internal/ocr.encodeForOCR({0x0?, 0x0?}, 0x3, {0x0, 0x0, 0x0, 0x0, 0x1, {0x0, 0x0}, ...})
+	C:/dev/private/ghost-mcp/internal/ocr/ocr.go:554 +0x1d7
+github.com/ghost-mcp/internal/ocr.PrepareParallelImageSet.func1()
+	C:/dev/private/ghost-mcp/internal/ocr/ocr.go:423 +0x57
+created by github.com/ghost-mcp/internal/ocr.PrepareParallelImageSet in goroutine 13
+	C:/dev/private/ghost-mcp/internal/ocr/ocr.go:422 +0x1e5
+ObjectCache(00007ffacc4a77c0)::~ObjectCache(): WARNING! LEAK! object 000001ee55cc3bb0 still has count 6 (id C:\Users\isber\vcpkg\installed\x64-mingw-dynamic\share\tessdata/eng.traineddatalstm-punc-dawg)
+ObjectCache(00007ffacc4a77c0)::~ObjectCache(): WARNING! LEAK! object 000001ee55cc3a60 still has count 6 (id C:\Users\isber\vcpkg\installed\x64-mingw-dynamic\share\tessdata/eng.traineddatalstm-word-dawg)
+ObjectCache(00007ffacc4a77c0)::~ObjectCache(): WARNING! LEAK! object 000001ee55cc3ad0 still has count 6 (id C:\Users\isber\vcpkg\installed\x64-mingw-dynamic\share\tessdata/eng.traineddatalstm-number-dawg)
+--- FAIL: TestFixture_Counter_Button (33.37s)
+=== RUN   TestFixture_Hover_Zone
+[INFO] Starting ghost-mcp v1.0.0...
+[INFO] Platform: windows/amd64
+[INFO] Token authentication enabled (GHOST_MCP_TOKEN is set)
+[INFO] --- Configuration ---
+[INFO]   GHOST_MCP_TOKEN                = 96967b4b****
+[INFO]   GHOST_MCP_TRANSPORT            = stdio
+[INFO]   GHOST_MCP_DEBUG                = 1
+[INFO]   GHOST_MCP_VISUAL               = 1
+[INFO]   GHOST_MCP_KEEP_SCREENSHOTS     = 1
+[INFO]   GHOST_MCP_SCREENSHOT_DIR       = C:\Users\isber\AppData\Local\Temp
+[INFO]   GHOST_MCP_AUDIT_LOG            = C:\Users\isber\AppData\Roaming\ghost-mcp\audit
+[INFO]   TESSDATA_PREFIX                = C:\Users\isber\vcpkg\installed\x64-mingw-dynamic\share\tessdata
+[INFO]   GHOST_MCP_HTTP_ADDR            = localhost:8080
+[INFO]   GHOST_MCP_HTTP_BASE_URL        = 
+[INFO]   GHOST_MCP_LEARNING             = 1 (learning mode on by default; set 0 to disable)
+[INFO] ---------------------
+[INFO] Learning mode enabled (default; set GHOST_MCP_LEARNING=0 to disable)
+[INFO] Audit logging enabled: C:\Users\isber\AppData\Roaming\ghost-mcp\audit
+[DEBUG] Audit[1] event=SERVER_START tool="" client=""
+[INFO] Failsafe position: (0, 0) - Move mouse here to trigger emergency shutdown
+[INFO] Transport: stdio
+[INFO] Creating MCP server: ghost-mcp v1.0.0
+[INFO] Registering tools...
+[INFO] Registering learning mode tools...
+[INFO] Learning mode tools registered
+[INFO] Smart click tool registered
+[INFO] Workflow tool registered
+[INFO] All tools registered successfully
+[INFO] Starting stdio transport...
+[INFO] IMPORTANT: All application logs are written to stderr
+[INFO] stdout is reserved for MCP JSON-RPC protocol
+[DEBUG] Audit[2] event=TOOL_CALL tool="find_elements" client=""
+[DEBUG] Handling find_elements request
+[INFO] learning mode: auto-learning screen before first tool call
+panic: test timed out after 10m0s
+	running tests:
+		TestFixture_Hover_Zone (9s)
+
+goroutine 177 [running]:
+testing.(*M).startAlarm.func1()
+	C:/Users/isber/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.25.8.windows-amd64/src/testing/testing.go:2682 +0x345
+created by time.goFunc
+	C:/Users/isber/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.25.8.windows-amd64/src/time/sleep.go:215 +0x2d
+
+goroutine 1 [chan receive]:
+testing.(*T).Run(0xc0000868c0, {0x7ff73dc2a833?, 0x7ff73dad3468?}, 0x7ff73dc5a108)
+	C:/Users/isber/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.25.8.windows-amd64/src/testing/testing.go:2005 +0x469
+testing.runTests.func1(0xc0000868c0)
+	C:/Users/isber/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.25.8.windows-amd64/src/testing/testing.go:2477 +0x37
+testing.tRunner(0xc0000868c0, 0xc000115bf8)
+	C:/Users/isber/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.25.8.windows-amd64/src/testing/testing.go:1934 +0xc3
+testing.runTests(0xc0000a02a0, {0x7ff73db42920, 0xec, 0xec}, {0xc000115cb8?, 0x7ff73d73b379?, 0x7ff73df8dae0?})
+	C:/Users/isber/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.25.8.windows-amd64/src/testing/testing.go:2475 +0x4b4
+testing.(*M).Run(0xc00009caa0)
+	C:/Users/isber/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.25.8.windows-amd64/src/testing/testing.go:2337 +0x63a
+github.com/ghost-mcp/cmd/ghost-mcp.TestMain(0xc00009caa0)
+	C:/dev/private/ghost-mcp/cmd/ghost-mcp/integration_test.go:982 +0x16f
+main.main()
+	_testmain.go:533 +0xa5
+
+goroutine 217 [select]:
+github.com/ghost-mcp/mcpclient.(*Client).CallTool(0xc00033c000, {0x7ff73dcde558, 0x7ff73dfd6440}, {0x7ff73dc220c8, 0xd}, 0x0)
+	C:/dev/private/ghost-mcp/mcpclient/mcpclient.go:202 +0x58e
+github.com/ghost-mcp/mcpclient.(*Client).CallToolString(0xc0003ee8c0?, {0x7ff73dcde558?, 0x7ff73dfd6440?}, {0x7ff73dc220c8?, 0x6ee?}, 0x7ff73d7e57a0?)
+	C:/dev/private/ghost-mcp/mcpclient/mcpclient.go:230 +0x26
+github.com/ghost-mcp/cmd/ghost-mcp.TestFixture_Hover_Zone(0xc0003ee8c0)
+	C:/dev/private/ghost-mcp/cmd/ghost-mcp/integration_fixture_test.go:558 +0x69
+testing.tRunner(0xc0003ee8c0, 0x7ff73dc5a108)
+	C:/Users/isber/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.25.8.windows-amd64/src/testing/testing.go:1934 +0xc3
+created by testing.(*T).Run in goroutine 1
+	C:/Users/isber/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.25.8.windows-amd64/src/testing/testing.go:1997 +0x44b
+
+goroutine 176 [syscall]:
+syscall.SyscallN(0x7ff73d9c3a73?, {0xc000257c88?, 0xc00027ca10?, 0x0?})
+	C:/Users/isber/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.25.8.windows-amd64/src/runtime/syscall_windows.go:500 +0x1e
+syscall.readFile(0x39c, {0xc000217000?, 0x1000, 0xc000257d40?}, 0x7ff73d9c3851?, 0x7ff73db3cf60?)
+	C:/Users/isber/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.25.8.windows-amd64/src/syscall/zsyscall_windows.go:1030 +0xbe
+syscall.ReadFile(...)
+	C:/Users/isber/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.25.8.windows-amd64/src/syscall/syscall_windows.go:482
+internal/poll.(*FD).Read.func1(0x7ff73d9c38a0?)
+	C:/Users/isber/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.25.8.windows-amd64/src/internal/poll/fd_windows.go:522 +0x4d
+internal/poll.execIO(0xc0003107a0, 0x7ff73dc5b0e8)
+	C:/Users/isber/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.25.8.windows-amd64/src/internal/poll/fd_windows.go:233 +0xa7
+internal/poll.(*FD).Read(0xc000310788, {0xc000217000, 0x1000, 0x1000})
+	C:/Users/isber/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.25.8.windows-amd64/src/internal/poll/fd_windows.go:521 +0x288
+os.(*File).read(...)
+	C:/Users/isber/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.25.8.windows-amd64/src/os/file_posix.go:29
+os.(*File).Read(0xc000316018, {0xc000217000?, 0xc0000e00e0?, 0x7ff73dbc2da0?})
+	C:/Users/isber/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.25.8.windows-amd64/src/os/file.go:144 +0x4f
+bufio.(*Scanner).Scan(0xc000330080)
+	C:/Users/isber/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.25.8.windows-amd64/src/bufio/scan.go:219 +0x83e
+github.com/ghost-mcp/mcpclient.(*Client).CallTool.func1()
+	C:/dev/private/ghost-mcp/mcpclient/mcpclient.go:189 +0x3e
+created by github.com/ghost-mcp/mcpclient.(*Client).CallTool in goroutine 217
+	C:/dev/private/ghost-mcp/mcpclient/mcpclient.go:188 +0x4e5
+ObjectCache(00007ffacc4a77c0)::~ObjectCache(): WARNING! LEAK! object 000001db1738beb0 still has count 6 (id C:\Users\isber\vcpkg\installed\x64-mingw-dynamic\share\tessdata/eng.traineddatalstm-punc-dawg)
+ObjectCache(00007ffacc4a77c0)::~ObjectCache(): WARNING! LEAK! object 000001db1738b4a0 still has count 6 (id C:\Users\isber\vcpkg\installed\x64-mingw-dynamic\share\tessdata/eng.traineddatalstm-word-dawg)
+ObjectCache(00007ffacc4a77c0)::~ObjectCache(): WARNING! LEAK! object 000001db1738bf90 still has count 6 (id C:\Users\isber\vcpkg\installed\x64-mingw-dynamic\share\tessdata/eng.traineddatalstm-number-dawg)
+FAIL	github.com/ghost-mcp/cmd/ghost-mcp	620.964s
+FAIL

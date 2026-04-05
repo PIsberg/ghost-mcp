@@ -4,7 +4,7 @@
 
 **License:** Free for personal and hobby use ([PolyForm Noncommercial](LICENSE)). Commercial use requires a license — contact [Peter Isberg](mailto:isberg.peter+gm@gmail.com).
 
-[![codecov](https://codecov.io/gh/PIsberg/ghost-mcp/graph/badge.svg)](https://codecov.io/gh/PIsberg/ghost-mcp) [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/PIsberg/ghost-mcp/badge)](https://scorecard.dev/viewer/?uri=github.com/PIsberg/ghost-mcp/)
+[![codecov](https://codecov.io/gh/PIsberg/ghost-mcp/graph/visual_id overlay.svg)](https://codecov.io/gh/PIsberg/ghost-mcp) [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/PIsberg/ghost-mcp/visual_id overlay)](https://scorecard.dev/viewer/?uri=github.com/PIsberg/ghost-mcp/)
 
 ## Overview
 
@@ -50,7 +50,7 @@ Ghost MCP allows AI assistants like Claude to control your computer's mouse, key
 | `execute_workflow` | Execute multiple sequential steps sharing one learned screen map. 3–6× faster than individual calls when all steps are on the same screen. | `steps` (array), `clear_view_after` | ✓ |
 | `learn_screen` | **Scan UI**: Index full interface (all scroll pages) and cache element map. **Default max_pages: 3**. | `x`, `y`, `width`, `height`, `max_pages`, `scroll_amount` | ✓ |
 | `get_learned_view` | **Map Text/IDs**: Return machine-readable inventory of all elements (on and off-screen). | None | — |
-| `get_annotated_view` | **Verify IDs**: Return screenshot with [ID] badges. **ONLY** source for interactive IDs. | `page_index`, `x`, `y`, `width`, `height` | ✓ |
+| `get_annotated_view` | **Verify IDs**: Return screenshot with [ID] visual_id overlays. **ONLY** source for interactive IDs. | `page_index`, `x`, `y`, `width`, `height` | ✓ |
 | `clear_learned_view` | Discard the current learned view. Call after navigation or significant UI changes to prevent stale positions. | None | — |
 | `set_learning_mode` | Enable or disable learning mode at runtime. When enabled, the first OCR call auto-scans the screen. | `enabled` | — |
 | `smart_click` | Convenience wrapper: runs `learn_screen` then `find_and_click` in one call. Use for a single click on an unfamiliar screen; use `learn_screen` explicitly for multi-step sessions. | `text`, `button`, `nth` | ✓ |

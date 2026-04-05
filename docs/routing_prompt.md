@@ -59,7 +59,7 @@ Example output:
 ]}
 ```
 
-(`ocr_id` is just a sequence number — it is NOT a visual badge ID.)
+(`ocr_id` is just a sequence number — it is NOT a visual visual_id overlay ID.)
 
 ---
 
@@ -86,13 +86,13 @@ to the annotated screenshot. Call:
 
 This returns a screenshot of the UI. **On top of the normal UI, the image has
 numbered overlays placed on every detected element.** These overlays are called
-**badges**. Here is exactly what they look like:
+**visual_id overlays**. Here is exactly what they look like:
 
-- Each badge is a **small solid-colored rectangle** (blue, green, red, etc.)
+- Each visual_id overlay is a **small solid-colored rectangle** (blue, green, red, etc.)
   with a **white number** printed inside it.
-- Each badge is placed at the **top-left corner** of the UI element it labels,
+- Each visual_id overlay is placed at the **top-left corner** of the UI element it labels,
   such as a button, input field, link, or icon.
-- Every badge has a **unique number** like 1, 5, 12, 23, etc.
+- Every visual_id overlay has a **unique number** like 1, 5, 12, 23, etc.
 
 **How to use the image:**
 
@@ -100,7 +100,7 @@ numbered overlays placed on every detected element.** These overlays are called
    For example: you are looking for a button labeled "INFO".
 2. **Find that element** in the image. You will see the "INFO" button rendered
    as part of the normal UI.
-3. **Look at the badge** placed on or near the "INFO" button. It will be a small
+3. **Look at the visual_id overlay** placed on or near the "INFO" button. It will be a small
    colored rectangle. Read the number inside it. Suppose it says **12**.
 4. **That number is the `visual_id`.** Call:
 
@@ -108,7 +108,7 @@ numbered overlays placed on every detected element.** These overlays are called
 {"tool": "click_at", "arguments": {"visual_id": 12}}
 ```
 
-**Important:** The `visual_id` parameter ONLY comes from reading these badge
+**Important:** The `visual_id` parameter ONLY comes from reading these visual_id overlay
 numbers in the `get_annotated_view` image. It is NOT the `ocr_id` from the JSON.
 They are completely different numbers. Never use `ocr_id` as `visual_id`.
 
@@ -116,7 +116,7 @@ They are completely different numbers. Never use `ocr_id` as `visual_id`.
 
 ### Action tools that accept coordinates OR visual_id
 
-| Action | By coordinates (Path A) | By badge (Path B) |
+| Action | By coordinates (Path A) | By visual_id overlay (Path B) |
 |--------|------------------------|-------------------|
 | Click | `click_at(x, y)` | `click_at(visual_id=N)` |
 | Type | `click_and_type(x, y, text="...")` | `click_and_type(visual_id=N, text="...")` |
@@ -161,7 +161,7 @@ If the target might be below the fold, increase `max_pages`:
 
 - `get_learned_view` returns elements from ALL pages at once.
 - If the element is not found, call `get_annotated_view(page_index: N)` to
-  visually inspect a specific page and read the badge number.
+  visually inspect a specific page and read the visual_id overlay number.
 - `click_at(visual_id=N)` works for any indexed element. The server scrolls for you.
 
 **NEVER** manually scroll + screenshot to find things. Index once, then act.
@@ -173,7 +173,7 @@ If the target might be below the fold, increase `max_pages`:
 ### Element not found after scan
 1. Call `get_learned_view` to see what OCR actually detected.
 2. If the target is missing, re-run `learn_screen` with higher `max_pages`.
-3. If still missing, use `get_annotated_view` to visually find it and read its badge.
+3. If still missing, use `get_annotated_view` to visually find it and read its visual_id overlay.
 
 ### Click did not work (UI unchanged)
 1. Call `wait_for_text` with a short timeout — the UI may be loading.
@@ -199,9 +199,9 @@ Primary Workflow.
 
 | Mistake | Why it fails | Fix |
 |---------|-------------|-----|
-| Calling `take_screenshot` to find elements | No badges, no coordinates | Use `get_learned_view` or `get_annotated_view` |
+| Calling `take_screenshot` to find elements | No visual_id overlays, no coordinates | Use `get_learned_view` or `get_annotated_view` |
 | Paging through `get_annotated_view` blindly | Wastes calls. Use `get_learned_view` to narrow the page first | Search JSON first, then view ONE page |
-| Using `ocr_id` as `visual_id` | They are different. `ocr_id` is a JSON counter. `visual_id` is a badge from the image. | Read badge numbers from the annotated screenshot |
+| Using `ocr_id` as `visual_id` | They are different. `ocr_id` is a JSON counter. `visual_id` is a visual_id overlay from the image. | Read visual_id overlay numbers from the annotated screenshot |
 | Scrolling + peeking repeatedly | Wastes tool calls, slow | Use `learn_screen(max_pages: 5)` once |
 | Skipping `get_learned_view` | You have no text map — you're guessing | Always call it after `learn_screen` |
 | Not clearing after navigation | Stale data points to wrong elements | Call `clear_learned_view` immediately |

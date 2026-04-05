@@ -114,7 +114,7 @@ During the `DeduplicateElements` phase in the `learner` package, every final UI 
 #### 2. Image Annotation (`AnnotateImage`)
 The `AnnotateImage` function in `internal/visual/visual.go` takes a raw screenshot and a list of elements:
 1.  **Outline**: Draws a thin green bounding box around every element.
-2.  **Badge**: Renders a small black-and-white numeric badge (e.g., `[12]`) at the top-left of each box.
+2.  **visual_id overlay**: Renders a small black-and-white numeric visual_id overlay (e.g., `[12]`) at the top-left of each box.
 3.  **Font**: Uses `basicfont.Face7x13` for zero-dependency, low-overhead text rendering.
 
 This allows the AI to "see" exactly what the OCR engine has detected and interact with specific elements via `click_at(id=N)`.

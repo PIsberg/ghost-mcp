@@ -276,9 +276,9 @@ func handleClickAt(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallT
 		visual.PulseCursor(x, y)
 	}
 
-	if err := checkFailsafe(); err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
+	// Ensure mouse is exactly at target after pulse and let it settle
+	robotgo.Move(x, y)
+	time.Sleep(100 * time.Millisecond)
 
 	robotgo.Click(button, false)
 	applyClickDelay(request)

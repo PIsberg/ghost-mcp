@@ -149,6 +149,7 @@ func learnScreen(cfg learnCfg) (*learner.View, error) {
 			ElementCount:          len(pageElements),
 			JPEG:                  jpegBytes,
 		}
+		saveScreenshotIfKeptFromBytes(jpegBytes, fmt.Sprintf("ghost-mcp-learn-page%d", page))
 		pages = append(pages, snap)
 
 		// ── Repeat detection & Diagnostics ──────────────────────────────────
@@ -280,6 +281,7 @@ func mergeOCRPasses(pageIndex, offsetX, offsetY int, results ...*ocr.Result) []l
 		}
 		for _, w := range p.result.Words {
 			if w.Confidence < ocr.MinConfidence {
+				logging.Debug("mergeOCRPasses: skipping %q (confidence %.2f < %.2f) in %s pass", w.Text, w.Confidence, ocr.MinConfidence, p.pass)
 				continue
 			}
 			text := strings.TrimSpace(w.Text)
@@ -295,6 +297,7 @@ func mergeOCRPasses(pageIndex, offsetX, offsetY int, results ...*ocr.Result) []l
 				continue
 			}
 			seen[key] = true
+			logging.Debug("mergeOCRPasses: found %q in %s pass (conf %.2f)", text, p.pass, w.Confidence)
 			elements = append(elements, learner.Element{
 				Text:       text,
 				X:          offsetX + w.X,
@@ -621,6 +624,9 @@ func handleGetAnnotatedView(_ context.Context, request mcp.CallToolRequest) (*mc
 	if err := jpeg.Encode(buf, annotated, &jpeg.Options{Quality: 85}); err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("encode failed: %v", err)), nil
 	}
+
+	// Save debug screenshot if requested
+	saveScreenshotIfKeptFromBytes(buf.Bytes(), "ghost-mcp-annotated")
 
 	b64 := base64.StdEncoding.EncodeToString(buf.Bytes())
 

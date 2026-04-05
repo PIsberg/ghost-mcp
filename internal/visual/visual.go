@@ -17,10 +17,10 @@ import (
 	"golang.org/x/image/math/fixed"
 )
 
-// AnnotateImage draws bounding boxes and numeric ID badges on an image,
+// AnnotateImage draws bounding boxes and numeric ID overlays on an image,
 // facilitating AI visual reasoning (Set-of-Marks).
 // offsetX and offsetY are the top-left coordinates of the src image in absolute screen space.
-// dpiScale is used to thicken borders and badges on high-DPI displays.
+// dpiScale is used to thicken borders and overlays on high-DPI displays.
 func AnnotateImage(src image.Image, elements []learner.Element, offsetX, offsetY int, dpiScale float64) image.Image {
 	if dpiScale <= 0 {
 		dpiScale = 1.0
@@ -33,8 +33,8 @@ func AnnotateImage(src image.Image, elements []learner.Element, offsetX, offsetY
 	draw.Draw(dst, bounds, src, bounds.Min, draw.Src)
 
 	// Colours for the annotations.
-	boxColor := color.RGBA{0, 255, 0, 180} // Bright green for boxes
-	badgeColor := color.RGBA{0, 0, 0, 220} // Dark background for text
+	boxColor := color.RGBA{0, 255, 0, 180}   // Bright green for boxes
+	overlayColor := color.RGBA{0, 0, 0, 220} // Dark background for text
 	textColor := image.NewUniform(color.White)
 
 	d := &font.Drawer{
@@ -68,34 +68,34 @@ func AnnotateImage(src image.Image, elements []learner.Element, offsetX, offsetY
 		// 1. Draw element bounding box
 		drawOutline(dst, absX, absY, e.Width, e.Height, thickness, boxColor)
 
-		// 2. Prepare the ID badge string
+		// 2. Prepare the ID overlay string
 		idStr := strconv.Itoa(e.ID)
 		textWidth := len(idStr) * 7
-		badgeW := textWidth + 6
-		badgeH := 16
+		overlayW := textWidth + 6
+		overlayH := 16
 
-		// Use larger badge if on high-DPI
+		// Use larger overlay if on high-DPI
 		if dpiScale > 1.25 {
-			badgeW = int(float64(badgeW) * dpiScale)
-			badgeH = int(float64(badgeH) * dpiScale)
+			overlayW = int(float64(overlayW) * dpiScale)
+			overlayH = int(float64(overlayH) * dpiScale)
 		}
 
-		// 3. Draw badge background (positioned at top-left of element)
-		badgeRect := image.Rect(absX, absY-badgeH, absX+badgeW, absY)
-		// If at the very top of the image region, move badge inside the box
-		if absY-badgeH < bounds.Min.Y {
-			badgeRect = image.Rect(absX, absY, absX+badgeW, absY+badgeH)
+		// 3. Draw overlay background (positioned at top-left of element)
+		overlayRect := image.Rect(absX, absY-overlayH, absX+overlayW, absY)
+		// If at the very top of the image region, move overlay inside the box
+		if absY-overlayH < bounds.Min.Y {
+			overlayRect = image.Rect(absX, absY, absX+overlayW, absY+overlayH)
 		}
-		draw.Draw(dst, badgeRect, image.NewUniform(badgeColor), image.Point{}, draw.Over)
+		draw.Draw(dst, overlayRect, image.NewUniform(overlayColor), image.Point{}, draw.Over)
 
 		// 4. Draw the numeric ID
-		// Center the text in the badge
-		dotY := badgeRect.Min.Y + 12
+		// Center the text in the overlay
+		dotY := overlayRect.Min.Y + 12
 		if dpiScale > 1.25 {
-			dotY = badgeRect.Min.Y + (badgeH+13)/2 - 2
+			dotY = overlayRect.Min.Y + (overlayH+13)/2 - 2
 		}
 		d.Dot = fixed.Point26_6{
-			X: fixed.I(badgeRect.Min.X + (badgeRect.Dx()-textWidth)/2),
+			X: fixed.I(overlayRect.Min.X + (overlayRect.Dx()-textWidth)/2),
 			Y: fixed.I(dotY),
 		}
 		d.DrawString(idStr)
@@ -151,23 +151,20 @@ func ShowClickEffect(x, y int) {
 
 // PulseCursor pulses the cursor to show an action happened.
 func PulseCursor(x, y int) {
-	origX, origY := robotgo.GetMousePos()
-
-	// Three quick pulses
+	// Pulse the cursor to show the click point
 	for p := 0; p < 3; p++ {
-		// Expand
 		for r := 5; r <= 25; r += 5 {
 			drawCircle(x, y, r)
 			time.Sleep(10 * time.Millisecond)
 		}
-		// Contract
 		for r := 25; r >= 5; r -= 5 {
 			drawCircle(x, y, r)
 			time.Sleep(10 * time.Millisecond)
 		}
 	}
 
-	robotgo.Move(origX, origY)
+	// End exactly at the target coordinates.
+	robotgo.Move(x, y)
 }
 
 func drawCircle(cx, cy, radius int) {

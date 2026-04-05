@@ -72,7 +72,7 @@ For maximum reliability and to avoid "Scroll-and-Peek" inefficiencies, follow th
 
 1.  **SCAN**: `learn_screen(max_pages: 3)` — Index the full interface (all scroll pages).
 2.  **MAP**: `get_learned_view()` — Load text-to-ID mappings into your context.
-3.  **VERIFY**: `get_annotated_view()` — Check the [ID] badges visually.
+3.  **VERIFY**: `get_annotated_view()` — Check the [ID] visual_id overlays visually.
 4.  **ACT**: `click_at(id=N)` — Act on the confirmed ID.
 
 🚫 **NO-PEEK RULE**: Never manually `scroll` and `take_screenshot` to find elements. Index once with `learn_screen`, then let the server handle the scrolling for you via ID-based actions.
@@ -1053,8 +1053,8 @@ For maximum reliability, always follow this sequence:
 
 1.  **Scan**: Call `learn_screen(max_pages: 3)` to capture the interface.
 2.  **Map**: Call `get_learned_view` to load the **Machine-Map** (the list of text labels and their numeric IDs).
-3.  **Verify**: Call `get_annotated_view`. This returns an image with numeric **ID badges** (e.g., `[5]`, `[12]`) overlaid on every element.
-4.  **Act**: Look at the ID badge in the image and use one of the **ID-ready tools**:
+3.  **Verify**: Call `get_annotated_view`. This returns an image with numeric **ID visual_id overlays** (e.g., `[5]`, `[12]`) overlaid on every element.
+4.  **Act**: Look at the ID visual_id overlay in the image and use one of the **ID-ready tools**:
     -   `click_at({"id": N})`
     -   `click_and_type({"id": N, "text": "..."})`
     -   `move_mouse({"id": N})`
