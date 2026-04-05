@@ -1741,17 +1741,21 @@ func handleFindElements(ctx context.Context, request mcp.CallToolRequest) (*mcp.
 			continue
 		}
 
-		elements = append(elements, map[string]interface{}{
+		cx := regionX + w.X + w.Width/2
+		cy := regionY + w.Y + w.Height/2
+		elem := map[string]interface{}{
 			"text":       w.Text,
 			"x":          regionX + w.X,
 			"y":          regionY + w.Y,
 			"width":      w.Width,
 			"height":     w.Height,
-			"center_x":   regionX + w.X + w.Width/2,
-			"center_y":   regionY + w.Y + w.Height/2,
+			"center_x":   cx,
+			"center_y":   cy,
 			"confidence": w.Confidence,
-			"type":       elementType, // button, label, heading, link, value, text
-		})
+			"type":       elementType,
+		}
+		addWidgetFields(elem, elementType, w.Text, regionX+w.X, cy)
+		elements = append(elements, elem)
 	}
 
 	logging.Info("find_elements: found %d elements in region (%d,%d) %dx%d", len(elements), regionX, regionY, regionW, regionH)
@@ -1776,10 +1780,7 @@ func handleFindElements(ctx context.Context, request mcp.CallToolRequest) (*mcp.
 		if i > 0 {
 			elementsJSON += ","
 		}
-		elementsJSON += fmt.Sprintf(
-			`{"text":%q,"type":%q,"x":%d,"y":%d,"width":%d,"height":%d,"center_x":%d,"center_y":%d,"confidence":%.1f}`,
-			e["text"], e["type"], e["x"], e["y"], e["width"], e["height"], e["center_x"], e["center_y"], e["confidence"],
-		)
+		elementsJSON += elementJSON(e)
 	}
 	elementsJSON += "]"
 
@@ -1789,10 +1790,7 @@ func handleFindElements(ctx context.Context, request mcp.CallToolRequest) (*mcp.
 		if i > 0 {
 			actionableJSON += ","
 		}
-		actionableJSON += fmt.Sprintf(
-			`{"text":%q,"type":%q,"center_x":%d,"center_y":%d,"confidence":%.1f}`,
-			e["text"], e["type"], e["center_x"], e["center_y"], e["confidence"],
-		)
+		actionableJSON += elementJSON(e)
 	}
 	actionableJSON += "]"
 
@@ -1876,18 +1874,21 @@ func handleFindElementsScanPages(_ context.Context, request mcp.CallToolRequest,
 			continue
 		}
 
-		allElements = append(allElements, map[string]interface{}{
+		cy := e.Y + e.Height/2
+		elem := map[string]interface{}{
 			"text":       e.Text,
 			"x":          e.X,
 			"y":          e.Y,
 			"width":      e.Width,
 			"height":     e.Height,
 			"center_x":   e.X + e.Width/2,
-			"center_y":   e.Y + e.Height/2,
+			"center_y":   cy,
 			"confidence": e.Confidence,
 			"type":       e.Type,
 			"page_index": e.PageIndex,
-		})
+		}
+		addWidgetFields(elem, e.Type, e.Text, e.X, cy)
+		allElements = append(allElements, elem)
 	}
 
 	// Separate viewport (page 0) from off-page elements.
@@ -1922,10 +1923,7 @@ func handleFindElementsScanPages(_ context.Context, request mcp.CallToolRequest,
 			if i > 0 {
 				json += ","
 			}
-			json += fmt.Sprintf(
-				`{"text":%q,"type":%q,"x":%d,"y":%d,"width":%d,"height":%d,"center_x":%d,"center_y":%d,"confidence":%.1f,"page_index":%d}`,
-				e["text"], e["type"], e["x"], e["y"], e["width"], e["height"], e["center_x"], e["center_y"], e["confidence"], e["page_index"],
-			)
+			json += elementJSON(e)
 		}
 		json += "]"
 		return json
@@ -2038,6 +2036,41 @@ func isActionableElementType(t learner.ElementType) bool {
 		return true
 	}
 	return false
+}
+
+// elementJSON serialises a find_elements element map to a JSON object string.
+// It includes widget_x, widget_y, and checked fields when present (checkbox/radio
+// elements), and page_index when present (multi-page scan results).
+func elementJSON(e map[string]interface{}) string {
+	s := fmt.Sprintf(
+		`{"text":%q,"type":%q,"x":%d,"y":%d,"width":%d,"height":%d,"center_x":%d,"center_y":%d,"confidence":%.1f`,
+		e["text"], e["type"], e["x"], e["y"], e["width"], e["height"], e["center_x"], e["center_y"], e["confidence"],
+	)
+	if wx, ok := e["widget_x"]; ok {
+		s += fmt.Sprintf(`,"widget_x":%d,"widget_y":%d,"checked":%v`, wx, e["widget_y"], e["checked"])
+	}
+	if pi, ok := e["page_index"]; ok {
+		s += fmt.Sprintf(`,"page_index":%d`, pi)
+	}
+	s += "}"
+	return s
+}
+
+// addWidgetFields attaches widget_x, widget_y, and checked to the element map
+// when the element type is checkbox or radio. widget_x is positioned ~24 px to
+// the left of the text bounding box — where the actual checkbox/radio widget
+// typically sits; widget_y is the vertical centre of the label.
+func addWidgetFields(elem map[string]interface{}, elementType learner.ElementType, text string, x, centerY int) {
+	if elementType != learner.ElementTypeCheckbox && elementType != learner.ElementTypeRadio {
+		return
+	}
+	wx := x - 24
+	if wx < 0 {
+		wx = 0
+	}
+	elem["widget_x"] = wx
+	elem["widget_y"] = centerY
+	elem["checked"] = learner.IsCheckedSymbol(text)
 }
 
 // handleFindAndClickAll finds and clicks multiple text labels in sequence.
