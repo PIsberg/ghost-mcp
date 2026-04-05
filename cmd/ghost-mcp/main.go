@@ -244,6 +244,29 @@ func handleClickAt(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallT
 		return mcp.NewToolResultError(fmt.Sprintf("invalid coordinates: %v", err)), nil
 	}
 
+	// Visual Anchor Support: if an ID is provided, look up its coordinates.
+	// This overrides any x/y provided in the request.
+	if id, err := getIntParam(request, "id"); err == nil && id > 0 {
+		view := globalLearner.GetView()
+		if view != nil {
+			found := false
+			for _, e := range view.Elements {
+				if e.ID == id {
+					x = e.X + e.Width/2
+					y = e.Y + e.Height/2
+					logging.Info("VISUAL ANCHOR: mapped ID %d to pixel (%d, %d)", id, x, y)
+					found = true
+					break
+				}
+			}
+			if !found {
+				return mcp.NewToolResultError(fmt.Sprintf("element ID %d not found in the current learned view", id)), nil
+			}
+		} else {
+			return mcp.NewToolResultError("click by ID requires an active learned view; call learn_screen or find_elements first"), nil
+		}
+	}
+
 	// Check for repeated clicks at same location
 	clickWarning := tracker.recordClick(x, y, button, true)
 	if clickWarning.ShouldStop {
@@ -964,11 +987,12 @@ Use this tool only when you have already moved the mouse to exact coordinates an
 	mcpServer.AddTool(mcp.NewTool("click_at",
 		mcp.WithDescription(`Move the mouse to (x, y) and click in one atomic operation. Preferred over separate move_mouse + click calls.
 
-⚠️ NOT FOR CLICKING BUTTONS BY LABEL: Use find_and_click instead — it finds the text on screen and clicks without needing you to supply coordinates.
+⚠️ VISUAL ANCHOR SUPPORT: If you have called get_annotated_view and see ID badges on the image, you can pass the "id" parameter instead of coordinates for 100% precision.
 
-Use click_at only when you already have exact pixel coordinates (e.g. center_x/center_y from find_elements, or a known fixed coordinate). Do not guess coordinates — guessing will miss.`),
-		mcp.WithNumber("x", mcp.Description("X coordinate in pixels from the left edge of the screen."), mcp.Required()),
-		mcp.WithNumber("y", mcp.Description("Y coordinate in pixels from the top edge of the screen."), mcp.Required()),
+Use click_at with "id" for perfect target alignment. Use click_at with (x, y) only when you already have exact pixel coordinates (e.g. center_x/center_y from find_elements).`),
+		mcp.WithNumber("x", mcp.Description("X coordinate in pixels from the left edge of the screen. Required if 'id' is not provided.")),
+		mcp.WithNumber("y", mcp.Description("Y coordinate in pixels from the top edge of the screen. Required if 'id' is not provided.")),
+		mcp.WithNumber("id", mcp.Description("Optional: The Visual ID badge number (from get_annotated_view or get_learned_view). If provided, x/y are ignored.")),
 		mcp.WithString("button", mcp.Description("Mouse button: 'left' (default), 'right', or 'middle'.")),
 		mcp.WithNumber("delay_ms", mcp.Description("Milliseconds to wait after the click for the UI to update (default: 100). Set to 0 to skip. Max: 10000.")),
 	), handleClickAt)

@@ -39,9 +39,11 @@ These rules override everything else. Violating them can cause data loss or runa
 | Wait for a UI change before proceeding | `wait_for_text` |
 | Click coordinates and wait for confirmation text | `click_until_text_appears` |
 | Run multiple sequential steps on one screen | `execute_workflow` |
-| Map a scrollable or complex interface first | `learn_screen` |
+| Map a scrollable or complex interface first | `find_and_click` |
 | Automate many steps after mapping the screen | `learn_screen` → cached `find_and_click` |
 | Learn screen + click in one convenience call | `smart_click` |
+| **High-Precision Visual Map (Set-of-Marks)** | `get_annotated_view` |
+| **Click an element by its ID badge** | `click_at(id=N)` |
 | Inspect what learn_screen found / debug misses | `get_learned_view` |
 | Type at the current cursor position | `type_text` |
 | Press a keyboard shortcut | `press_key` |
@@ -217,6 +219,17 @@ the learn/act/clear lifecycle manually:
 
 For more than one action on the same screen, use `learn_screen` explicitly so
 you control when `clear_learned_view` is called.
+
+### Scenario J — Hard-to-reach or icon-heavy UIs (Visual Anchors)
+
+If `find_and_click` fails or you see many similar buttons (e.g. 10 trash icons),
+use the **Visual Anchor** workflow for 100% precision:
+
+1. **Get the map:** ```json {"tool": "get_annotated_view"} ```
+2. **Inspect the image:** Look for the numeric ID badge (e.g. `[12]`) next to your target.
+3. **Click by ID:** ```json {"tool": "click_at", "arguments": {"id": 12}} ```
+
+This eliminates OCR "drift" and ensures you hit exactly the element you see.
 
 ---
 

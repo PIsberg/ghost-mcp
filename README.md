@@ -33,7 +33,7 @@ Ghost MCP allows AI assistants like Claude to control your computer's mouse, key
 | `get_screen_size` | Get screen resolution and DPI scale factor. | None | — |
 | `move_mouse` | Move mouse cursor to absolute coordinates. Origin (0,0) is top-left. | `x`, `y` | — |
 | `click` | Click mouse at current cursor position. Use `move_mouse` first. | `button` (left/right/middle) | — |
-| `click_at` | Move mouse to coordinates and click in one operation. Preferred over separate move+click. | `x`, `y`, `button` | — |
+| `click_at` | Move mouse to coordinates and click in one operation. **Supports Visual IDs** from annotated scans. | `x`, `y`, `id`, `button` | — |
 | `double_click` | Move mouse to coordinates and double-click. Use for opening files or activating items. | `x`, `y` | — |
 | `scroll` | Move mouse to coordinates and scroll the wheel. | `x`, `y`, `direction`, `amount` | — |
 | `type_text` | Type text via keyboard. Use for input fields. | `text`, `press_enter` | — |
@@ -49,7 +49,8 @@ Ghost MCP allows AI assistants like Claude to control your computer's mouse, key
 | `click_until_text_appears` | Click coordinates and retry until confirmation text appears or `max_clicks` is reached. Prevents infinite click loops. | `x`, `y`, `wait_for_text`, `button`, `timeout_ms`, `max_clicks` | ✓ |
 | `execute_workflow` | Execute multiple sequential steps sharing one learned screen map. 3–6× faster than individual calls when all steps are on the same screen. | `steps` (array), `clear_view_after` | ✓ |
 | `learn_screen` | Scan the full interface across scroll positions, run OCR, and cache the element map. Required before fast cached lookups. | `x`, `y`, `width`, `height`, `max_pages`, `scroll_amount` | ✓ |
-| `get_learned_view` | Return the cached element list from the last `learn_screen`. Use to inspect what was found or debug missed elements. | None | — |
+| `get_learned_view` | Return the cached element list from the last `learn_screen`. Elements include a unique `id`. | None | — |
+| `get_annotated_view` | Capture a screenshot and overlay **Visual ID badges** on detected elements. High-precision interaction tool. | `x`, `y`, `width`, `height` | ✓ |
 | `clear_learned_view` | Discard the current learned view. Call after navigation or significant UI changes to prevent stale positions. | None | — |
 | `set_learning_mode` | Enable or disable learning mode at runtime. When enabled, the first OCR call auto-scans the screen. | `enabled` | — |
 | `smart_click` | Convenience wrapper: runs `learn_screen` then `find_and_click` in one call. Use for a single click on an unfamiliar screen; use `learn_screen` explicitly for multi-step sessions. | `text`, `button`, `nth` | ✓ |

@@ -2,11 +2,81 @@
 package visual
 
 import (
+	"image"
+	"image/color"
+	"image/draw"
 	"math"
+	"strconv"
 	"time"
 
+	"github.com/ghost-mcp/internal/learner"
 	"github.com/go-vgo/robotgo"
+	"golang.org/x/image/font"
+	"golang.org/x/image/font/basicfont"
+	"golang.org/x/image/math/fixed"
 )
+
+// AnnotateImage draws bounding boxes and numeric ID badges on an image,
+// facilitating AI visual reasoning (Set-of-Marks).
+func AnnotateImage(src image.Image, elements []learner.Element) image.Image {
+	bounds := src.Bounds()
+	// Create an RGBA copy so we can draw safely.
+	dst := image.NewRGBA(bounds)
+	draw.Draw(dst, bounds, src, bounds.Min, draw.Src)
+
+	// Colours for the annotations.
+	boxColor := color.RGBA{0, 255, 0, 180}   // Bright green for boxes
+	badgeColor := color.RGBA{0, 0, 0, 220}   // Dark background for text
+	textColor := image.NewUniform(color.White)
+
+	d := &font.Drawer{
+		Dst:  dst,
+		Src:  textColor,
+		Face: basicfont.Face7x13,
+	}
+
+	for _, e := range elements {
+		// 1. Draw element bounding box (1px outline)
+		drawOutline(dst, e.X, e.Y, e.Width, e.Height, boxColor)
+
+		// 2. Prepare the ID badge string
+		idStr := strconv.Itoa(e.ID)
+		textWidth := len(idStr) * 7
+		badgeW := textWidth + 6
+		badgeH := 16
+
+		// 3. Draw badge background (positioned at top-left of element)
+		badgeRect := image.Rect(e.X, e.Y-badgeH, e.X+badgeW, e.Y)
+		// If at the very top of the screen, move badge inside the box
+		if e.Y-badgeH < bounds.Min.Y {
+			badgeRect = image.Rect(e.X, e.Y, e.X+badgeW, e.Y+badgeH)
+		}
+		draw.Draw(dst, badgeRect, image.NewUniform(badgeColor), image.Point{}, draw.Over)
+
+		// 4. Draw the numeric ID
+		d.Dot = fixed.Point26_6{
+			X: fixed.I(badgeRect.Min.X + 3),
+			Y: fixed.I(badgeRect.Min.Y + 12),
+		}
+		d.DrawString(idStr)
+	}
+
+	return dst
+}
+
+// drawOutline draws a 1-pixel rectangle outline.
+func drawOutline(dst *image.RGBA, x, y, w, h int, c color.Color) {
+	// Top and bottom
+	for xOff := 0; xOff < w; xOff++ {
+		dst.Set(x+xOff, y, c)
+		dst.Set(x+xOff, y+h-1, c)
+	}
+	// Left and right
+	for yOff := 0; yOff < h; yOff++ {
+		dst.Set(x, y+yOff, c)
+		dst.Set(x+w-1, y+yOff, c)
+	}
+}
 
 // ShowClickEffect draws a visual circle at the click location.
 func ShowClickEffect(x, y int) {

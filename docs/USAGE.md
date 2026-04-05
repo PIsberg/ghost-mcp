@@ -11,6 +11,7 @@ This guide demonstrates how to use Ghost MCP to automate UI interactions through
 - [OCR Text Payloads](#ocr-text-payloads)
 - [Example Workflows](#example-workflows)
 - [API Reference](#api-reference)
+- [High-Precision Visual Anchors](#high-precision-visual-anchors)
 
 ## Quick Start
 
@@ -184,6 +185,13 @@ Moves the mouse to the given coordinates and clicks — one call instead of two.
 ```
 
 `button` is optional and defaults to `"left"`.
+
+#### Visual Anchor Support
+`click_at` supports high-precision clicking via visual IDs:
+```json
+{ "tool": "click_at", "arguments": { "id": 12 } }
+```
+If `id` is provided, the `x` and `y` parameters are ignored. The server uses the coordinates from the last `get_annotated_view` or `learn_screen` scan.
 
 ---
 
@@ -1041,6 +1049,33 @@ sudo apt install gcc libx11-dev xorg-dev libxtst-dev libpng-dev
 sudo apt install xvfb
 export DISPLAY=:99
 Xvfb :99 &
+```
+
+---
+
+## High-Precision Visual Anchors
+
+When standard OCR matching fails or the UI is icon-heavy, use **Visual Anchors** (also known as Set-of-Marks) for 100% click precision.
+
+### Workflow
+
+1.  **Map the screen**: Call `learn_screen` or `find_elements` to discover elements.
+2.  **Get the annotated map**: Call `get_annotated_view`. This returns an image with numeric **ID badges** (e.g., `[5]`, `[12]`) overlaid on every element.
+3.  **Click by ID**: Look at the ID badge in the image and call `click_at({"id": N})`.
+
+This eliminates "pixel drift" and ensures you interact with exactly what you see.
+
+### Tool: get_annotated_view
+
+Captures the current viewport and overlays visual IDs from the last scan.
+
+**Arguments** (all optional):
+- `x`, `y`: Top-left of capture region (logical pixels)
+- `width`, `height`: Dimensions of region
+
+**Returns**: JSON metadata + JPEG image:
+```json
+{ "success": true, "element_count": 42, "format": "jpeg", "size_bytes": 125400 }
 ```
 
 ---

@@ -53,12 +53,30 @@ The tool scrolls DOWN during scanning and automatically scrolls BACK UP when don
 	mcpServer.AddTool(mcp.NewTool("get_learned_view",
 		mcp.WithDescription(`Return the full element map from the last learn_screen call.
 
-Each element includes: text (use this exact string in find_and_click), x/y coordinates,
-width/height, page_index (0=top, 1+=requires scrolling), and confidence (prefer >60).
+Each element includes: ID (can be used with click_at), text, x/y coordinates,
+width/height, page_index (0=top, 1+=requires scrolling), and confidence.
 
 Call immediately after learn_screen to inspect the complete interface before acting.
 Returns {"learned":false} if learn_screen has not been called yet.`),
 	), handleGetLearnedView)
+
+	mcpServer.AddTool(mcp.NewTool("get_annotated_view",
+		mcp.WithDescription(`Capture a screenshot of the current viewport and overlay visual IDs from the last scan.
+
+This is the HIGH-PRECISION visual exploration tool. It returns an image with bounding
+boxes and ID markers (e.g. [5], [12]) overlaid on every discovered element.
+
+WORKFLOW:
+1. Call learn_screen or find_elements first to discover elements.
+2. Call get_annotated_view to see the visual "Set-of-Marks".
+3. Use the ID badge numbers you see in the image to call click_at(id=N).
+
+Parameters (x, y, width, height) are optional and default to full screen.`),
+		mcp.WithNumber("x", mcp.Description("X coordinate of region to capture (default: 0).")),
+		mcp.WithNumber("y", mcp.Description("Y coordinate of region to capture (default: 0).")),
+		mcp.WithNumber("width", mcp.Description("Width of region to capture (default: full screen).")),
+		mcp.WithNumber("height", mcp.Description("Height of region to capture (default: full screen).")),
+	), handleGetAnnotatedView)
 
 	mcpServer.AddTool(mcp.NewTool("clear_learned_view",
 		mcp.WithDescription(`Discard the current learned view so the next learn_screen builds a fresh one.

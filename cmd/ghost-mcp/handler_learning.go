@@ -16,6 +16,7 @@ import (
 	"github.com/ghost-mcp/internal/logging"
 	"github.com/ghost-mcp/internal/ocr"
 	"github.com/ghost-mcp/internal/validate"
+	"github.com/ghost-mcp/internal/visual"
 	"github.com/go-vgo/robotgo"
 	"github.com/mark3labs/mcp-go/mcp"
 )
@@ -403,6 +404,7 @@ func handleGetLearnedView(_ context.Context, _ mcp.CallToolRequest) (*mcp.CallTo
 	}
 
 	type elementJSON struct {
+		ID         int     `json:"id"`
 		Text       string  `json:"text"`
 		X          int     `json:"x"`
 		Y          int     `json:"y"`
@@ -417,7 +419,7 @@ func handleGetLearnedView(_ context.Context, _ mcp.CallToolRequest) (*mcp.CallTo
 	elems := make([]elementJSON, len(view.Elements))
 	for i, e := range view.Elements {
 		elems[i] = elementJSON{
-			Text: e.Text, X: e.X, Y: e.Y,
+			ID: e.ID, Text: e.Text, X: e.X, Y: e.Y,
 			Width: e.Width, Height: e.Height,
 			Confidence: e.Confidence, PageIndex: e.PageIndex,
 			Type: string(e.Type), OcrPass: string(e.OcrPass),
@@ -471,6 +473,54 @@ func handleClearLearnedView(_ context.Context, _ mcp.CallToolRequest) (*mcp.Call
 	globalLearner.ClearView()
 	logging.Info("Learned view cleared")
 	return mcp.NewToolResultText(`{"success":true,"message":"Learned view cleared. Call learn_screen to rebuild."}`), nil
+}
+
+func handleGetAnnotatedView(_ context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	logging.Debug("Handling get_annotated_view request")
+
+	view := globalLearner.GetView()
+	if view == nil {
+		return mcp.NewToolResultText(`{"learned":false,"message":"No view has been learned yet. Call learn_screen or find_elements first."}`), nil
+	}
+
+	screenW, screenH := robotgo.GetScreenSize()
+	x, _ := getIntParam(request, "x")
+	y, _ := getIntParam(request, "y")
+	width := screenW
+	height := screenH
+	if w, err := getIntParam(request, "width"); err == nil {
+		width = w
+	}
+	if h, err := getIntParam(request, "height"); err == nil {
+		height = h
+	}
+
+	if err := validate.ScreenRegion(x, y, width, height, screenW, screenH); err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("invalid region: %v", err)), nil
+	}
+
+	// Capture the current viewport
+	img, err := robotgo.CaptureImg(x, y, width, height)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("capture failed: %v", err)), nil
+	}
+
+	// Annotate with visual anchors
+	annotated := visual.AnnotateImage(img, view.Elements)
+
+	// Encode to JPEG
+	buf := new(bytes.Buffer)
+	if err := jpeg.Encode(buf, annotated, &jpeg.Options{Quality: 85}); err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("encode failed: %v", err)), nil
+	}
+
+	b64 := base64.StdEncoding.EncodeToString(buf.Bytes())
+
+	return mcp.NewToolResultImage(
+		fmt.Sprintf(`{"success":true,"element_count":%d,"format":"jpeg","size_bytes":%d}`, len(view.Elements), buf.Len()),
+		b64,
+		"image/jpeg",
+	), nil
 }
 
 func handleSetLearningMode(_ context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {

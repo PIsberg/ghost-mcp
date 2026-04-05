@@ -281,6 +281,23 @@ func TestDeduplicateElements_KeepsNonOverlapping(t *testing.T) {
 	}
 }
 
+func TestDeduplicateElements_AssignsIDs(t *testing.T) {
+	elems := []Element{
+		{Text: "A", X: 100, Y: 100, Width: 10, Height: 10, PageIndex: 0},
+		{Text: "B", X: 200, Y: 100, Width: 10, Height: 10, PageIndex: 0},
+		{Text: "C", X: 300, Y: 100, Width: 10, Height: 10, PageIndex: 0},
+	}
+	got := DeduplicateElements(elems)
+	if len(got) != 3 {
+		t.Fatalf("expected 3, got %d", len(got))
+	}
+	for i, e := range got {
+		if e.ID != i+1 {
+			t.Errorf("expected ID %d for element %d, got %d", i+1, i, e.ID)
+		}
+	}
+}
+
 func TestDeduplicateElements_Empty(t *testing.T) {
 	got := DeduplicateElements(nil)
 	if got != nil {

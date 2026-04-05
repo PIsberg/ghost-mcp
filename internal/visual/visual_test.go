@@ -1,8 +1,37 @@
 package visual
 
 import (
+	"image"
+	"image/color"
 	"testing"
+
+	"github.com/ghost-mcp/internal/learner"
 )
+
+func TestAnnotateImage(t *testing.T) {
+	// Create a dummy image
+	img := image.NewRGBA(image.Rect(0, 0, 100, 100))
+	for y := 0; y < 100; y++ {
+		for x := 0; x < 100; x++ {
+			img.Set(x, y, color.White)
+		}
+	}
+
+	elements := []learner.Element{
+		{ID: 1, X: 10, Y: 10, Width: 20, Height: 10},
+		{ID: 2, X: 50, Y: 50, Width: 30, Height: 20},
+	}
+
+	result := AnnotateImage(img, elements)
+	if result == nil {
+		t.Fatal("expected non-nil result")
+	}
+
+	bounds := result.Bounds()
+	if bounds.Dx() != 100 || bounds.Dy() != 100 {
+		t.Errorf("expected size 100x100, got %dx%d", bounds.Dx(), bounds.Dy())
+	}
+}
 
 func TestShowClickEffect(t *testing.T) {
 	// Test that ShowClickEffect completes without panic

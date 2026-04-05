@@ -63,6 +63,7 @@ const (
 
 // Element represents a UI text element discovered during screen learning.
 type Element struct {
+	ID         int     `json:"id"`
 	Text       string  `json:"text"`
 	X          int     `json:"x"`
 	Y          int     `json:"y"`
@@ -656,6 +657,12 @@ func DeduplicateElements(elements []Element) []Element {
 			out = append(out, candidate)
 		}
 	}
+
+	// Assign sequential IDs (1-based) to the final deduplicated set.
+	for i := range out {
+		out[i].ID = i + 1
+	}
+
 	return out
 }
 
