@@ -52,7 +52,8 @@ type OcrPass string
 const (
 	OcrPassNormal     OcrPass = "normal"      // grayscale + contrast stretch
 	OcrPassInverted   OcrPass = "inverted"    // brightness inversion (white-on-dark)
-	OcrPassBrightText OcrPass = "bright_text" // isolates near-white pixels
+	OcrPassBrightText OcrPass = "bright_text" // isolates near-white pixels (white text on coloured bg)
+	OcrPassDarkText   OcrPass = "dark_text"   // isolates near-dark achromatic pixels (dark text on coloured bg)
 	OcrPassColor      OcrPass = "color"       // full colour (coloured-background buttons)
 )
 
@@ -318,11 +319,26 @@ func InferElementType(text string, width, height int) ElementType {
 }
 
 var inputPlaceholders = []string{
-	"enter your", "type here", "type your", "input your",
+	// Explicit entry prompts
+	"enter your", "enter text", "enter here",
+	"type here", "type your", "type text",
+	"input your", "input here",
+	"write here", "write your",
+	// Common field-name placeholders with ellipsis
 	"email...", "password...",
 	"username...", "name...", "phone...", "address...",
 	"city...", "state...", "zip...", "country...",
 	"message...", "comment...", "notes...", "description...",
+	"search here", "search for",
+	"url...", "website...", "link...",
+	"title...", "subject...", "topic...",
+	"first name", "last name", "full name",
+	// Multi-line / textarea clues
+	"multi-line", "multiline", "text area",
+	// Generic ellipsis-only fields (very short — checked last)
+	"type...", "enter...",
+	// MCP test fixture specific
+	"use mcp type_text",
 }
 
 // isInputPlaceholder returns true for common input field placeholder text.
@@ -332,24 +348,44 @@ func isInputPlaceholder(s string) bool {
 			return true
 		}
 	}
-	// Also check for common single-word placeholders (excluding dropdown/button words)
-	if s == "email" || s == "password" || s == "username" || s == "name" ||
-		s == "phone" || s == "address" || s == "city" || s == "message" ||
-		s == "comment" {
+	// Common single-word field-name placeholders (no ellipsis variant above).
+	switch s {
+	case "email", "password", "username", "name", "phone", "address",
+		"city", "message", "comment", "url", "website":
 		return true
 	}
 	return false
 }
 
+// checkedSymbols are Unicode codepoints that indicate a selected/ticked state.
+// Used by both isCheckboxText (symbol detection) and IsCheckedSymbol (state detection).
+const checkedSymbols = "☑☒✓✔✗✘" // ballot-box-checked, heavy-check, ballot-x variants
+
+// uncheckedSymbols are Unicode codepoints that indicate an empty/unselected state.
+const uncheckedSymbols = "☐□◻▢"
+
+// radioSelectedSymbols indicate a selected radio button.
+const radioSelectedSymbols = "●◉⊙⊚"
+
+// radioEmptySymbols indicate an unselected radio button.
+const radioEmptySymbols = "○◯◎"
+
 var checkboxPatterns = []string{
-	"[ ]", "[x]", "[✓]", "[✔]",
-	"i agree", "accept", "agree to", "terms",
-	"subscribe", "remember me", "keep me",
+	// Symbol strings OCR may return as multi-char sequences
+	"[ ]", "[x]", "[X]", "[✓]", "[✔]", "[ x ]",
+	"(x)", "(X)", "( )",
+	// Agreement / opt-in text
+	"i agree", "agree to", "agree with", "accept",
+	"subscribe", "unsubscribe", "opt in", "opt out",
+	"remember me", "keep me", "stay logged in",
+	"select all", "deselect all",
+	// State description text
+	"check this", "tick this", "mark as",
 }
 
-// isCheckboxText returns true for checkbox text or symbols.
+// isCheckboxText returns true when OCR output looks like a checkbox widget or label.
 func isCheckboxText(s string) bool {
-	if strings.ContainsAny(s, "☐☑✓✗✘√[]") {
+	if strings.ContainsAny(s, checkedSymbols+uncheckedSymbols) {
 		return true
 	}
 	for _, p := range checkboxPatterns {
@@ -361,12 +397,18 @@ func isCheckboxText(s string) bool {
 }
 
 var radioPatterns = []string{
-	"option ", "choice ", "select this",
+	// Enumerated options — the trailing space is intentional to avoid matching
+	// words like "optional" or "choices".
+	"option ", "choice ",
+	// Symbol strings OCR may return
+	"( )", "(*)", "( • )", "(•)",
+	// Explicit radio-button phrases
+	"select this", "select option",
 }
 
-// isRadioText returns true for radio button text or symbols.
+// isRadioText returns true when OCR output looks like a radio-button widget or label.
 func isRadioText(s string) bool {
-	if strings.ContainsAny(s, "○●◉◎") {
+	if strings.ContainsAny(s, radioSelectedSymbols+radioEmptySymbols) {
 		return true
 	}
 	for _, p := range radioPatterns {
@@ -375,6 +417,22 @@ func isRadioText(s string) bool {
 		}
 	}
 	return false
+}
+
+// IsCheckedSymbol returns true when text contains a symbol indicating a
+// checked/selected control state. Used by find_elements to populate the
+// "checked" field for checkbox and radio elements when OCR captures state symbols.
+//
+// Checked indicators: ☑ ☒ ✓ ✔ ✗ ✘ ● ◉ [x] [X] (*) (•)
+// These are distinct from mere presence indicators (☐ ○) which are unchecked.
+func IsCheckedSymbol(text string) bool {
+	if strings.ContainsAny(text, checkedSymbols+radioSelectedSymbols) {
+		return true
+	}
+	lower := strings.ToLower(text)
+	return strings.Contains(lower, "[x]") ||
+		strings.Contains(lower, "(*)") ||
+		strings.Contains(lower, "(•)")
 }
 
 var dropdownPatterns = []string{

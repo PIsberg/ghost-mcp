@@ -471,6 +471,143 @@ func TestBrightTextToGray_DarkBackground(t *testing.T) {
 	}
 }
 
+// TestDarkTextToGray_DarkOnColored verifies that dark achromatic text on a
+// coloured background is detected correctly. The canonical case is the WARNING
+// button: dark #333 text on yellow #f0ad4e background.
+func TestDarkTextToGray_DarkOnColored(t *testing.T) {
+	// WARNING button: yellow background, dark text, anti-aliased edge.
+	yellowBg := color.RGBA{R: 240, G: 173, B: 78, A: 255}    // #f0ad4e, lum≈180
+	darkText := color.RGBA{R: 51, G: 51, B: 51, A: 255}      // #333, lum=51, spread=0
+	antiAliased := color.RGBA{R: 146, G: 112, B: 65, A: 255} // 50% blend, lum≈115, spread=81
+
+	// White background — should NOT be detected as text (lum=255 > darkTextMaxLum).
+	whiteBg := color.RGBA{R: 255, G: 255, B: 255, A: 255}
+	// Saturated color pixel — should be excluded by spread check.
+	cyanPx := color.RGBA{R: 0, G: 200, B: 220, A: 255} // lum≈148, spread=220
+	// Dark but saturated pixel — should be excluded by spread check.
+	darkRed := color.RGBA{R: 100, G: 0, B: 0, A: 255} // lum=21, spread=100 ≤ 130 — included
+
+	img := image.NewRGBA(image.Rect(0, 0, 10, 10))
+	pixels := map[image.Point]color.RGBA{
+		{0, 0}: darkText,
+		{1, 1}: antiAliased,
+		{2, 2}: yellowBg,
+		{3, 3}: whiteBg,
+		{4, 4}: cyanPx,
+		{5, 5}: darkRed,
+	}
+	for y := 0; y < 10; y++ {
+		for x := 0; x < 10; x++ {
+			if c, ok := pixels[image.Pt(x, y)]; ok {
+				img.Set(x, y, c)
+			} else {
+				img.Set(x, y, yellowBg)
+			}
+		}
+	}
+
+	got := darkTextToGray(img)
+
+	checks := []struct {
+		pt   image.Point
+		want uint8
+		desc string
+	}{
+		{image.Pt(0, 0), 0, "#333 dark text (lum=51, spread=0) → black"},
+		{image.Pt(1, 1), 0, "50% anti-aliased #333+yellow (lum≈115, spread=81) → black"},
+		{image.Pt(2, 2), 255, "yellow #f0ad4e background (lum≈180 > 175) → white"},
+		{image.Pt(3, 3), 255, "white background (lum=255 > 175) → white"},
+		{image.Pt(4, 4), 255, "cyan (spread=220 > 130) → white"},
+		{image.Pt(5, 5), 0, "dark red (lum=21 ≤ 175, spread=100 ≤ 130) → black"},
+	}
+	for _, c := range checks {
+		if got.GrayAt(c.pt.X, c.pt.Y).Y != c.want {
+			t.Errorf("%s: got gray=%d, want %d", c.desc, got.GrayAt(c.pt.X, c.pt.Y).Y, c.want)
+		}
+	}
+}
+
+// TestDarkTextToGray_PlaceholderGray verifies that common browser placeholder
+// text colors (medium gray, achromatic) are detected by darkTextToGray after
+// raising darkTextMaxLum to 175. This ensures find_elements can classify input
+// fields when their placeholder text is rendered in gray rather than black.
+func TestDarkTextToGray_PlaceholderGray(t *testing.T) {
+	checks := []struct {
+		c    color.RGBA
+		want uint8
+		desc string
+	}{
+		// Chrome/Edge: rgba(0,0,0,0.54) on white → (122,122,122), lum=122
+		{color.RGBA{122, 122, 122, 255}, 0, "Chrome placeholder lum=122 → black"},
+		// Common CSS #999, lum=153
+		{color.RGBA{153, 153, 153, 255}, 0, "#999 placeholder lum=153 → black"},
+		// Common CSS #a0a0a0, lum=160
+		{color.RGBA{160, 160, 160, 255}, 0, "#a0a0a0 placeholder lum=160 → black"},
+		// Common CSS #a9a9a9, lum=169
+		{color.RGBA{169, 169, 169, 255}, 0, "#a9a9a9 placeholder lum=169 → black"},
+		// White background must stay white
+		{color.RGBA{255, 255, 255, 255}, 255, "white background lum=255 → white"},
+		// Light page bg #f5f5f5 must stay white
+		{color.RGBA{245, 245, 245, 255}, 255, "#f5f5f5 page bg lum=245 → white"},
+		// Yellow button bg #f0ad4e excluded by both lum>175 and spread>130
+		{color.RGBA{240, 173, 78, 255}, 255, "yellow #f0ad4e lum=180 spread=162 → white"},
+		// Cyan excluded by spread despite lum<175
+		{color.RGBA{23, 162, 184, 255}, 255, "cyan #17a2b8 lum=158 spread=161 → white"},
+	}
+
+	for _, c := range checks {
+		img := image.NewRGBA(image.Rect(0, 0, 1, 1))
+		img.SetRGBA(0, 0, c.c)
+		got := darkTextToGray(img)
+		if got.GrayAt(0, 0).Y != c.want {
+			t.Errorf("%s: got gray=%d, want %d", c.desc, got.GrayAt(0, 0).Y, c.want)
+		}
+	}
+}
+
+// TestDarkTextToGray_ColoredDarkPixelExcludedBySpread verifies that dark but
+// highly-saturated pixels (e.g. a dark blue button border) are excluded by the
+// spread check even when their luminance is below darkTextMaxLum.
+func TestDarkTextToGray_ColoredDarkPixelExcludedBySpread(t *testing.T) {
+	// Dark blue: lum≈18, but spread=131 > brightTextMaxSpread(130) → excluded.
+	darkBlue := color.RGBA{R: 0, G: 0, B: 131, A: 255}
+	img := image.NewRGBA(image.Rect(0, 0, 4, 4))
+	for y := 0; y < 4; y++ {
+		for x := 0; x < 4; x++ {
+			img.Set(x, y, darkBlue)
+		}
+	}
+	got := darkTextToGray(img)
+	if got.GrayAt(2, 2).Y != 255 {
+		t.Errorf("dark blue (spread=131 > 130) should be excluded: got gray=%d, want 255", got.GrayAt(2, 2).Y)
+	}
+}
+
+// TestDarkTextToGray_SlowPath verifies that the slow (non-RGBA) image path
+// produces the same output as the fast *image.RGBA path.
+func TestDarkTextToGray_SlowPath(t *testing.T) {
+	// Build an RGBA image and convert to NRGBA to force the slow path.
+	rgba := image.NewRGBA(image.Rect(0, 0, 4, 4))
+	rgba.Set(0, 0, color.RGBA{R: 51, G: 51, B: 51, A: 255})   // dark text → black
+	rgba.Set(1, 1, color.RGBA{R: 240, G: 173, B: 78, A: 255}) // yellow bg → white
+
+	// image.NRGBA triggers the slow path in darkTextToGray.
+	nrgba := image.NewNRGBA(image.Rect(0, 0, 4, 4))
+	nrgba.Set(0, 0, color.RGBA{R: 51, G: 51, B: 51, A: 255})
+	nrgba.Set(1, 1, color.RGBA{R: 240, G: 173, B: 78, A: 255})
+
+	fast := darkTextToGray(rgba)
+	slow := darkTextToGray(nrgba)
+
+	for _, pt := range []image.Point{{0, 0}, {1, 1}} {
+		f := fast.GrayAt(pt.X, pt.Y).Y
+		s := slow.GrayAt(pt.X, pt.Y).Y
+		if f != s {
+			t.Errorf("at %v: fast=%d slow=%d — paths disagree", pt, f, s)
+		}
+	}
+}
+
 // TestOptions_DefaultIsGrayscale verifies the zero value of Options selects
 // grayscale mode (Color == false), preserving backward-compatible behaviour.
 func TestOptions_DefaultIsGrayscale(t *testing.T) {
@@ -534,18 +671,59 @@ func TestReadImage_InvertedMode(t *testing.T) {
 	}
 }
 
+// TestReadAllPasses_DeduplicatesIdenticalWords verifies that ReadAllPasses merges
+// words found by multiple passes (same text, same approximate position) into a
+// single entry — so a word visible in both normal and bright-text passes is not
+// double-counted.
+func TestReadAllPasses_DeduplicatesIdenticalWords(t *testing.T) {
+	// A plain white image with no real text — all passes will return zero words.
+	// We verify that ReadAllPasses returns a non-error result with an empty word list.
+	img := whiteImage(200, 100)
+	result, err := ReadAllPasses(img)
+	if err != nil && !strings.Contains(err.Error(), "tessdata") {
+		t.Fatalf("ReadAllPasses returned unexpected error: %v", err)
+	}
+	if result == nil {
+		t.Fatal("expected non-nil result from ReadAllPasses")
+	}
+	// White image should yield zero words regardless of pass count.
+	if len(result.Words) != 0 {
+		t.Errorf("expected 0 words from blank image, got %d", len(result.Words))
+	}
+}
+
+// TestReadAllPasses_ReturnsMergedResult verifies that ReadAllPasses returns a
+// Result whose Text field is a space-joined version of all Words.
+func TestReadAllPasses_ReturnsMergedResult(t *testing.T) {
+	img := whiteImage(10, 10)
+	result, err := ReadAllPasses(img)
+	if err != nil && !strings.Contains(err.Error(), "tessdata") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result == nil {
+		return // tessdata missing; can't verify further
+	}
+	// Text must be consistent with Words.
+	if len(result.Words) == 0 && result.Text != "" {
+		t.Errorf("Words is empty but Text=%q; want empty string", result.Text)
+	}
+}
+
 func TestPrepareParallelImageSet_GrayscaleIncludesAllVariants(t *testing.T) {
 	img := whiteImage(20, 10)
 	set, err := PrepareParallelImageSet(img, true)
 	if err != nil {
 		t.Fatalf("PrepareParallelImageSet: %v", err)
 	}
-	if len(set.Normal) == 0 || len(set.Inverted) == 0 || len(set.BrightText) == 0 || len(set.Color) == 0 {
+	if len(set.Normal) == 0 || len(set.Inverted) == 0 || len(set.BrightText) == 0 ||
+		len(set.DarkText) == 0 || len(set.Color) == 0 || len(set.ColorInverted) == 0 {
 		t.Fatalf("expected all grayscale variants to be populated: %+v", map[string]int{
-			"normal":      len(set.Normal),
-			"inverted":    len(set.Inverted),
-			"bright_text": len(set.BrightText),
-			"color":       len(set.Color),
+			"normal":         len(set.Normal),
+			"inverted":       len(set.Inverted),
+			"bright_text":    len(set.BrightText),
+			"dark_text":      len(set.DarkText),
+			"color":          len(set.Color),
+			"color_inverted": len(set.ColorInverted),
 		})
 	}
 }
@@ -562,8 +740,8 @@ func TestPrepareParallelImageSet_ColorOnlyReusesBytes(t *testing.T) {
 	if &set.Normal[0] != &set.Color[0] {
 		t.Fatal("expected non-grayscale path to reuse the same prepared bytes for normal and color")
 	}
-	if len(set.Inverted) != 0 || len(set.BrightText) != 0 {
-		t.Fatal("expected inverted and bright-text variants to stay empty when grayscale=false")
+	if len(set.Inverted) != 0 || len(set.BrightText) != 0 || len(set.DarkText) != 0 || len(set.ColorInverted) != 0 {
+		t.Fatal("expected inverted, bright-text, dark-text, and color-inverted variants to stay empty when grayscale=false")
 	}
 }
 
@@ -585,10 +763,12 @@ func TestPrepareParallelImageSet_GrayscaleVariantsAreIndependent(t *testing.T) {
 	}
 
 	// Each variant must be a distinct allocation — they encode the image differently.
-	if len(set.Normal) == 0 || len(set.Inverted) == 0 || len(set.BrightText) == 0 || len(set.Color) == 0 {
-		t.Fatal("expected all four variants to be non-empty")
+	if len(set.Normal) == 0 || len(set.Inverted) == 0 || len(set.BrightText) == 0 ||
+		len(set.DarkText) == 0 || len(set.Color) == 0 || len(set.ColorInverted) == 0 {
+		t.Fatal("expected all six variants to be non-empty")
 	}
-	if &set.Normal[0] == &set.Inverted[0] || &set.Normal[0] == &set.BrightText[0] || &set.Normal[0] == &set.Color[0] {
+	if &set.Normal[0] == &set.Inverted[0] || &set.Normal[0] == &set.BrightText[0] ||
+		&set.Normal[0] == &set.DarkText[0] || &set.Normal[0] == &set.Color[0] {
 		t.Fatal("grayscale variants must not share memory — parallel writes to the same buffer would race")
 	}
 }

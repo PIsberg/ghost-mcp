@@ -738,8 +738,13 @@ func TestIntegration_FindElementsInvalidRegion(t *testing.T) {
 	t.Log("✓ Invalid region correctly rejected")
 }
 
-// TestIntegration_FindAndClickButton verifies find_and_click against the fixture's
-// plain-text buttons (dark text, easily readable by grayscale OCR).
+// TestIntegration_FindAndClickButton verifies find_and_click against all four
+// fixture buttons, each with a different colour rendering challenge:
+//
+//   - Primary (#667eea purple,  white text) — BrightText / ColorInverted pass
+//   - Success (#28a745 green,   white text) — Normal / BrightText pass
+//   - Warning (#f0ad4e yellow,  dark #333 text) — DarkText pass
+//   - Info    (#17a2b8 cyan,    white text) — ColorInverted pass
 func TestIntegration_FindAndClickButton(t *testing.T) {
 	if os.Getenv("INTEGRATION") != "1" {
 		t.Skip("Integration tests not enabled")
@@ -761,53 +766,29 @@ func TestIntegration_FindAndClickButton(t *testing.T) {
 	ctx := context.Background()
 	time.Sleep(settleTime)
 
-	for _, label := range []string{"Primary", "Success", "Warning"} {
-		t.Run(label, func(t *testing.T) {
-			result, err := client.FindAndClick(ctx, label, mcpclient.FindAndClickOptions{})
+	buttons := []struct {
+		label string
+		hint  string
+	}{
+		{"Primary", "white text on purple #667eea — BrightText/ColorInverted pass"},
+		{"Success", "white text on green #28a745 — Normal/BrightText pass"},
+		{"Warning", "dark #333 text on yellow #f0ad4e — DarkText pass"},
+		{"Info", "white text on cyan #17a2b8 — ColorInverted pass"},
+	}
+	for _, btn := range buttons {
+		btn := btn
+		t.Run(btn.label, func(t *testing.T) {
+			result, err := client.FindAndClick(ctx, btn.label, mcpclient.FindAndClickOptions{})
 			if err != nil {
-				t.Fatalf("FindAndClick(%q) error: %v", label, err)
+				t.Fatalf("FindAndClick(%q) error: %v", btn.label, err)
 			}
 			if !result.Success {
-				t.Fatalf("FindAndClick(%q) not found", label)
+				t.Fatalf("FindAndClick(%q) not found (%s)", btn.label, btn.hint)
 			}
-			t.Logf("✓ Clicked %q at (%d, %d)", label, result.ActualX, result.ActualY)
+			t.Logf("✓ Clicked %q at (%d, %d) via %s", btn.label, result.ActualX, result.ActualY, btn.hint)
 			time.Sleep(settleTime)
 		})
 	}
-}
-
-// TestIntegration_FindAndClickColoredButton verifies that find_and_click can locate
-// the Info button, which has white text on a cyan/blue gradient background that is
-// invisible to grayscale OCR. This exercises the color-mode fallback in the 3-pass OCR.
-func TestIntegration_FindAndClickColoredButton(t *testing.T) {
-	if os.Getenv("INTEGRATION") != "1" {
-		t.Skip("Integration tests not enabled")
-	}
-
-	skipIfNoGCC(t)
-	skipIfNoDisplay(t)
-
-	_, cleanup := startFixtureServer(t)
-	defer cleanup()
-	waitForFixture(t)
-
-	client, err := mcpclient.NewClient(mcpclient.Config{Timeout: testTimeout})
-	if err != nil {
-		t.Fatalf("Failed to create MCP client: %v", err)
-	}
-	defer client.Close()
-
-	ctx := context.Background()
-	time.Sleep(settleTime)
-
-	result, err := client.FindAndClick(ctx, "Info", mcpclient.FindAndClickOptions{})
-	if err != nil {
-		t.Fatalf("FindAndClick('Info') error: %v", err)
-	}
-	if !result.Success {
-		t.Fatal("FindAndClick('Info') not found — color OCR fallback may have failed")
-	}
-	t.Logf("✓ Clicked Info button at (%d, %d)", result.ActualX, result.ActualY)
 }
 
 // TestIntegration_FindAndClickAll verifies find_and_click_all clicks multiple buttons
