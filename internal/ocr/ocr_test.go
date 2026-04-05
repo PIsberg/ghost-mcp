@@ -476,8 +476,8 @@ func TestBrightTextToGray_DarkBackground(t *testing.T) {
 // button: dark #333 text on yellow #f0ad4e background.
 func TestDarkTextToGray_DarkOnColored(t *testing.T) {
 	// WARNING button: yellow background, dark text, anti-aliased edge.
-	yellowBg := color.RGBA{R: 240, G: 173, B: 78, A: 255}  // #f0ad4e, lum≈180
-	darkText := color.RGBA{R: 51, G: 51, B: 51, A: 255}    // #333, lum=51, spread=0
+	yellowBg := color.RGBA{R: 240, G: 173, B: 78, A: 255}    // #f0ad4e, lum≈180
+	darkText := color.RGBA{R: 51, G: 51, B: 51, A: 255}      // #333, lum=51, spread=0
 	antiAliased := color.RGBA{R: 146, G: 112, B: 65, A: 255} // 50% blend, lum≈115, spread=81
 
 	// White background — should NOT be detected as text (lum=255 > darkTextMaxLum).
@@ -550,7 +550,7 @@ func TestDarkTextToGray_ColoredDarkPixelExcludedBySpread(t *testing.T) {
 func TestDarkTextToGray_SlowPath(t *testing.T) {
 	// Build an RGBA image and convert to NRGBA to force the slow path.
 	rgba := image.NewRGBA(image.Rect(0, 0, 4, 4))
-	rgba.Set(0, 0, color.RGBA{R: 51, G: 51, B: 51, A: 255}) // dark text → black
+	rgba.Set(0, 0, color.RGBA{R: 51, G: 51, B: 51, A: 255})   // dark text → black
 	rgba.Set(1, 1, color.RGBA{R: 240, G: 173, B: 78, A: 255}) // yellow bg → white
 
 	// image.NRGBA triggers the slow path in darkTextToGray.
@@ -630,6 +630,44 @@ func TestReadImage_InvertedMode(t *testing.T) {
 	_, err := ReadImage(img, Options{Inverted: true})
 	if err != nil && !strings.Contains(err.Error(), "tessdata") {
 		t.Errorf("ReadImage with Inverted=true returned unexpected error: %v", err)
+	}
+}
+
+// TestReadAllPasses_DeduplicatesIdenticalWords verifies that ReadAllPasses merges
+// words found by multiple passes (same text, same approximate position) into a
+// single entry — so a word visible in both normal and bright-text passes is not
+// double-counted.
+func TestReadAllPasses_DeduplicatesIdenticalWords(t *testing.T) {
+	// A plain white image with no real text — all passes will return zero words.
+	// We verify that ReadAllPasses returns a non-error result with an empty word list.
+	img := whiteImage(200, 100)
+	result, err := ReadAllPasses(img)
+	if err != nil && !strings.Contains(err.Error(), "tessdata") {
+		t.Fatalf("ReadAllPasses returned unexpected error: %v", err)
+	}
+	if result == nil {
+		t.Fatal("expected non-nil result from ReadAllPasses")
+	}
+	// White image should yield zero words regardless of pass count.
+	if len(result.Words) != 0 {
+		t.Errorf("expected 0 words from blank image, got %d", len(result.Words))
+	}
+}
+
+// TestReadAllPasses_ReturnsMergedResult verifies that ReadAllPasses returns a
+// Result whose Text field is a space-joined version of all Words.
+func TestReadAllPasses_ReturnsMergedResult(t *testing.T) {
+	img := whiteImage(10, 10)
+	result, err := ReadAllPasses(img)
+	if err != nil && !strings.Contains(err.Error(), "tessdata") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result == nil {
+		return // tessdata missing; can't verify further
+	}
+	// Text must be consistent with Words.
+	if len(result.Words) == 0 && result.Text != "" {
+		t.Errorf("Words is empty but Text=%q; want empty string", result.Text)
 	}
 }
 

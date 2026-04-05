@@ -449,6 +449,93 @@ func PrepareParallelImageSet(img image.Image, grayscale bool) (*PreparedImageSet
 	return set, nil
 }
 
+// ReadAllPasses runs all six preprocessing passes against img concurrently and
+// returns a single merged Result with duplicate words removed. Two words are
+// considered duplicates when their lowercased text matches and their top-left
+// corner is within 10 px on each axis. The first pass to discover a word wins.
+//
+// Pass order (earlier = higher priority for deduplication):
+//
+//	normal → inverted → bright-text → dark-text → color → color-inverted
+//
+// Use this when you need maximum text coverage in a single scan (e.g.
+// find_elements) rather than searching for a specific string.
+func ReadAllPasses(img image.Image) (*Result, error) {
+	prepared, err := PrepareParallelImageSet(img, true)
+	if err != nil {
+		return nil, fmt.Errorf("prepare passes: %w", err)
+	}
+
+	type passResult struct {
+		order int
+		res   *Result
+	}
+	ch := make(chan passResult, 6)
+
+	passList := [6]struct {
+		order int
+		data  []byte
+	}{
+		{0, prepared.Normal},
+		{1, prepared.Inverted},
+		{2, prepared.BrightText},
+		{3, prepared.DarkText},
+		{4, prepared.Color},
+		{5, prepared.ColorInverted},
+	}
+	for _, p := range passList {
+		p := p
+		go func() {
+			res, _ := ReadPreparedBytes(p.data, ScaleFactor, Options{})
+			ch <- passResult{p.order, res}
+		}()
+	}
+
+	// Collect all results.
+	results := make([]*Result, 6)
+	for range passList {
+		pr := <-ch
+		results[pr.order] = pr.res
+	}
+
+	// Merge with deduplication: first-seen word (by priority order) wins.
+	type wordKey struct {
+		text string
+		x, y int
+	}
+	seen := make(map[wordKey]bool)
+	var merged []Word
+	for _, res := range results {
+		if res == nil {
+			continue
+		}
+		for _, w := range res.Words {
+			if w.Confidence < MinConfidence || w.Text == "" {
+				continue
+			}
+			key := wordKey{
+				text: strings.ToLower(strings.TrimSpace(w.Text)),
+				x:    (w.X / 10) * 10,
+				y:    (w.Y / 10) * 10,
+			}
+			if seen[key] {
+				continue
+			}
+			seen[key] = true
+			merged = append(merged, w)
+		}
+	}
+
+	var sb strings.Builder
+	for i, w := range merged {
+		if i > 0 {
+			sb.WriteByte(' ')
+		}
+		sb.WriteString(w.Text)
+	}
+	return &Result{Text: sb.String(), Words: merged}, nil
+}
+
 // ReadPreparedBytes runs OCR on already-preprocessed image bytes.
 func ReadPreparedBytes(imgBytes []byte, scaleFactor int, opts Options) (*Result, error) {
 	client := getPooledClient()

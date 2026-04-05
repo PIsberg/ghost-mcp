@@ -1714,9 +1714,9 @@ func handleFindElements(ctx context.Context, request mcp.CallToolRequest) (*mcp.
 
 	saveScreenshotIfKept(img, "ghost-mcp-findelements")
 
-	// Run OCR with grayscale mode for best text detection
-	// Grayscale + contrast stretch detects labels better than color mode
-	ocrResult, ocrErr := ocr.ReadImage(img, ocr.Options{Color: false})
+	// Run all six OCR passes concurrently and merge results so that coloured
+	// buttons (white text on dark, dark text on yellow, etc.) are all detected.
+	ocrResult, ocrErr := ocr.ReadAllPasses(img)
 	if ocrErr != nil {
 		logging.Error("OCR failed: %v", ocrErr)
 		return mcp.NewToolResultError(fmt.Sprintf("OCR failed: %v", ocrErr)), nil
