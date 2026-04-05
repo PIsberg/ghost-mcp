@@ -32,72 +32,53 @@ These rules override everything else. Violating them can cause data loss or runa
 
 | What you need to do | Best tool |
 |---|---|
-| Click a button or link by its visible label | `find_and_click` |
-| Click multiple distinct elements atomically | `find_and_click_all` |
-| Click a field and type into it | `find_click_and_type` |
-| Read every visible text element + coordinates | `find_elements` |
-| Wait for a UI change before proceeding | `wait_for_text` |
-| Click coordinates and wait for confirmation text | `click_until_text_appears` |
-| Run multiple sequential steps on one screen | `execute_workflow` |
-| Map a scrollable or complex interface first | `find_and_click` |
-| Automate many steps after mapping the screen | `learn_screen` → cached `find_and_click` |
-| Learn screen + click in one convenience call | `smart_click` |
-| **High-Precision Visual Map (Set-of-Marks)** | `get_annotated_view` |
-| **Click an element by its ID badge** | `click_at(id=N)` |
-| Inspect what learn_screen found / debug misses | `get_learned_view` |
-| Type at the current cursor position | `type_text` |
-| Press a keyboard shortcut | `press_key` |
-| Scroll and search for text | `scroll_until_text` |
-| Take a screenshot for visual inspection | `take_screenshot` |
-| Get screen size / DPI | `get_screen_size` |
+| **1. SCAN (Capture UI)** | `learn_screen` |
+| **2. MAP (Searchable Text/IDs)** | `get_learned_view` |
+| **3. VERIFY (Visual ID Badges)** | `get_annotated_view` |
+| **4. ACT (Precision Click)** | `click_at(id=N)` |
+| **4. ACT (Focus & Type)** | `click_and_type(id=N, text="...")` |
+| **4. ACT (Hover/Drag Start)** | `move_mouse(id=N)` |
+| **4. ACT (Open/Activate)** | `double_click(id=N)` |
 
-**Avoid:** using `take_screenshot` to read text — use `find_elements` instead (10× faster, machine-readable).
+**CRITICAL FLOW:** You must call `get_learned_view` to load the text-to-ID mappings into your context window, followed by `get_annotated_view` to visually confirm where those IDs are located.
+
+**Avoid:** using `take_screenshot` to read text — use the 1-2-3-4 flow above instead.
 
 ---
 
 ## 2. Optimal Tool Paths by Scenario
 
-### Scenario A — Click a single button
+### Scenario A — First Time on a New Screen (MANDATORY PRECISION FLOW)
+
+You MUST follow this 4-step sequence. Skipping ANY step is a failure:
+
+1. **Scan**: `json {"tool": "learn_screen", "arguments": {"max_pages": 1}} ` (Capture)
+2. **Read Map**: `json {"tool": "get_learned_view", "arguments": {}} ` (**REQUIRED**: Load ID mappings)
+3. **Verify UI**: `json {"tool": "get_annotated_view", "arguments": {}} ` (**REQUIRED**: See the ID badges)
+4. **Interact**: Use IDs from Step 2 confirmed in Step 3 for 100% reliable automation.
+
+**CRITICAL:** NEVER use `take_screenshot` to identify IDs or read labels. `get_annotated_view` is the ONLY tool that provides the visual ID badges required for interaction.
+
+### Scenario B — Click a button by label (Quick Task)
+
+If you only need one quick click and the UI is familiar:
 
 ```json
 {"tool": "find_and_click", "arguments": {"text": "Save"}}
 ```
 
-If you are unsure the click succeeded, chain with `wait_for_text`:
+### Scenario C — Fill a complex form
 
-```json
-{"tool": "find_and_click", "arguments": {"text": "Save"}}
-{"tool": "wait_for_text",  "arguments": {"text": "Saved successfully", "visible": true, "timeout_ms": 5000}}
-```
-
-### Scenario B — Fill a simple form
+1. Map the screen once: `learn_screen`
+2. Act on elements using the cached map (10× faster):
 
 ```json
 {"tool": "find_click_and_type", "arguments": {"text": "Username", "type_text": "alice@example.com"}}
 {"tool": "find_click_and_type", "arguments": {"text": "Password", "type_text": "hunter2"}}
 {"tool": "find_and_click",      "arguments": {"text": "Sign in"}}
-{"tool": "wait_for_text",       "arguments": {"text": "Dashboard", "visible": true, "timeout_ms": 8000}}
 ```
 
-Or in one call using `execute_workflow` (screen is learned once; all steps share that cached map):
-
-```json
-{
-  "tool": "execute_workflow",
-  "arguments": {
-    "steps": [
-      {"action": "type",  "text": "Username", "value": "alice@example.com"},
-      {"action": "type",  "text": "Password", "value": "hunter2"},
-      {"action": "click", "text": "Sign in"}
-    ]
-  }
-}
-```
-
-> `execute_workflow` does not support `wait_for_text`. To verify post-login navigation, call
-> `wait_for_text` as a separate tool call after the workflow completes.
-
-### Scenario C — Multiple instructions given at once (batch, same screen)
+### Scenario D — Multiple instructions given at once (batch, same screen)
 
 Batch Actions (Same Screen): ALWAYS use `execute_workflow`. It caches the screen map once,
 running 3–6× faster than individual calls. Constraint: all steps MUST be on the same page.
@@ -116,37 +97,10 @@ If spanning multiple pages, use individual calls and call `clear_learned_view` b
 }
 ```
 
-### Scenario D — Click multiple distinct elements atomically
-
-`find_and_click_all` clicks every element in the list in a single call.
-Use it when you need to click several known, distinct targets that are all
-present on screen — for example, checking three checkboxes or clicking a
-sequence of toolbar buttons. Do NOT use it to try alternative labels for one
-target; use `find_and_click` with `select_best=true` for fuzzy matching instead.
-
-```json
-{
-  "tool": "find_and_click_all",
-  "arguments": {"texts": "[\"Enable logging\", \"Enable metrics\", \"Enable tracing\"]"}
-}
-```
-
-To dismiss a dialog where you know only one label will match:
-
-```json
-{"tool": "find_and_click", "arguments": {"text": "OK"}}
-```
-
 ### Scenario E — Scroll and find content
 
 ```json
 {"tool": "scroll_until_text", "arguments": {"text": "Privacy Policy", "direction": "down", "max_scrolls": 10}}
-```
-
-Or use `find_and_click` with scroll parameters when you also want to click it:
-
-```json
-{"tool": "find_and_click", "arguments": {"text": "Privacy Policy", "scroll_direction": "down", "max_scrolls": 10}}
 ```
 
 ### Scenario F — Verify the UI changed before acting
@@ -173,39 +127,13 @@ Invest in learning once; all subsequent find operations use the cached map:
 {"tool": "clear_learned_view",  "arguments": {}}
 ```
 
-`learn_screen` scans the full interface across scroll positions. `get_learned_view` returns the
-element list — inspect it to verify OCR found the targets. `find_and_click` uses the cached
-bounding box (fast — no full-screen scan). `clear_learned_view` discards after navigation to
-avoid stale positions.
+### Scenario H — Exploration Hierarchy — How to Discover the UI
 
-### Scenario H — Unknown interface (first time seeing it)
+When encountering an unknown interface, follow this strict priority:
 
-Use a strict hierarchy to explore before acting:
-
-1. **Primary — fast text dump:** `find_elements` returns all visible text with coordinates and types.
-
-```json
-{"tool": "find_elements", "arguments": {}}
-```
-
-2. **Secondary — visual inspection:** Only if `find_elements` misses visual cues (icons without text),
-   use `take_screenshot` to visually inspect.
-
-```json
-{"tool": "take_screenshot", "arguments": {}}
-```
-
-3. **Tertiary — scrollable/long page:** Only if the page scrolls and you need below-fold elements,
-   use `learn_screen`.
-
-```json
-{"tool": "learn_screen", "arguments": {"max_pages": 5}}
-```
-
-After `find_elements` returns results:
-- If you see the target element → use `find_and_click` or `find_click_and_type` directly
-- If the interface is large or scrollable → proceed to `learn_screen`
-- If you need to act on many elements → switch to `execute_workflow` or `learn_screen` path
+1. **Primary — Capture & Map:** `learn_screen` followed by `get_learned_view`. This gives you a machine-readable JSON inventory of every element and its ID.
+2. **Secondary — Visual Anchor:** `get_annotated_view`. This gives you a visual "Set-of-Marks" screenshot to confirm the ID badges.
+3. **Tertiary — Raw Visual:** `take_screenshot` only if OCR failed to find icon-only buttons.
 
 ### Scenario I — One-off click on a new screen (convenience)
 
@@ -220,16 +148,38 @@ the learn/act/clear lifecycle manually:
 For more than one action on the same screen, use `learn_screen` explicitly so
 you control when `clear_learned_view` is called.
 
-### Scenario J — Hard-to-reach or icon-heavy UIs (Visual Anchors)
+### Scenario J — High-Precision Visual Anchors
 
-If `find_and_click` fails or you see many similar buttons (e.g. 10 trash icons),
-use the **Visual Anchor** workflow for 100% precision:
+When standard OCR matching fails or the UI is icon-heavy, use **Visual Anchors** (also known as Set-of-Marks) for 100% click precision.
 
-1. **Get the map:** ```json {"tool": "get_annotated_view"} ```
-2. **Inspect the image:** Look for the numeric ID badge (e.g. `[12]`) next to your target.
-3. **Click by ID:** ```json {"tool": "click_at", "arguments": {"id": 12}} ```
+### Mandatory 4-Step Workflow
 
-This eliminates OCR "drift" and ensures you hit exactly the element you see.
+For maximum reliability, always follow this sequence:
+
+1.  **Scan**: Call `learn_screen` to capture the interface.
+2.  **Map**: Call `get_learned_view` to load the **Machine-Map** (the list of text labels and their numeric IDs).
+3.  **Verify**: Call `get_annotated_view`. This returns an image with numeric **ID badges** (e.g., `[5]`, `[12]`) overlaid on every element.
+4.  **Act**: Look at the ID badge in the image and use one of the **ID-ready tools**:
+    -   `click_at({"id": N})`
+    -   `click_and_type({"id": N, "text": "..."})`
+    -   `move_mouse({"id": N})`
+    -   `double_click({"id": N})`
+
+This eliminates "pixel drift" and ensures you interact with exactly what you see.
+
+### Tool: get_annotated_view
+
+Captures the current viewport and overlays visual IDs from the last scan. Use `page_index` to see IDs for elements discovered during a multi-page scroll.
+
+**Arguments** (all optional):
+- `page_index`: The scroll-page index (0, 1, 2...) from the last scan.
+- `x`, `y`: Top-left of capture region (logical pixels).
+- `width`, `height`: Dimensions of region.
+
+**Returns**: JSON metadata + JPEG image:
+```json
+{ "success": true, "element_count": 42, "format": "jpeg", "size_bytes": 125400 }
+```
 
 ---
 
