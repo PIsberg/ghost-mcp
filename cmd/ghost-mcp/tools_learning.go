@@ -52,7 +52,6 @@ Note: ocr_id is just an internal sequence number. It is NOT a visual_id.
 The visual_id comes ONLY from reading the annotated screenshot image.`),
 	), handleGetLearnedView)
 
-
 	mcpServer.AddTool(mcp.NewTool("get_annotated_view",
 		mcp.WithDescription(`ANNOTATED SCREENSHOT — Returns a screenshot of your UI with visual_id overlays.
 
@@ -82,7 +81,6 @@ WHEN TO CALL:
 		mcp.WithNumber("width", mcp.Description("Width (live mode only, default: full screen).")),
 		mcp.WithNumber("height", mcp.Description("Height (live mode only, default: full screen).")),
 	), handleGetAnnotatedView)
-
 
 	mcpServer.AddTool(mcp.NewTool("clear_learned_view",
 		mcp.WithDescription(`Discard the current learned view so the next learn_screen builds a fresh one.

@@ -238,5 +238,3 @@ Primary Workflow.
 | Skipping ` + "`get_learned_view`" + ` | You have no text map — you're guessing | Always call it after ` + "`learn_screen`" + ` |
 | Not clearing after navigation | Stale data points to wrong elements | Call ` + "`clear_learned_view`" + ` immediately |
 `
-
-

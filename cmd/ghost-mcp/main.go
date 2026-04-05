@@ -951,14 +951,14 @@ Returns {width, height, scale_factor}.
 	), handleGetScreenSize)
 
 	mcpServer.AddTool(mcp.NewTool("move_mouse",
-		mcp.WithDescription(`Move the mouse cursor to absolute screen coordinates or a visual_id badge.
+		mcp.WithDescription(`Move the mouse cursor to absolute screen coordinates or a visual_id.
 
 Two modes:
 - Coordinates: move_mouse(x=350, y=780)
-- Badge ID:    move_mouse(visual_id=12) — read the badge number from the get_annotated_view image.`),
+- Visual ID:   move_mouse(visual_id=12) — read the visual_id from the get_annotated_view image.`),
 		mcp.WithNumber("x", mcp.Description("X coordinate in pixels. Required if 'visual_id' is not provided.")),
 		mcp.WithNumber("y", mcp.Description("Y coordinate in pixels. Required if 'visual_id' is not provided.")),
-		mcp.WithNumber("visual_id", mcp.Description("The badge number you see in the get_annotated_view image (e.g. [12] means visual_id=12). If provided, x/y are ignored.")),
+		mcp.WithNumber("visual_id", mcp.Description("The number shown on the overlay in the get_annotated_view image (e.g. overlay shows 12 means visual_id=12). If provided, x/y are ignored.")),
 	), handleMoveMouse)
 
 	mcpServer.AddTool(mcp.NewTool("click",
@@ -976,13 +976,13 @@ Use this tool only when you have already moved the mouse to exact coordinates an
 
 Two modes:
 - Coordinates: click_at(x=350, y=780) — use when get_learned_view found the element.
-- Badge ID:    click_at(visual_id=12)  — use when you read badge [12] from the get_annotated_view image.
+- Visual ID:   click_at(visual_id=12)  — use when you read visual_id 12 from the get_annotated_view image.
 
 Choose coordinates when OCR found your target. Choose visual_id when you identified
-the badge number by looking at the annotated screenshot.`),
+the overlay number by looking at the annotated screenshot.`),
 		mcp.WithNumber("x", mcp.Description("X coordinate in pixels. Required if 'visual_id' is not provided.")),
 		mcp.WithNumber("y", mcp.Description("Y coordinate in pixels. Required if 'visual_id' is not provided.")),
-		mcp.WithNumber("visual_id", mcp.Description("The badge number you see in the get_annotated_view image (e.g. [12] means visual_id=12). If provided, x/y are ignored.")),
+		mcp.WithNumber("visual_id", mcp.Description("The number shown on the overlay in the get_annotated_view image (e.g. overlay shows 12 means visual_id=12). If provided, x/y are ignored.")),
 		mcp.WithString("button", mcp.Description("Mouse button: 'left' (default), 'right', or 'middle'.")),
 		mcp.WithNumber("delay_ms", mcp.Description("Milliseconds to wait after the click for the UI to update (default: 100). Set to 0 to skip. Max: 10000.")),
 	), handleClickAt)
@@ -992,10 +992,10 @@ the badge number by looking at the annotated screenshot.`),
 
 Two modes:
 - Coordinates: double_click(x=350, y=780)
-- Badge ID:    double_click(visual_id=12) — read the badge number from the get_annotated_view image.`),
+- Visual ID:   double_click(visual_id=12) — read the visual_id from the get_annotated_view image.`),
 		mcp.WithNumber("x", mcp.Description("X coordinate in pixels. Required if 'visual_id' is not provided.")),
 		mcp.WithNumber("y", mcp.Description("Y coordinate in pixels. Required if 'visual_id' is not provided.")),
-		mcp.WithNumber("visual_id", mcp.Description("The badge number you see in the get_annotated_view image (e.g. [12] means visual_id=12). If provided, x/y are ignored.")),
+		mcp.WithNumber("visual_id", mcp.Description("The number shown on the overlay in the get_annotated_view image (e.g. overlay shows 12 means visual_id=12). If provided, x/y are ignored.")),
 		mcp.WithNumber("delay_ms", mcp.Description("Wait after double-click (default: 100). Max: 10000.")),
 	), handleDoubleClick)
 
@@ -1062,10 +1062,10 @@ NORMAL WORKFLOW:
 
 Two modes:
 - Coordinates: click_and_type(x=350, y=780, text="hello")
-- Badge ID:    click_and_type(visual_id=12, text="hello") — read [12] from the annotated image.`),
+- Visual ID:   click_and_type(visual_id=12, text="hello") — read visual_id from the annotated image.`),
 		mcp.WithNumber("x", mcp.Description("X coordinate in pixels. Required if 'visual_id' is not provided.")),
 		mcp.WithNumber("y", mcp.Description("Y coordinate in pixels. Required if 'visual_id' is not provided.")),
-		mcp.WithNumber("visual_id", mcp.Description("The badge number you see in the get_annotated_view image (e.g. [12] means visual_id=12). If provided, x/y are ignored.")),
+		mcp.WithNumber("visual_id", mcp.Description("The number shown on the overlay in the get_annotated_view image (e.g. overlay shows 12 means visual_id=12). If provided, x/y are ignored.")),
 		mcp.WithString("text", mcp.Description("The exact text string to type."), mcp.Required()),
 		mcp.WithBoolean("press_enter", mcp.Description("If true, automatically presses Enter after typing (default: false).")),
 		mcp.WithNumber("delay_ms", mcp.Description("Wait after click before typing (default: 100).")),
@@ -1084,8 +1084,8 @@ Common keys: 'enter', 'tab', 'esc', 'backspace', 'up', 'down'. Modifiers: 'ctrl'
 read text, or identify IDs, you are making a MAJOR REASONING ERROR. 
 
 ── USE get_annotated_view INSTEAD ─────────────────────────────────────────────
-get_annotated_view provides the essential ID badges ([5], [12]) required for 
-interaction. take_screenshot gives you a "blind" image with No IDs.`),
+get_annotated_view provides the essential visual_id overlays (e.g. 5, 12) required for 
+interaction. take_screenshot gives you a "blind" image with no visual_ids.`),
 		mcp.WithNumber("x", mcp.Description("X coordinate of the top-left corner of the capture region in pixels (default: 0).")),
 		mcp.WithNumber("y", mcp.Description("Y coordinate of the top-left corner of the capture region in pixels (default: 0).")),
 		mcp.WithNumber("width", mcp.Description("Width of the capture region in pixels (default: full screen width).")),
