@@ -77,40 +77,42 @@ Ghost MCP has **built-in safeguards** to prevent infinite retry loops and runawa
 
 | What you need to do | Best tool |
 |---|---|
-| **Map the interface for the first time** | ` + "`learn_screen`" + ` |
-| **Visually see elements and their IDs** | ` + "`get_annotated_view`" + ` |
-| **Click an element by its visual ID badge** | ` + "`click_at(id=N)`" + ` |
-| **Focus and type into a field by its ID** | ` + "`click_and_type(id=N)`" + ` |
-| Click a button or link by its visible label | ` + "`find_and_click`" + ` |
-| Click a field and type into it | ` + "`find_click_and_type`" + ` |
-| Read all visible text + coordinates quickly | ` + "`find_elements`" + ` |
-| Wait for a UI change before proceeding | ` + "`wait_for_text`" + ` |
-| Run multiple sequential steps on one screen | ` + "`execute_workflow`" + ` |
-| Learn screen + click in one convenience call | ` + "`smart_click`" + ` |
-| Inspect what learn_screen found / debug misses | ` + "`get_learned_view`" + ` |
-| Scroll and search for text | ` + "`scroll_until_text`" + ` |
-| Take a raw screenshot (visual-only) | ` + "`take_screenshot`" + ` |
+| **1. SCAN (Capture UI)** | ` + "`learn_screen`" + ` |
+| **2. MAP (Searchable Text/IDs)** | ` + "`get_learned_view`" + ` |
+| **3. VERIFY (Visual ID Badges)** | ` + "`get_annotated_view`" + ` |
+| **4. ACT (Precision Click)** | ` + "`click_at(id=N)`" + ` |
+| **4. ACT (Focus & Type)** | ` + "`click_and_type(id=N, text=\"...\")`" + ` |
+| **4. ACT (Hover/Drag Start)** | ` + "`move_mouse(id=N)`" + ` |
+| **4. ACT (Open/Activate)** | ` + "`double_click(id=N)`" + ` |
 
-**Avoid:** using ` + "`take_screenshot`" + ` to read text — use ` + "`get_annotated_view`" + ` instead to see labels AND IDs.
+**CRITICAL FLOW:** You must call ` + "`get_learned_view`" + ` to load the text-to-ID mappings into your context window, followed by ` + "`get_annotated_view`" + ` to visually confirm where those IDs are located.
+
+**Avoid:** using ` + "`take_screenshot`" + ` to read text — use the 1-2-3-4 flow above instead.
 
 ---
 
 ## 2. Optimal Tool Paths by Scenario
 
-### Scenario A — First Time on a Screen (REQUIRED FIRST STEP)
+### Scenario A — First Time on a New Screen (COMPLETE PRECISION FLOW)
 
-Always start with a learning scan to understand the layout and gain visual IDs:
+You MUST follow this 4-step sequence for guaranteed precision:
 
-` + "```" + `json
-{"tool": "learn_screen", "arguments": {"max_pages": 1}}
-{"tool": "get_annotated_view", "arguments": {}}
-` + "```" + `
+1. **Scan**: ` + "```" + `json {"tool": "learn_screen", "arguments": {"max_pages": 1}} ` + "```" + `
+2. **Search Map**: ` + "```" + `json {"tool": "get_learned_view", "arguments": {}} ` + "```" + ` (See which IDs map to which text labels)
+3. **Verify UI**: ` + "```" + `json {"tool": "get_annotated_view", "arguments": {}} ` + "```" + ` (See the numeric ID badges on the interface)
+4. **Interact**: Use IDs discovered in Step 2 and confirmed in Step 3 for 100% reliable automation.
 
-Now you can see the screen with numeric ID badges (e.g. ` + "`[5]`" + `, ` + "`[12]`" + `). Use these IDs for 100% click precision:
+**PRO TIP:** Once you have mapped the screen, you can use these **ID-ready tools** for all subsequent actions:
 
-` + "```" + `json
-{"tool": "click_at", "arguments": {"id": 12}}
-` + "```" + `
+| Action | Tool | Description |
+|---|---|---|
+| **Hover** | ` + "`move_mouse(id=N)`" + ` | Safest way to hover or prepare for drag. |
+| **Click** | ` + "`click_at(id=N)`" + ` | Precision clicking for buttons/menus. |
+| **Double Click** | ` + "`double_click(id=N)`" + ` | Open files/folders by their ID. |
+| **Type** | ` + "`click_and_type(id=N)`" + ` | Focuses the field and types automatically. |
+
+### The Visual ID Ecosystem
+IDs are universal and durable. Once you have seen ` + "`[N]`" + ` in an annotated view, that ID remains valid for any of the tools above until you call ` + "`clear_learned_view`" + ` or navigative to a new screen.
 
 ### Scenario B — Click a button by label (Quick Task)
 
@@ -137,9 +139,9 @@ If you only need one quick click and the UI is familiar:
 
 When encountering an unknown interface, follow this strict priority:
 
-1. **Primary — Learn & Annotate:** ` + "`learn_screen`" + ` followed by ` + "`get_annotated_view`" + `. This gives you a machine-readable map AND a visual confirmation with precise IDs.
-2. **Secondary — Fast Text Dump:** ` + "`find_elements`" + ` only if you need a quick, non-image list of visible text.
-3. **Tertiary — Raw Visual:** ` + "`take_screenshot`" + ` only if OCR fails to find icon-only buttons.
+1. **Primary — Capture & Map:** ` + "`learn_screen`" + ` followed by ` + "`get_learned_view`" + `. This gives you a machine-readable JSON inventory of every element and its ID.
+2. **Secondary — Visual Anchor:** ` + "`get_annotated_view`" + `. This gives you a visual "Set-of-Marks" screenshot to confirm the ID badges.
+3. **Tertiary — Raw Visual:** ` + "`take_screenshot`" + ` only if OCR failed to find icon-only buttons.
 
 ` + "```" + `json
 {"tool": "learn_screen",        "arguments": {"max_pages": 3}}
@@ -155,11 +157,13 @@ After ` + "`find_elements`" + ` returns results:
 - To see IDs for lower sections, use ` + "`get_annotated_view(page_index=1)`" + ` (for the second page).
 - **IMPORTANT**: To click an ID on another page, you MUST scroll there first before calling ` + "`click_at(id=N)`" + `.
 
-### SCENARIO A: First Time on a New Screen
+### SCENARIO A: First Time on a New Screen (COMPLETE MAPPING)
 1. ` + "`learn_screen(max_pages=2)`" + ` → map the current interface.
-2. ` + "`get_annotated_view`" + ` → see visual ID badges for the top section.
-3. (Optional) ` + "`get_annotated_view(page_index=1)`" + ` → see visual ID badges for below the fold.
-4. ` + "`click_at(id=5)`" + ` → 100% precise interaction.
+2. ` + "`get_learned_view`" + ` → MANDATORY: load the searchable text-map of IDs.
+3. ` + "`get_annotated_view`" + ` → MANDATORY: see the visual ID badges.
+4. ` + "`click_at(id=5)`" + ` → use the ID from Step 2 confirmed in Step 3.
+
+**NEVER** skip Step 2. You cannot guess the Numeric IDs; you must see them on the annotated image.
 
 ### Scenario I — One-off click on a new screen (convenience)
 

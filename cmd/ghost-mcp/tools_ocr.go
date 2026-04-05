@@ -24,8 +24,9 @@ If the text is unique and unambiguous, you can omit element_type.
 For best performance, call learn_screen first — subsequent calls use the cached element
 location (10–25× faster). For a single one-off click, find_and_click works without learn_screen.
 
-🎯 FOR HIGHEST PRECISION: Call learn_screen then get_annotated_view first. This gives you
-numeric ID badges (e.g. [5], [12]). Use these IDs with click_at(id=N) for 100% precision.
+🎯 FOR HIGHEST PRECISION (MANDATORY): Always consider calling learn_screen then 
+get_annotated_view FIRST. This gives you numeric ID badges (e.g. [5], [12]). 
+Use these IDs with click_at(id=N) for 100% precision.
 
 WHEN TO USE:
 - Click a single button, link, or menu item by its visible text label.
@@ -122,17 +123,14 @@ RESPONSE: {success, text, visible, waited_ms} or {error: "timeout..."}`),
 	), handleWaitForText)
 
 	mcpServer.AddTool(mcp.NewTool("find_elements",
-		mcp.WithDescription(`QUICK EXPLORATION TOOL — Read all visible text on screen with coordinates, types, and bounding boxes.
+		mcp.WithDescription(`QUICK TEXT CHECK — Read visible text on screen with coordinates.
 
 ── EXPLORATION HIERARCHY ──────────────────────────────────────────────────────
-  1. learn_screen    ← PRIMARY: full-interface map + visual IDs (best for workflows)
-  2. find_elements   ← SECONDARY: fast text-only dump (best for quick checks)
-  3. take_screenshot ← TERTIARY: only if OCR misses icon-only elements
+  1. learn_screen    ← PRIMARY: full-interface map + visual IDs (MANDATORY for interaction)
+  2. find_elements   ← SECONDARY: fast text-only check (NOT for interaction)
 
-Use find_elements when:
-- You need a quick, text-only inventory of the current viewport.
-- You want to check if a specific label exists without a full-screen scan.
-- You need center_x/center_y coordinates for a one-off click_at.
+⚠️ WARNING: This tool returns text but NO visual context. You cannot know which ID 
+corresponds to which UI element without calling get_annotated_view first.
 
 For any task involving 2+ steps, PREFER learn_screen followed by get_annotated_view.
 This gives you numeric ID badges that you can use with click_at(id=N) for 100% precision.

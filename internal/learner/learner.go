@@ -146,6 +146,24 @@ func (l *Learner) IsEnabled() bool {
 	return l.enabled
 }
 
+// GetElementCoords returns the absolute screen coordinates (center point) of
+// an element by its numeric ID. Returns (0, 0, false) if the ID is not found.
+func (l *Learner) GetElementCoords(id int) (x, y int, found bool) {
+	l.mu.RLock()
+	defer l.mu.RUnlock()
+
+	if l.view == nil {
+		return 0, 0, false
+	}
+
+	for _, e := range l.view.Elements {
+		if e.ID == id {
+			return e.X + e.Width/2, e.Y + e.Height/2, true
+		}
+	}
+	return 0, 0, false
+}
+
 // GetView returns the current learned view. Returns nil if not yet learned.
 func (l *Learner) GetView() *View {
 	l.mu.RLock()

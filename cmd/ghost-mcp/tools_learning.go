@@ -12,27 +12,16 @@ func registerLearningTools(mcpServer *server.MCPServer) {
 	logging.Info("Registering learning mode tools...")
 
 	mcpServer.AddTool(mcp.NewTool("learn_screen",
-		mcp.WithDescription(`EXPLORATION TOOL — Scan the full interface, run multi-pass OCR, and cache the element map.
-This is the RECOMMENDED logic for any new screen or complex workflow.
+		mcp.WithDescription(`PRIMARY EXPLORATION TOOL — Perform a deep scan of the current screen or web page.
+This tool builds an internal map of all text, buttons, and input fields.
 
-EXPLORATION HIERARCHY:
-  1. learn_screen    ← PRIMARY for exploration and complex workflows.
-  2. find_elements   ← SECONDARY for quick text-only dumps.
-  3. take_screenshot ← TERTIARY (only for icon-only interfaces).
+🎯 MANDATORY FOLLOW-UP: Immediately call get_annotated_view after this tool.
+You cannot interact with IDs until you have seen them on the annotated image.
 
-Use learn_screen when:
-• You first arrive on a new screen or UI state.
-• You have 3+ sequential actions on the same screen (caches the map for all steps).
-• The page scrolls and you need elements below the visible area.
-• After navigating to a new page, opening a dialog, or switching tabs.
-
-── RECOMMENDED WORKFLOW ───────────────────────────────────────────────────────
-  1. learn_screen          ← map the interface (scroll through if needed)
-  2. get_annotated_view    ← VISUALLY confirm elements and their numeric IDs
-  3. click_at(id=N)        ← interact with elements using 100% precise IDs
-  4. clear_learned_view    ← after navigating away, then go back to step 1
-
-The tool scrolls DOWN during scanning and automatically scrolls BACK UP when done.`),
+── WHY CALL THIS? ─────────────────────────────────────────────────────────────
+- It is 100% precise. No coordinate guessing or OCR drift.
+- It is 10–25× faster for subsequent actions as results are cached.
+- It detects elements across multiple scroll pages if max_pages > 1.`),
 		mcp.WithNumber("x", mcp.Description("Left edge of the scan region in pixels (default: 0 / full screen).")),
 		mcp.WithNumber("y", mcp.Description("Top edge of the scan region in pixels (default: 0 / full screen).")),
 		mcp.WithNumber("width", mcp.Description("Width of the scan region in pixels (default: full screen width).")),
@@ -43,13 +32,18 @@ The tool scrolls DOWN during scanning and automatically scrolls BACK UP when don
 	), handleLearnScreen)
 
 	mcpServer.AddTool(mcp.NewTool("get_learned_view",
-		mcp.WithDescription(`Return the full element map from the last learn_screen call.
+		mcp.WithDescription(`MACHINE-READABLE MAP — Retrieve the full JSON element list from the last scan.
+Includes all discovered text, classified element types, coordinates, and numeric IDs.
 
-Each element includes: ID (can be used with click_at), text, x/y coordinates,
-width/height, page_index (0=top, 1+=requires scrolling), and confidence.
+🎯 ESSENTIAL STEP: Call this immediately after learn_screen to populate your context
+with the searchable text and IDs of every UI element.
 
-Call immediately after learn_screen to inspect the complete interface before acting.
-Returns {"learned":false} if learn_screen has not been called yet.`),
+── WHY CALL THIS? ─────────────────────────────────────────────────────────────
+- It allows you to search for specific button/label text and find its unique ID.
+- It provides the 'id' parameter required for high-precision click_at(id=N).
+- It gives you the full text-based inventory of the screen (machine-readable).
+
+After calling this, use get_annotated_view to visually confirm the IDs.`),
 	), handleGetLearnedView)
 
 	mcpServer.AddTool(mcp.NewTool("get_annotated_view",

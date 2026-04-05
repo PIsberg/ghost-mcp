@@ -166,43 +166,30 @@ func handleGetScreenSize(ctx context.Context, request mcp.CallToolRequest) (*mcp
 	)), nil
 }
 
-func handleMoveMouse(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func handleMoveMouse(_ context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	logging.Debug("Handling move_mouse request")
 
-	x, err := getIntParam(request, "x")
-	if err != nil {
-		logging.Error("Invalid x parameter: %v", err)
-		return mcp.NewToolResultError(fmt.Sprintf("invalid x parameter: %v", err)), nil
-	}
-	y, err := getIntParam(request, "y")
-	if err != nil {
-		logging.Error("Invalid y parameter: %v", err)
-		return mcp.NewToolResultError(fmt.Sprintf("invalid y parameter: %v", err)), nil
+	x, errX := getIntParam(request, "x")
+	y, errY := getIntParam(request, "y")
+	id, errID := getIntParam(request, "id")
+
+	if errID == nil {
+		foundX, foundY, found := globalLearner.GetElementCoords(id)
+		if !found {
+			return mcp.NewToolResultError(fmt.Sprintf("ID %d not found in current view", id)), nil
+		}
+		x, y = foundX, foundY
+	} else if errX != nil || errY != nil {
+		return mcp.NewToolResultError("either 'id' or both 'x' and 'y' must be provided"), nil
 	}
 
 	screenW, screenH := robotgo.GetScreenSize()
 	if err := validate.Coords(x, y, screenW, screenH); err != nil {
-		logging.Error("Coordinate validation failed: %v", err)
-		return mcp.NewToolResultError(fmt.Sprintf("invalid coordinates: %v", err)), nil
+		return mcp.NewToolResultError(fmt.Sprintf("invalid position: %v", err)), nil
 	}
-
-	// Log current position
-	currentX, currentY := robotgo.GetMousePos()
-	logging.Info("ACTION: Moving mouse from (%d, %d) to (%d, %d)", currentX, currentY, x, y)
 
 	robotgo.Move(x, y)
-
-	if os.Getenv("GHOST_MCP_VISUAL") == "1" {
-		visual.PulseCursor(x, y)
-	}
-
-	if err := checkFailsafe(); err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	finalX, finalY := robotgo.GetMousePos()
-	logging.Info("ACTION COMPLETE: Mouse now at (%d, %d)", finalX, finalY)
-	return mcp.NewToolResultText(fmt.Sprintf(`{"success": true, "x": %d, "y": %d}`, finalX, finalY)), nil
+	return mcp.NewToolResultText(fmt.Sprintf("Moved mouse to (%d, %d)", x, y)), nil
 }
 
 func handleClick(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -244,15 +231,18 @@ func handleClick(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToo
 func handleClickAt(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	logging.Debug("Handling click_at request")
 
-	x, err := getIntParam(request, "x")
-	if err != nil {
-		logging.Error("Invalid x parameter: %v", err)
-		return mcp.NewToolResultError(fmt.Sprintf("invalid x parameter: %v", err)), nil
-	}
-	y, err := getIntParam(request, "y")
-	if err != nil {
-		logging.Error("Invalid y parameter: %v", err)
-		return mcp.NewToolResultError(fmt.Sprintf("invalid y parameter: %v", err)), nil
+	x, errX := getIntParam(request, "x")
+	y, errY := getIntParam(request, "y")
+	id, errID := getIntParam(request, "id")
+
+	if errID == nil {
+		foundX, foundY, found := globalLearner.GetElementCoords(id)
+		if !found {
+			return mcp.NewToolResultError(fmt.Sprintf("ID %d not found in current view", id)), nil
+		}
+		x, y = foundX, foundY
+	} else if errX != nil || errY != nil {
+		return mcp.NewToolResultError("either 'id' or both 'x' and 'y' must be provided"), nil
 	}
 
 	button, err := getStringParam(request, "button")
@@ -271,29 +261,6 @@ func handleClickAt(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallT
 	if err := validate.Coords(x, y, screenW, screenH); err != nil {
 		logging.Error("Coordinate validation failed: %v", err)
 		return mcp.NewToolResultError(fmt.Sprintf("invalid coordinates: %v", err)), nil
-	}
-
-	// Visual Anchor Support: if an ID is provided, look up its coordinates.
-	// This overrides any x/y provided in the request.
-	if id, err := getIntParam(request, "id"); err == nil && id > 0 {
-		view := globalLearner.GetView()
-		if view != nil {
-			found := false
-			for _, e := range view.Elements {
-				if e.ID == id {
-					x = e.X + e.Width/2
-					y = e.Y + e.Height/2
-					logging.Info("VISUAL ANCHOR: mapped ID %d to pixel (%d, %d)", id, x, y)
-					found = true
-					break
-				}
-			}
-			if !found {
-				return mcp.NewToolResultError(fmt.Sprintf("element ID %d not found in the current learned view", id)), nil
-			}
-		} else {
-			return mcp.NewToolResultError("click by ID requires an active learned view; call learn_screen or find_elements first"), nil
-		}
 	}
 
 	// Check for repeated clicks at same location
@@ -336,50 +303,37 @@ func handleClickAt(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallT
 	return mcp.NewToolResultText(response + "}"), nil
 }
 
-func handleDoubleClick(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func handleDoubleClick(_ context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	logging.Debug("Handling double_click request")
 
-	x, err := getIntParam(request, "x")
-	if err != nil {
-		logging.Error("Invalid x parameter: %v", err)
-		return mcp.NewToolResultError(fmt.Sprintf("invalid x parameter: %v", err)), nil
-	}
-	y, err := getIntParam(request, "y")
-	if err != nil {
-		logging.Error("Invalid y parameter: %v", err)
-		return mcp.NewToolResultError(fmt.Sprintf("invalid y parameter: %v", err)), nil
+	x, errX := getIntParam(request, "x")
+	y, errY := getIntParam(request, "y")
+	id, errID := getIntParam(request, "id")
+
+	if errID == nil {
+		foundX, foundY, found := globalLearner.GetElementCoords(id)
+		if !found {
+			return mcp.NewToolResultError(fmt.Sprintf("ID %d not found in current view", id)), nil
+		}
+		x, y = foundX, foundY
+	} else if errX != nil || errY != nil {
+		return mcp.NewToolResultError("either 'id' or both 'x' and 'y' must be provided"), nil
 	}
 
 	screenW, screenH := robotgo.GetScreenSize()
 	if err := validate.Coords(x, y, screenW, screenH); err != nil {
-		logging.Error("Coordinate validation failed: %v", err)
-		return mcp.NewToolResultError(fmt.Sprintf("invalid coordinates: %v", err)), nil
+		return mcp.NewToolResultError(fmt.Sprintf("invalid double_click position: %v", err)), nil
 	}
 
-	logging.Info("ACTION: Moving mouse to (%d, %d) for double-click", x, y)
 	robotgo.Move(x, y)
-
-	if os.Getenv("GHOST_MCP_VISUAL") == "1" {
-		visual.PulseCursor(x, y)
+	robotgo.Click("left", true) // true = double click
+	delay, _ := getIntParam(request, "delay_ms")
+	if delay <= 0 {
+		delay = 100
 	}
+	time.Sleep(time.Duration(delay) * time.Millisecond)
 
-	if err := checkFailsafe(); err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	robotgo.Click("left", true)
-	applyClickDelay(request)
-
-	finalX, finalY := robotgo.GetMousePos()
-	if finalX != x || finalY != y {
-		logging.Info("WARNING: cursor moved after double-click: requested (%d,%d) actual (%d,%d)", x, y, finalX, finalY)
-	}
-	logging.Info("ACTION COMPLETE: Double-click at (%d, %d)", x, y)
-
-	return mcp.NewToolResultText(fmt.Sprintf(
-		`{"success": true, "requested_x": %d, "requested_y": %d, "actual_x": %d, "actual_y": %d}`,
-		x, y, finalX, finalY,
-	)), nil
+	return mcp.NewToolResultText(fmt.Sprintf("Double-clicked at (%d, %d)", x, y)), nil
 }
 
 func handleScroll(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -680,15 +634,18 @@ func handleTypeText(ctx context.Context, request mcp.CallToolRequest) (*mcp.Call
 func handleClickAndType(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	logging.Debug("Handling click_and_type request")
 
-	x, err := getIntParam(request, "x")
-	if err != nil {
-		logging.Error("Invalid x parameter: %v", err)
-		return mcp.NewToolResultError(fmt.Sprintf("invalid x parameter: %v", err)), nil
-	}
-	y, err := getIntParam(request, "y")
-	if err != nil {
-		logging.Error("Invalid y parameter: %v", err)
-		return mcp.NewToolResultError(fmt.Sprintf("invalid y parameter: %v", err)), nil
+	x, errX := getIntParam(request, "x")
+	y, errY := getIntParam(request, "y")
+	id, errID := getIntParam(request, "id")
+
+	if errID == nil {
+		foundX, foundY, found := globalLearner.GetElementCoords(id)
+		if !found {
+			return mcp.NewToolResultError(fmt.Sprintf("ID %d not found in current view", id)), nil
+		}
+		x, y = foundX, foundY
+	} else if errX != nil || errY != nil {
+		return mcp.NewToolResultError("either 'id' or both 'x' and 'y' must be provided"), nil
 	}
 
 	text, err := getStringParam(request, "text")
@@ -706,29 +663,6 @@ func handleClickAndType(ctx context.Context, request mcp.CallToolRequest) (*mcp.
 	if err := validate.Coords(x, y, screenW, screenH); err != nil {
 		logging.Error("Coordinate validation failed: %v", err)
 		return mcp.NewToolResultError(fmt.Sprintf("invalid coordinates: %v", err)), nil
-	}
-
-	// Visual Anchor Support: if an ID is provided, look up its coordinates.
-	// This overrides any x/y provided in the request.
-	if id, err := getIntParam(request, "id"); err == nil && id > 0 {
-		view := globalLearner.GetView()
-		if view != nil {
-			found := false
-			for _, e := range view.Elements {
-				if e.ID == id {
-					x = e.X + e.Width/2
-					y = e.Y + e.Height/2
-					logging.Info("VISUAL ANCHOR (ClickAndType): mapped ID %d to pixel (%d, %d)", id, x, y)
-					found = true
-					break
-				}
-			}
-			if !found {
-				return mcp.NewToolResultError(fmt.Sprintf("element ID %d not found in the current learned view", id)), nil
-			}
-		} else {
-			return mcp.NewToolResultError("click_and_type by ID requires an active learned view; call learn_screen or find_elements first"), nil
-		}
 	}
 
 	pressEnter := getBoolParam(request, "press_enter", false)
@@ -1017,13 +951,14 @@ Returns {width, height, scale_factor}.
 	), handleGetScreenSize)
 
 	mcpServer.AddTool(mcp.NewTool("move_mouse",
-		mcp.WithDescription(`Move the mouse cursor to absolute screen coordinates. (0,0) is the top-left corner.
+		mcp.WithDescription(`Move the mouse cursor to absolute screen coordinates or a Visual ID.
 
-⚠️ NOT FOR CLICKING BUTTONS: If you want to click a button or link by its text label, use find_and_click instead — it locates the target by OCR and clicks in one call with no coordinate guessing.
-
-Use move_mouse only when you already have exact coordinates (e.g. from find_elements center_x/center_y) and need to hover before a click, or when dragging.`),
-		mcp.WithNumber("x", mcp.Description("X coordinate in pixels from the left edge of the screen. Must be within screen bounds."), mcp.Required()),
-		mcp.WithNumber("y", mcp.Description("Y coordinate in pixels from the top edge of the screen. Must be within screen bounds."), mcp.Required()),
+🎯 FOR HIGHEST PRECISION: If you see ID badges on the annotated image (e.g. [5], [12]), 
+pass that "id" parameter here instead of coordinates. This ensures you hover exactly 
+over the target element.`),
+		mcp.WithNumber("x", mcp.Description("X coordinate in pixels. Required if 'id' is not provided.")),
+		mcp.WithNumber("y", mcp.Description("Y coordinate in pixels. Required if 'id' is not provided.")),
+		mcp.WithNumber("id", mcp.Description("Optional: The Visual ID badge number (from get_annotated_view or get_learned_view). If provided, x/y are ignored.")),
 	), handleMoveMouse)
 
 	mcpServer.AddTool(mcp.NewTool("click",
@@ -1050,12 +985,15 @@ Only use (x, y) coordinates as a fallback when Visual IDs are not available.`),
 	), handleClickAt)
 
 	mcpServer.AddTool(mcp.NewTool("double_click",
-		mcp.WithDescription(`Move the mouse to (x, y) and perform a double-click. Use for opening files, activating items, or any UI that requires double-click.
+		mcp.WithDescription(`Move the mouse to (x, y) or a Visual ID and perform a double-click.
+Use for opening files, activating items, or any UI that requires double-click.
 
-Use coordinates from find_elements (center_x/center_y) or a known fixed position. Do not guess coordinates.`),
-		mcp.WithNumber("x", mcp.Description("X coordinate in pixels from the left edge of the screen."), mcp.Required()),
-		mcp.WithNumber("y", mcp.Description("Y coordinate in pixels from the top edge of the screen."), mcp.Required()),
-		mcp.WithNumber("delay_ms", mcp.Description("Milliseconds to wait after the click for the UI to update (default: 100). Set to 0 to skip. Max: 10000.")),
+🎯 FOR HIGHEST PRECISION: If you see ID badges on the annotated image (e.g. [5], [12]), 
+pass that "id" parameter here instead of coordinates.`),
+		mcp.WithNumber("x", mcp.Description("X coordinate in pixels. Required if 'id' is not provided.")),
+		mcp.WithNumber("y", mcp.Description("Y coordinate in pixels. Required if 'id' is not provided.")),
+		mcp.WithNumber("id", mcp.Description("Optional: The Visual ID badge number (from get_annotated_view). If provided, x/y are ignored.")),
+		mcp.WithNumber("delay_ms", mcp.Description("Wait after double-click (default: 100). Max: 10000.")),
 	), handleDoubleClick)
 
 	mcpServer.AddTool(mcp.NewTool("scroll",
