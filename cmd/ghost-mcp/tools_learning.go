@@ -13,16 +13,13 @@ func registerLearningTools(mcpServer *server.MCPServer) {
 
 	mcpServer.AddTool(mcp.NewTool("learn_screen",
 		mcp.WithDescription(`INDEX FULL INTERFACE — Scan the UI across multiple scroll positions.
-🚨 USE THIS FOR LONG PAGES: Instead of manually scrolling and taking pictures, 
-use max_pages > 1 to "index" the entire form/list in one tool call.
 
-── WHY CALL THIS? ─────────────────────────────────────────────────────────────
-- It builds a single, durable map of all elements (on-screen and off-screen).
-- It allows you to find IDs for buttons that are currently hidden below the fold.
-- It prevents the inefficient "Scroll -> Peek -> Scroll -> Peek" loop.
+🚨 LONG PAGES: You MUST set max_pages > 1 for scrollable UIs. 
+Calling learn_screen with max_pages: 1 (default) on a long page is a failure.
 
-After one scan, you can use click_at(id=N) for ANY element, and the server will 
-automatically handle the necessary scrolling for you.`),
+🚫 NO-PEEK RULE: Do NOT use "Scroll -> take_screenshot" repeatedly. 
+Instead, call learn_screen(max_pages: 10) once to index the whole UI.
+The server will then automatically reach any ID for you.`),
 		mcp.WithNumber("x", mcp.Description("Left edge of the scan region in pixels (default: 0 / full screen).")),
 		mcp.WithNumber("y", mcp.Description("Top edge of the scan region in pixels (default: 0 / full screen).")),
 		mcp.WithNumber("width", mcp.Description("Width of the scan region in pixels (default: full screen width).")),
@@ -40,11 +37,13 @@ Includes all discovered text, classified element types, coordinates, and numeric
 with the searchable text and IDs of every UI element.
 
 ── WHY CALL THIS? ─────────────────────────────────────────────────────────────
-- It allows you to search for specific button/label text and find its unique ID.
-- It provides the 'id' parameter required for high-precision click_at(id=N).
-- It gives you the full text-based inventory of the screen (machine-readable).
+- 🚀 UNIVERSAL DISCOVERY: It returns IDs for ALL elements found across 
+  all scroll pages. You now know the ID of every button, even those off-screen.
+- It provides the 'id' parameter required for precision interaction.
+- After calling this, use get_annotated_view to visually confirm the IDs.
 
-After calling this, use get_annotated_view to visually confirm the IDs.`),
+🚫 NO-PEEK RULE: Do NOT use "Scroll -> take_screenshot" when learning mode is active.
+Always use learn_screen to index, then get_learned_view to retrieve data.`),
 	), handleGetLearnedView)
 
 	mcpServer.AddTool(mcp.NewTool("get_annotated_view",

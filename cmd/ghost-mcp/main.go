@@ -989,6 +989,7 @@ Only use (x, y) coordinates as a fallback when Visual IDs are not available.`),
 Use for opening files, activating items, or any UI that requires double-click.
 
 🎯 FOR HIGHEST PRECISION: If you see ID badges on the annotated image (e.g. [5], [12]), 
+FOR HIGHEST PRECISION: If you see ID badges on the annotated image (e.g. [5], [12]), 
 pass that "id" parameter here instead of coordinates.`),
 		mcp.WithNumber("x", mcp.Description("X coordinate in pixels. Required if 'id' is not provided.")),
 		mcp.WithNumber("y", mcp.Description("Y coordinate in pixels. Required if 'id' is not provided.")),
@@ -997,22 +998,20 @@ pass that "id" parameter here instead of coordinates.`),
 	), handleDoubleClick)
 
 	mcpServer.AddTool(mcp.NewTool("scroll",
-		mcp.WithDescription(`Move the mouse to (x, y) and scroll the mouse wheel. Use for scrolling lists, pages, and dropdowns.
+		mcp.WithDescription(`Move the mouse to (x, y) and scroll the mouse wheel.
 
-Scroll 'down' to reveal content below, 'up' to go back up. For horizontal content use 'left' or 'right'.
+NO-PEEK RULE: Do NOT use this tool manually to "peek" at the UI after learn_screen.
+Instead, use click_at(id=N). The server will automatically scroll to the
+indexed target for you.
 
-The response includes visible_text — the OCR text of the centre half of the screen after scrolling. Use this to know what is now on screen WITHOUT needing a separate find_elements or take_screenshot call.
+── WHEN TO USE ────────────────────────────────────────────────────────────────
+- To scroll for human-only visual inspection (e.g. reading an article).
+- When learn_screen is NOT in use.
 
-🚫 AFTER SCROLL, DO NOT call find_elements or take_screenshot unless you specifically need to interact with a region not covered by visible_text. visible_text already tells you what appeared!
-
-AMOUNT GUIDANCE — use small increments to avoid overshooting:
-- amount=15 (default): ~2/3 screen — best for general page navigation
-- amount=5: ~1/4 screen — use for fine control or small sections
-- amount=30: ~full screen — use for very long pages
-
-SEARCH WORKFLOW: scroll down by 15, check visible_text for your target; repeat if not found. Only 3-4 scrolls needed to cover a full page!
-
-x and y are optional and default to the screen centre, which is correct for most page scrolling. Only specify them when scrolling a specific widget (e.g. a side panel or dropdown list).`),
+AMOUNT GUIDANCE:
+- amount=15 (default): ~2/3 screen
+- amount=5: ~1/4 screen
+- amount=30: ~full screen`),
 		mcp.WithNumber("x", mcp.Description("X coordinate to scroll at (pixels from left edge). Defaults to screen centre.")),
 		mcp.WithNumber("y", mcp.Description("Y coordinate to scroll at (pixels from top edge). Defaults to screen centre.")),
 		mcp.WithString("direction", mcp.Description("Scroll direction: 'up', 'down', 'left', or 'right'."), mcp.Required()),
@@ -1025,88 +1024,65 @@ x and y are optional and default to the screen centre, which is correct for most
 🎯 WHEN TO USE:
 - You need to find text that is likely off-screen in a scrollable page, list, or panel
 - You want a bounded search with fewer tool calls and no manual scroll loop
-- You want to stop automatically when the viewport stops changing
 
 HOW IT WORKS:
 1. OCR-searches the current viewport first
 2. If not found, scrolls in the requested direction
 3. Repeats search up to max_scrolls times
-4. Stops early if the viewport text stops changing (likely end reached)
-5. Returns the found text box and center coordinates
-
-SPEED TIPS:
-- Use x/y/width/height to search only the relevant panel or form area
-- amount=5 is the default because it moves faster than fine scrolling without overshooting as badly as 10
-- Prefer this over repeated scroll calls when hunting for a label or input field on a long page
-
-RETURNS:
-- On success: {success, found, box, center_x, center_y, scroll_count, direction, amount, pass, visible_text}
-- On failure: error with the last visible_text to explain what was on screen`),
+4. Stops early if the viewport text stops changing (end reached)
+5. Returns the found text box and center coordinates`),
 		mcp.WithString("text", mcp.Description("Text to search for while scrolling (case-insensitive substring match)."), mcp.Required()),
 		mcp.WithString("direction", mcp.Description("Scroll direction: 'up', 'down', 'left', or 'right'."), mcp.Required()),
-		mcp.WithNumber("amount", mcp.Description("Scroll steps per attempt (default: 5). amount=3 is finer, amount=10 jumps farther but may overshoot.")),
-		mcp.WithNumber("max_scrolls", mcp.Description("Maximum number of scroll attempts after the initial viewport check (default: 8).")),
+		mcp.WithNumber("amount", mcp.Description("Scroll steps per attempt (default: 5).")),
+		mcp.WithNumber("max_scrolls", mcp.Description("Maximum number of scroll attempts (default: 8).")),
 		mcp.WithNumber("nth", mcp.Description("Which occurrence to match if the text appears multiple times (default: 1).")),
-		mcp.WithNumber("scroll_x", mcp.Description("X coordinate to scroll at (default: screen center). Useful for scrolling a specific panel.")),
-		mcp.WithNumber("scroll_y", mcp.Description("Y coordinate to scroll at (default: screen center). Useful for scrolling a specific panel.")),
+		mcp.WithNumber("scroll_x", mcp.Description("X coordinate to scroll at (default: screen center).")),
+		mcp.WithNumber("scroll_y", mcp.Description("Y coordinate to scroll at (default: screen center).")),
 		mcp.WithNumber("x", mcp.Description("X coordinate of the OCR search region (default: 0 = full screen).")),
 		mcp.WithNumber("y", mcp.Description("Y coordinate of the OCR search region (default: 0 = full screen).")),
-		mcp.WithNumber("width", mcp.Description("Width of the OCR search region (default: full screen). Smaller regions are faster.")),
-		mcp.WithNumber("height", mcp.Description("Height of the OCR search region (default: full screen). Smaller regions are faster.")),
-		mcp.WithBoolean("grayscale", mcp.Description("Use grayscale OCR (default: true). Set false when colour context matters.")),
+		mcp.WithNumber("width", mcp.Description("Width of the OCR search region (default: full screen).")),
+		mcp.WithNumber("height", mcp.Description("Height of the OCR search region (default: full screen).")),
+		mcp.WithBoolean("grayscale", mcp.Description("Use grayscale OCR (default: true).")),
 	), handleScrollUntilText)
 
 	mcpServer.AddTool(mcp.NewTool("type_text",
-		mcp.WithDescription(`Type text as keyboard input into the currently focused element. Click the target input field first to ensure it has focus before typing.
+		mcp.WithDescription(`Type text as keyboard input into the currently focused element. 
 
 NORMAL WORKFLOW:
-1. find_and_click {"text": "placeholder or label text"} → focuses the field
-2. type_text {"text": "your text"}
-
-IF THE FIELD HAS NO DETECTABLE TEXT (e.g. dark/empty placeholder):
-- Find a labeled button immediately next to the field (e.g. "Clear" button beside the input)
-- find_and_click {"text": "Clear"} → response includes box: {x, y, width, height}
-- The input field is to the LEFT: click_at {"x": box.x - 200, "y": box.y + box.height/2}
-- Then type_text
-
-For special characters or control sequences (Enter, Tab, Ctrl+C), use press_key instead. To verify the text was entered, use wait_for_text or find_elements on the input region — not a full screenshot.`),
-		mcp.WithString("text", mcp.Description("The exact text string to type. Supports Unicode. Do not include control characters — use press_key for Enter, Tab, Backspace etc."), mcp.Required()),
-		mcp.WithBoolean("press_enter", mcp.Description("If true, automatically presses the Enter key immediately after the text is typed (default: false).")),
+1. find_and_click {"text": "label"} → focuses the field
+2. type_text {"text": "your text"}`),
+		mcp.WithString("text", mcp.Description("The exact text string to type."), mcp.Required()),
+		mcp.WithBoolean("press_enter", mcp.Description("If true, automatically presses the Enter key immediately after typing (default: false).")),
 	), handleTypeText)
 
 	mcpServer.AddTool(mcp.NewTool("click_and_type",
 		mcp.WithDescription(`Move the mouse to (x, y), click to focus, and then type text.
 
-🎯 FOR HIGHEST PRECISION: Always consider calling get_annotated_view FIRST. If you see ID badges
-on the image (e.g. [5], [12]), pass that "id" parameter here instead of coordinates. This
-ensures 100% precision.`),
+🎯 VISUAL ID SUPPORT: If you see ID badges on the annotated image (e.g. [5], [12]), 
+pass that "id" parameter here instead of coordinates for 100% precision.`),
 		mcp.WithNumber("x", mcp.Description("X coordinate in pixels. Required if 'id' is not provided.")),
 		mcp.WithNumber("y", mcp.Description("Y coordinate in pixels. Required if 'id' is not provided.")),
 		mcp.WithNumber("id", mcp.Description("Optional: The Visual ID badge number (from get_annotated_view). If provided, x/y are ignored.")),
-		mcp.WithString("text", mcp.Description("The exact text string to type. Supports Unicode."), mcp.Required()),
+		mcp.WithString("text", mcp.Description("The exact text string to type."), mcp.Required()),
 		mcp.WithBoolean("press_enter", mcp.Description("If true, automatically presses Enter after typing (default: false).")),
-		mcp.WithNumber("delay_ms", mcp.Description("Wait after click before typing (default: 100). Max: 10000.")),
+		mcp.WithNumber("delay_ms", mcp.Description("Wait after click before typing (default: 100).")),
 	), handleClickAndType)
 
 	mcpServer.AddTool(mcp.NewTool("press_key",
-		mcp.WithDescription(`Press a single keyboard key or key combination. Use for control keys, navigation, and shortcuts.
-
-Common uses: 'enter' to confirm/submit, 'tab' to move between fields, 'esc' to cancel/close, 'backspace'/'delete' to erase, arrow keys to navigate lists. For shortcuts use modifier keys: 'ctrl', 'alt', 'shift', 'cmd' (macOS).`),
-		mcp.WithString("key", mcp.Description("Key name: 'enter', 'tab', 'esc', 'space', 'backspace', 'delete', 'up', 'down', 'left', 'right', 'ctrl', 'alt', 'shift', 'win' (Windows key), 'cmd' (macOS), 'f1'–'f12', or any single letter/digit."), mcp.Required()),
+		mcp.WithDescription(`Press a single keyboard key or key combination. 
+Common keys: 'enter', 'tab', 'esc', 'backspace', 'up', 'down'. Modifiers: 'ctrl', 'alt', 'shift'.`),
+		mcp.WithString("key", mcp.Description("Key name (e.g. 'enter', 'tab', 'shift', 'a', '1')."), mcp.Required()),
 	), handlePressKey)
 
 	mcpServer.AddTool(mcp.NewTool("take_screenshot",
-		mcp.WithDescription(`Capture a raw, un-annotated screenshot of the screen.
+		mcp.WithDescription(`Capture a raw, un-annotated screenshot. (FOR VISUAL-ONLY TASKS).
 
-⚠️ WARNING: NOT FOR UI ANALYSIS. Do NOT use this tool to read text, find buttons, 
-or identify IDs. You will fail because it provides no numeric badges.
+🚫 DO NOT CALL THIS FOR UI ANALYSIS. If you are trying to find buttons, 
+read text, or identify IDs, you are making a MAJOR REASONING ERROR. 
 
-── WHEN TO USE ────────────────────────────────────────────────────────────────
-- To verify visual appearance only (colors, alignment, graphics).
-- When learn_screen + get_annotated_view failed to find an icon-only button.
-
-For all interaction tasks, use get_annotated_view instead. It provides the 
-essential ID badges required for click_at(id=N).`),
+── USE get_annotated_view INSTEAD ─────────────────────────────────────────────
+get_annotated_view provides the essential ID badges ([5], [12]) required for 
+interaction. take_screenshot gives you a "blind" image with No IDs.`),
 		mcp.WithNumber("x", mcp.Description("X coordinate of the top-left corner of the capture region in pixels (default: 0).")),
 		mcp.WithNumber("y", mcp.Description("Y coordinate of the top-left corner of the capture region in pixels (default: 0).")),
 		mcp.WithNumber("width", mcp.Description("Width of the capture region in pixels (default: full screen width).")),

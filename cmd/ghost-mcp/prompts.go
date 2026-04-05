@@ -91,7 +91,20 @@ Ghost MCP has **built-in safeguards** to prevent infinite retry loops and runawa
 
 ---
 
-## 2. Optimal Tool Paths by Scenario
+## 2. HALL OF SHAME — Amateur Mistakes
+
+If you do any of these, you are performing poorly:
+
+| Mistake | Why it's a failure |
+|---|---|
+| **Scroll-and-Peek** | Calling ` + "`scroll`" + ` then ` + "`take_screenshot`" + ` repeatedly. It is slow and uses too many tool calls. |
+| **Silent ID Guessing** | Using ` + "`click_at(id=5)`" + ` before you have actually seen ` + "`[5]`" + ` in an annotated screenshot. |
+| **Lazy Long-Page Scan** | Calling ` + "`learn_screen(max_pages=1)`" + ` on a 5-page form. You've only indexed 20% of the UI. |
+| **Blind Navigation** | Not calling ` + "`clear_learned_view`" + ` after a click that changes the screen. You'll mis-click. |
+
+---
+
+## 3. Optimal Tool Paths by Scenario
 
 ### Scenario A — First Time on a New Screen (MANDATORY PRECISION FLOW)
 
@@ -143,13 +156,13 @@ After ` + "`find_elements`" + ` returns results:
 - If the screen is COMPLEX (many buttons/fields) → use ` + "`get_annotated_view`" + ` then ` + "`click_at(id=N)`" + `
 
 **OFF-SCREEN ELEMENTS (LONG PAGES):**
-🚫 **NO-PEEK RULE:** Do NOT use the "Scroll -> ` + "`get_annotated_view`" + ` -> Scroll" peek-loop. It is slow and uses too many tool calls.
+🚫 **NO-PEEK RULE:** Do NOT use the "Scroll -> ` + "`take_screenshot`" + ` -> Scroll" peek-loop.
 
 Instead, use the **Index-then-Act** flow:
-1. **Index Once**: ` + "`learn_screen(max_pages: 5)`" + ` to scan the entire long page/form.
-2. **Search Map**: ` + "`get_learned_view`" + ` to find the IDs for ALL elements (even off-screen).
+1. **Index Once**: ` + "`learn_screen(max_pages: 5)`" + ` once to scan the whole UI.
+2. **Read Map**: ` + "`get_learned_view`" + ` to find the IDs of ALL elements (on and off-screen).
 3. **Verify Visually**: ` + "`get_annotated_view(page_index: 2)`" + ` to see the 3rd scroll-page from history without live-scrolling.
-4. **Interact**: ` + "`click_at(id=N)`" + `. The server will automatically scroll to the target if it's off-screen.
+4. **Interact**: ` + "`click_at(id=N)`" + `. The server will automatically scroll to the target for you.
 
 **NEVER** use ` + "`take_screenshot`" + ` or live ` + "`scroll`" + ` to find things you can index with one ` + "`learn_screen`" + ` call.
 
