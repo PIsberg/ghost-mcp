@@ -428,12 +428,22 @@ func handleLearnScreen(_ context.Context, request mcp.CallToolRequest) (*mcp.Cal
 	return mcp.NewToolResultText(string(responseJSON)), nil
 }
 
-func handleGetLearnedView(_ context.Context, _ mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func handleGetLearnedView(_ context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	logging.Debug("Handling get_learned_view request")
 
 	view := globalLearner.GetView()
 	if view == nil {
 		return mcp.NewToolResultText(`{"learned":false,"message":"No view has been learned yet. Call learn_screen first."}`), nil
+	}
+
+	// Build element type filter set (nil = no filter = return all).
+	var typeFilter map[learner.ElementType]struct{}
+	if typeStrs, err := getStringArrayParam(request, "element_types"); err == nil && len(typeStrs) > 0 {
+		typeFilter = make(map[learner.ElementType]struct{}, len(typeStrs))
+		for _, s := range typeStrs {
+			typeFilter[learner.ElementType(s)] = struct{}{}
+		}
+		logging.Debug("get_learned_view: filtering by types %v", typeStrs)
 	}
 
 	type elementJSON struct {
@@ -449,15 +459,20 @@ func handleGetLearnedView(_ context.Context, _ mcp.CallToolRequest) (*mcp.CallTo
 		OcrPass    string  `json:"ocr_pass"`
 		LabelFor   string  `json:"label_for,omitempty"`
 	}
-	elems := make([]elementJSON, len(view.Elements))
-	for i, e := range view.Elements {
-		elems[i] = elementJSON{
+	elems := make([]elementJSON, 0, len(view.Elements))
+	for _, e := range view.Elements {
+		if typeFilter != nil {
+			if _, ok := typeFilter[e.Type]; !ok {
+				continue
+			}
+		}
+		elems = append(elems, elementJSON{
 			OcrID: e.ID, Text: e.Text, X: e.X, Y: e.Y,
 			Width: e.Width, Height: e.Height,
 			Confidence: e.Confidence, PageIndex: e.PageIndex,
 			Type: string(e.Type), OcrPass: string(e.OcrPass),
 			LabelFor: e.LabelFor,
-		}
+		})
 	}
 
 	// Page summary (no JPEG bytes — use get_page_screenshot for images).

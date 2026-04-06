@@ -68,6 +68,18 @@ Use learning mode for major tasks. It is 10-25x faster than individual OCR calls
 ` + "```" + `
 *Analyzes all pages (scrolled content). Look for ` + "`ocr_id`" + ` to use Path A.*
 
+**Filtering by element type (optional):** When you only need a specific kind of
+element, pass ` + "`element_types`" + ` to reduce noise and speed up your search.
+Valid values: ` + "`button`" + `, ` + "`label`" + `, ` + "`input`" + `, ` + "`checkbox`" + `, ` + "`radio`" + `, ` + "`dropdown`" + `,
+` + "`toggle`" + `, ` + "`slider`" + `, ` + "`heading`" + `, ` + "`link`" + `, ` + "`value`" + `, ` + "`text`" + `, ` + "`unknown`" + `.
+
+` + "```" + `json
+{"tool": "get_learned_view", "arguments": {"element_types": ["button"]}}
+{"tool": "get_learned_view", "arguments": {"element_types": ["input", "label"]}}
+` + "```" + `
+
+Omit ` + "`element_types`" + ` (or pass an empty array) to return all elements.
+
 ### Step 3: View a specific page (if Path A fails)
 ` + "```" + `json
 {"tool": "get_annotated_view", "arguments": {"page_index": 0}}
@@ -104,6 +116,7 @@ do not need to explore. If the shortcut fails, fall back to the Primary Workflow
 | ` + "`smart_click(text=\"Submit\")`" + ` | One-off click on unfamiliar screen (auto-scans). |
 | ` + "`find_click_and_type(text=\"Username\", type_text=\"alice\")`" + ` | Quick text entry by label. |
 | ` + "`execute_workflow(steps=[...])`" + ` | Batch multiple steps on one screen (3-6x faster). |
+| ` + "`get_learned_view(element_types=[\"button\"])`" + ` | Narrow a large view to only buttons (or any type). |
 
 **If a shortcut fails or the screen is complex, switch to the Primary Workflow immediately.**
 
@@ -174,6 +187,7 @@ Primary Workflow.
 | Using ` + "`ocr_id`" + ` as ` + "`visual_id`" + ` | They are different. ` + "`ocr_id`" + ` is a JSON counter. ` + "`visual_id`" + ` is from the annotated image. | Read the overlay numbers from the annotated screenshot |
 | Scrolling + peeking repeatedly | Wastes tool calls, slow | Use ` + "`learn_screen(max_pages: 5)`" + ` once |
 | Not clearing after navigation | Stale data points to wrong elements | Call ` + "`clear_learned_view`" + ` immediately |
+| Scanning all elements to find one button | Wastes search time on large views | Use ` + "`get_learned_view(element_types=[\"button\"])`" + ` |
 
 ---
 

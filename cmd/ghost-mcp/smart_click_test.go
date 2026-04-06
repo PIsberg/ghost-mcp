@@ -68,6 +68,9 @@ func TestSmartClick_MissingText(t *testing.T) {
 // =============================================================================
 
 func TestSmartClick_AutoLearns_WhenDisabled(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping: triggers real screen capture and OCR")
+	}
 	orig := globalLearner
 	defer func() { globalLearner = orig }()
 	globalLearner = learner.New() // Disabled by default
@@ -94,6 +97,9 @@ func TestSmartClick_AutoLearns_WhenDisabled(t *testing.T) {
 }
 
 func TestSmartClick_UsesExistingView(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping: triggers real find_and_click OCR")
+	}
 	orig := globalLearner
 	defer func() { globalLearner = orig }()
 	globalLearner = learner.New()
@@ -118,6 +124,9 @@ func TestSmartClick_UsesExistingView(t *testing.T) {
 // =============================================================================
 
 func TestSmartClick_EmptyText(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping: triggers real screen capture and OCR")
+	}
 	req := makeSmartClickReq("")
 
 	result, err := handleSmartClick(context.Background(), req)

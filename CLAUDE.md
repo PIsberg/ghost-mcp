@@ -81,6 +81,9 @@ The server exposes tools across several files:
 - `cmd/ghost-mcp/main.go`: `get_screen_size`, `move_mouse`, `click`, `click_at`, `type_text`, `press_key`, `take_screenshot`
 - `cmd/ghost-mcp/tools_ocr.go`: `find_and_click`, `find_and_click_all`, `find_elements`, `find_click_and_type`, `wait_for_text`
 - `cmd/ghost-mcp/tools_learning.go`: `learn_screen`, `get_learned_view`, `clear_learned_view`, `set_learning_mode`
+- `cmd/ghost-mcp/tools_smart_click.go`: `smart_click` — convenience wrapper: `learn_screen` + `find_and_click` in one call; recommended when the AI doesn't manage the learn/clear lifecycle manually
+- `cmd/ghost-mcp/tools_workflow.go`: `execute_workflow` — runs multiple sequential steps (click, type, wait, scroll, refresh_view) against a single learned view; 10–25× faster than individual calls for multi-action screens
+- `cmd/ghost-mcp/prompts.go`: registers the `ghost_mcp_guide` MCP prompt — a tool routing guide AI clients can request at session start to understand which tools to use and when
 
 ### Learning Mode
 
