@@ -283,7 +283,7 @@ go test -bench=Benchmark -benchmem ./cmd/ghost-mcp/...
 
 2. **Enable debug logging:**
    ```powershell
-   $env:GHOST_MCP_DEBUG = "1"
+   $env:GHOST_MCP_LOG_LEVEL = "DEBUG"
    go test -v -tags=integration ./cmd/ghost-mcp/...
    ```
 

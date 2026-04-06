@@ -16,7 +16,7 @@ The Ghost MCP server sits between an AI client (like Claude) and the operating s
 
 The entry point orchestrates server initialization:
 
-1. **Logging Setup**: Initializes stderr-based logging
+1. **Logging Setup**: Initializes structured storytelling logging (stderr + configurable file)
 2. **Token Validation**: Reads `GHOST_MCP_TOKEN`; exits with error if not set
 3. **Signal Handling**: Registers handlers for SIGINT/SIGTERM
 4. **Server Creation**: Calls `createServer(token)` to build the MCP server
@@ -278,30 +278,36 @@ func getIntParam(request mcp.CallToolRequest, name string) (int, error)
 
 These handle JSON's tendency to decode numbers as `float64`.
 
-### 6. Logging System
+### 11. Structured Storytelling Logging
 
-**Critical Design Decision**: All logs go to stderr.
+Ghost MCP implements a narrative-driven logging system using Go's standard `log/slog` library. This system is designed to provide high observability for human auditors while keeping the MCP protocol transport clean.
 
-```
-┌────────────────────────────────────────────────────┐
-│                    stdout                          │
-│  (MCP JSON-RPC Protocol - MUST stay clean)         │
-│  {"jsonrpc":"2.0","result":{...}}                  │
-└────────────────────────────────────────────────────┘
+#### Dual-Writer Strategy
 
-┌────────────────────────────────────────────────────┐
-│                    stderr                          │
-│  (Application Logs - Safe for debugging)           │
-│  [INFO] Starting ghost-mcp v1.0.0...               │
-│  [DEBUG] Handling move_mouse request               │
-│  [ERROR] Invalid parameter: x                      │
-└────────────────────────────────────────────────────┘
-```
+To maintain protocol integrity, the system utilizes a **dual-writer** approach:
 
-Logging functions:
-- `logInfo()`: Informational messages
-- `logError()`: Error conditions
-- `logDebug()`: Debug output (only when `GHOST_MCP_DEBUG=1`)
+1.  **stderr**: All logs are written to the standard error stream. MCP clients (like Claude Desktop) capture this stream and surface it for immediate debugging.
+2.  **Narrative File**: All logs are simultaneously appended to a configurable log file (default: `application.log`).
+
+This ensures that **stdout stays clean**, reserved exclusively for the MCP JSON-RPC protocol.
+
+#### Storytelling Narrative
+
+The logging philosophy is centered around a "storytelling" narrative that makes it easy for developers to understand the agent's intent and progress:
+
+-   **`INFO` Level**: Narrates high-level agent actions and outcomes. Messages use active voice (e.g., *"Agent is searching for text to click"*, *"Success: Mouse moved to (100, 200)"*).
+-   **`DEBUG` Level**: Provides low-level technical detail for troubleshooting, including tool payloads, OCR confidence scores, and environment configuration.
+
+#### Configuration & Initialization
+
+Logging is initialized at the very beginning of `main()` to capture all startup diagnostics:
+
+| Environment Variable | Description |
+|----------------------|-------------|
+| `GHOST_MCP_LOG_FILE` | Path to the log file (defaults to `./application.log`). |
+| `GHOST_MCP_LOG_LEVEL`| Log verbosity (`DEBUG`, `INFO`, `WARN`, `ERROR`). |
+
+At startup, the system explicitly logs the active log file path to `stderr`, providing immediate feedback on where the agent's "journey" is being recorded.
 
 ### 7. Failsafe Mechanism
 

@@ -358,7 +358,8 @@ func trigrams(s string) map[string]bool {
 // =============================================================================
 
 func handleLearnScreen(_ context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	logging.Debug("Handling learn_screen request")
+	logging.Info("Agent is learning the screen layout to improve navigation accuracy")
+	logging.Debug("LearnScreen parameters: %v", request.Params)
 
 	cfg := learnCfg{}
 	if v, err := getIntParam(request, "x"); err == nil {
@@ -429,7 +430,7 @@ func handleLearnScreen(_ context.Context, request mcp.CallToolRequest) (*mcp.Cal
 }
 
 func handleGetLearnedView(_ context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	logging.Debug("Handling get_learned_view request")
+	logging.Info("Agent is retrieving the learned UI elements for analysis")
 
 	view := globalLearner.GetView()
 	if view == nil {
@@ -524,7 +525,7 @@ func handleClearLearnedView(_ context.Context, _ mcp.CallToolRequest) (*mcp.Call
 }
 
 func handleGetAnnotatedView(_ context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	logging.Debug("Handling get_annotated_view request")
+	logging.Info("Agent is generating an annotated view of the screen")
 
 	view := globalLearner.GetView()
 	if view == nil {
@@ -669,7 +670,7 @@ func handleSetLearningMode(_ context.Context, request mcp.CallToolRequest) (*mcp
 // as a base64-encoded image. This lets the AI visually analyze the page layout,
 // icons, colours, and non-text elements that OCR cannot capture.
 func handleGetPageScreenshot(_ context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	logging.Debug("Handling get_page_screenshot request")
+	logging.Info("Agent is retrieving a page screenshot from the learning history")
 
 	pageIndex, err := getIntParam(request, "page_index")
 	if err != nil {

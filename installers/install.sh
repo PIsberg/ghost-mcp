@@ -367,11 +367,14 @@ configure_auth() {
 configure_settings() {
     print_header "Step 4 - Optional Settings"
     
-    read -p "  Enable debug logging? (y/N) " debug_input
-    if [[ "$debug_input" =~ ^[Yy]$ ]]; then
-        DEBUG="1"
+    echo -e "${YELLOW}  Select log verbosity:${NC}"
+    echo -e "  [1] INFO (Narrative of agent actions)"
+    echo -e "  [2] DEBUG (Full tool payloads)"
+    read -p "  Enter choice (1-2) [default: 1]: " level_choice
+    if [[ "$level_choice" == "2" ]]; then
+        LOG_LEVEL="DEBUG"
     else
-        DEBUG="0"
+        LOG_LEVEL="INFO"
     fi
     
     AUDIT_LOG="$HOME/.config/ghost-mcp/audit"
@@ -409,7 +412,7 @@ set_environment() {
 
 export GHOST_MCP_TOKEN="$TOKEN"
 export GHOST_MCP_TRANSPORT="$TRANSPORT"
-export GHOST_MCP_DEBUG="$DEBUG"
+export GHOST_MCP_LOG_LEVEL="$LOG_LEVEL"
 export GHOST_MCP_AUDIT_LOG="$AUDIT_LOG"
 export GHOST_MCP_VISUAL="$VISUAL"
 export GHOST_MCP_SCREENSHOT_DIR="$SCREENSHOT_DIR"
@@ -432,7 +435,7 @@ EOF
     # Also export for current session
     export GHOST_MCP_TOKEN="$TOKEN"
     export GHOST_MCP_TRANSPORT="$TRANSPORT"
-    export GHOST_MCP_DEBUG="$DEBUG"
+    export GHOST_MCP_LOG_LEVEL="$LOG_LEVEL"
     export GHOST_MCP_AUDIT_LOG="$AUDIT_LOG"
     export GHOST_MCP_VISUAL="$VISUAL"
     export GHOST_MCP_SCREENSHOT_DIR="$SCREENSHOT_DIR"
@@ -471,7 +474,7 @@ generate_settings() {
       "env": {
         "GHOST_MCP_TOKEN": "$TOKEN",
         "GHOST_MCP_TRANSPORT": "$TRANSPORT",
-        "GHOST_MCP_DEBUG": "$DEBUG",
+        "GHOST_MCP_LOG_LEVEL": "$LOG_LEVEL",
         "GHOST_MCP_AUDIT_LOG": "$AUDIT_LOG",
         "GHOST_MCP_VISUAL": "$VISUAL",
         "GHOST_MCP_SCREENSHOT_DIR": "$SCREENSHOT_DIR"

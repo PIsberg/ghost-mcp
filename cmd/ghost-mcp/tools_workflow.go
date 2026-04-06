@@ -310,10 +310,20 @@ func getStringFromMap(m map[string]interface{}, key string) string {
 }
 
 func getIntFromMap(m map[string]interface{}, key string) int {
-	if v, ok := m[key].(float64); ok {
-		return int(v)
+	val, ok := m[key]
+	if !ok {
+		return 0
 	}
-	return 0
+	switch v := val.(type) {
+	case int:
+		return v
+	case int64:
+		return int(v)
+	case float64:
+		return int(v)
+	default:
+		return 0
+	}
 }
 
 func workflowResultToJSON(result WorkflowResult) string {

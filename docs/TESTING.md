@@ -426,8 +426,8 @@ Enable verbose logging:
 
 ```bash
 # Set environment variable
-set GHOST_MCP_DEBUG=1  # Windows
-export GHOST_MCP_DEBUG=1  # macOS/Linux
+set GHOST_MCP_LOG_LEVEL=DEBUG  # Windows
+export GHOST_MCP_LOG_LEVEL=DEBUG  # macOS/Linux
 
 # Run tests
 go test -v ./...

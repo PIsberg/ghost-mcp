@@ -156,10 +156,10 @@ func initiateShutdown() {
 // =============================================================================
 
 func handleGetScreenSize(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	logging.Debug("Handling get_screen_size request")
+	logging.Info("Agent is checking the screen resolution")
 	width, height := robotgo.GetScreenSize()
 	scale := getDPIScale()
-	logging.Info("Screen size: %dx%d, DPI scale: %.2f", width, height, scale)
+	logging.Debug("Screen context: %dx%d pixels, DPI scale identifier: %.2f", width, height, scale)
 	return mcp.NewToolResultText(fmt.Sprintf(
 		`{"width": %d, "height": %d, "scale_factor": %.2f}`,
 		width, height, scale,
@@ -167,7 +167,8 @@ func handleGetScreenSize(ctx context.Context, request mcp.CallToolRequest) (*mcp
 }
 
 func handleMoveMouse(_ context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	logging.Debug("Handling move_mouse request")
+	logging.Info("Agent is moving the mouse cursor")
+	logging.Debug("Move parameters: %v", request.Params)
 
 	x, errX := getIntParam(request, "x")
 	y, errY := getIntParam(request, "y")
@@ -176,24 +177,30 @@ func handleMoveMouse(_ context.Context, request mcp.CallToolRequest) (*mcp.CallT
 	if errVID == nil {
 		foundX, foundY, found := globalLearner.GetElementCoords(vid)
 		if !found {
+			logging.Error("Target element (visual_id=%d) not found in current view", vid)
 			return mcp.NewToolResultError(fmt.Sprintf("visual_id %d not found in current view", vid)), nil
 		}
 		x, y = foundX, foundY
+		logging.Debug("Resolved visual_id %d to coordinates (%d, %d)", vid, x, y)
 	} else if errX != nil || errY != nil {
+		logging.Error("Missing target coordinates or visual_id")
 		return mcp.NewToolResultError("either 'visual_id' or both 'x' and 'y' must be provided"), nil
 	}
 
 	screenW, screenH := robotgo.GetScreenSize()
 	if err := validate.Coords(x, y, screenW, screenH); err != nil {
+		logging.Error("Target coordinates (%d, %d) are outside screen bounds (%dx%d)", x, y, screenW, screenH)
 		return mcp.NewToolResultError(fmt.Sprintf("invalid position: %v", err)), nil
 	}
 
 	robotgo.Move(x, y)
+	logging.Info("Success: Mouse moved to (%d, %d)", x, y)
 	return mcp.NewToolResultText(fmt.Sprintf(`{"success": true, "x": %d, "y": %d}`, x, y)), nil
 }
 
 func handleClick(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	logging.Debug("Handling click request")
+	logging.Info("Agent is clicking the mouse")
+	logging.Debug("Click parameters: %v", request.Params)
 
 	button, err := getStringParam(request, "button")
 	if err != nil {
@@ -204,12 +211,12 @@ func handleClick(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToo
 	validButtons := map[string]bool{"left": true, "right": true, "middle": true}
 	if !validButtons[button] {
 		err := fmt.Errorf("invalid button '%s', must be 'left', 'right', or 'middle'", button)
-		logging.Error("%v", err)
+		logging.Error("Unsupported mouse button: %s", button)
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
 	x, y := robotgo.GetMousePos()
-	logging.Info("ACTION: Performing %s click at (%d, %d)", button, x, y)
+	logging.Info("Action: Performing %s click at (%d, %d)", button, x, y)
 
 	// Show visual feedback if enabled
 	if os.Getenv("GHOST_MCP_VISUAL") == "1" {
@@ -224,12 +231,13 @@ func handleClick(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToo
 	}
 
 	finalX, finalY := robotgo.GetMousePos()
-	logging.Info("ACTION COMPLETE: %s click executed at (%d, %d)", button, finalX, finalY)
+	logging.Info("Success: %s click executed at (%d, %d)", button, finalX, finalY)
 	return mcp.NewToolResultText(fmt.Sprintf(`{"success": true, "button": "%s", "x": %d, "y": %d}`, button, finalX, finalY)), nil
 }
 
 func handleClickAt(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	logging.Debug("Handling click_at request")
+	logging.Info("Agent is clicking an element at specific coordinates")
+	logging.Debug("ClickAt parameters: %v", request.Params)
 
 	x, errX := getIntParam(request, "x")
 	y, errY := getIntParam(request, "y")
@@ -238,10 +246,13 @@ func handleClickAt(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallT
 	if errVID == nil {
 		foundX, foundY, found := globalLearner.GetElementCoords(vid)
 		if !found {
+			logging.Error("Target element (visual_id=%d) not found in view", vid)
 			return mcp.NewToolResultError(fmt.Sprintf("visual_id %d not found in current view", vid)), nil
 		}
 		x, y = foundX, foundY
+		logging.Debug("Target element (visual_id=%d) resolved to (%d, %d)", vid, x, y)
 	} else if errX != nil || errY != nil {
+		logging.Error("Missing target coordinates/visual_id")
 		return mcp.NewToolResultError("either 'visual_id' or both 'x' and 'y' must be provided"), nil
 	}
 
@@ -253,23 +264,23 @@ func handleClickAt(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallT
 	validButtons := map[string]bool{"left": true, "right": true, "middle": true}
 	if !validButtons[button] {
 		err := fmt.Errorf("invalid button '%s', must be 'left', 'right', or 'middle'", button)
-		logging.Error("%v", err)
+		logging.Error("Unsupported mouse button: %s", button)
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
 	screenW, screenH := robotgo.GetScreenSize()
 	if err := validate.Coords(x, y, screenW, screenH); err != nil {
-		logging.Error("Coordinate validation failed: %v", err)
+		logging.Error("Target position (%d, %d) out of bounds", x, y)
 		return mcp.NewToolResultError(fmt.Sprintf("invalid coordinates: %v", err)), nil
 	}
 
 	// Check for repeated clicks at same location
 	clickWarning := tracker.recordClick(x, y, button, true)
 	if clickWarning.ShouldStop {
-		logging.Error("REPEATED CLICK WARNING: %s", clickWarning.Reason)
+		logging.Info("Caution: Detected repeated clicking at (%d, %d) - %s", x, y, clickWarning.Reason)
 	}
 
-	logging.Info("ACTION: Moving mouse to (%d, %d) for %s click", x, y, button)
+	logging.Info("Action: Moving and performing %s click at (%d, %d)", button, x, y)
 	robotgo.Move(x, y)
 
 	if os.Getenv("GHOST_MCP_VISUAL") == "1" {
@@ -285,9 +296,9 @@ func handleClickAt(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallT
 
 	finalX, finalY := robotgo.GetMousePos()
 	if finalX != x || finalY != y {
-		logging.Info("WARNING: cursor moved after click: requested (%d,%d) actual (%d,%d)", x, y, finalX, finalY)
+		logging.Debug("Cursor drift detection: requested (%d,%d) actual (%d,%d)", x, y, finalX, finalY)
 	}
-	logging.Info("ACTION COMPLETE: %s click at (%d, %d)", button, finalX, finalY)
+	logging.Info("Success: %s click at (%d, %d) complete", button, finalX, finalY)
 
 	response := fmt.Sprintf(
 		`{"success": true, "button": "%s", "requested_x": %d, "requested_y": %d, "actual_x": %d, "actual_y": %d}`,
@@ -304,7 +315,8 @@ func handleClickAt(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallT
 }
 
 func handleDoubleClick(_ context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	logging.Debug("Handling double_click request")
+	logging.Info("Agent is double-clicking an element")
+	logging.Debug("DoubleClick parameters: %v", request.Params)
 
 	x, errX := getIntParam(request, "x")
 	y, errY := getIntParam(request, "y")
@@ -313,18 +325,23 @@ func handleDoubleClick(_ context.Context, request mcp.CallToolRequest) (*mcp.Cal
 	if errVID == nil {
 		foundX, foundY, found := globalLearner.GetElementCoords(vid)
 		if !found {
+			logging.Error("Target element (visual_id=%d) not found", vid)
 			return mcp.NewToolResultError(fmt.Sprintf("visual_id %d not found in current view", vid)), nil
 		}
 		x, y = foundX, foundY
+		logging.Debug("Resolved visual_id %d to (%d, %d)", vid, x, y)
 	} else if errX != nil || errY != nil {
+		logging.Error("Missing double-click target")
 		return mcp.NewToolResultError("either 'visual_id' or both 'x' and 'y' must be provided"), nil
 	}
 
 	screenW, screenH := robotgo.GetScreenSize()
 	if err := validate.Coords(x, y, screenW, screenH); err != nil {
+		logging.Error("DoubleClick coordinates (%d, %d) out of bounds", x, y)
 		return mcp.NewToolResultError(fmt.Sprintf("invalid double_click position: %v", err)), nil
 	}
 
+	logging.Info("Action: Moving and performing double-click at (%d, %d)", x, y)
 	robotgo.Move(x, y)
 	robotgo.Click("left", true) // true = double click
 	delay, _ := getIntParam(request, "delay_ms")
@@ -333,11 +350,13 @@ func handleDoubleClick(_ context.Context, request mcp.CallToolRequest) (*mcp.Cal
 	}
 	time.Sleep(time.Duration(delay) * time.Millisecond)
 
+	logging.Info("Success: Double-click complete")
 	return mcp.NewToolResultText(fmt.Sprintf("Double-clicked at (%d, %d)", x, y)), nil
 }
 
 func handleScroll(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	logging.Debug("Handling scroll request")
+	logging.Info("Agent is scrolling the viewport")
+	logging.Debug("Scroll parameters: %v", request.Params)
 
 	screenW, screenH := uiGetScreenSize()
 
@@ -354,19 +373,16 @@ func handleScroll(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallTo
 
 	direction, err := getStringParam(request, "direction")
 	if err != nil {
-		logging.Error("Invalid direction parameter: %v", err)
+		logging.Error("Invalid scroll direction")
 		return mcp.NewToolResultError(fmt.Sprintf("invalid direction parameter: %v", err)), nil
 	}
 
 	validDirections := map[string]bool{"up": true, "down": true, "left": true, "right": true}
 	if !validDirections[direction] {
-		err := fmt.Errorf("invalid direction '%s', must be 'up', 'down', 'left', or 'right'", direction)
-		logging.Error("%v", err)
-		return mcp.NewToolResultError(err.Error()), nil
+		logging.Error("Unsupported scroll direction: %s", direction)
+		return mcp.NewToolResultError(fmt.Sprintf("invalid direction '%s'", direction)), nil
 	}
 
-	// Default amount=15 for faster page coverage (was 3)
-	// On most systems: amount=10 ≈ half page, amount=15 ≈ 2/3 page, amount=30 ≈ full page
 	amount := 15
 	if a, err := getIntParam(request, "amount"); err == nil {
 		if a <= 0 {
@@ -376,11 +392,11 @@ func handleScroll(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallTo
 	}
 
 	if err := validate.Coords(x, y, screenW, screenH); err != nil {
-		logging.Error("Coordinate validation failed: %v", err)
+		logging.Error("Scroll coordinates (%d, %d) out of bounds", x, y)
 		return mcp.NewToolResultError(fmt.Sprintf("invalid coordinates: %v", err)), nil
 	}
 
-	logging.Info("ACTION: Moving mouse to (%d, %d) then scrolling %s by %d", x, y, direction, amount)
+	logging.Info("Action: Scrolling %s by %d at (%d, %d)", direction, amount, x, y)
 	uiMoveMouse(x, y)
 
 	if err := uiCheckFailsafe(); err != nil {
@@ -388,7 +404,6 @@ func handleScroll(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallTo
 	}
 
 	uiScrollDir(amount, direction)
-	logging.Info("ACTION COMPLETE: Scrolled %s by %d at (%d, %d)", direction, amount, x, y)
 
 	// Run a quick OCR pass on the centre half of the screen so the AI knows
 	// what is now visible without needing a separate screenshot + find_elements call.
@@ -398,12 +413,10 @@ func handleScroll(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallTo
 	if img, captureErr := uiCaptureImage(0, stripY, screenW, stripH); captureErr == nil {
 		if ocrResult, ocrErr := uiReadImage(img, ocr.Options{}); ocrErr == nil {
 			visibleText = ocrResult.Text
-		} else {
-			logging.Debug("scroll OCR failed (non-fatal): %v", ocrErr)
+			logging.Debug("New visible text context captured post-scroll")
 		}
-	} else {
-		logging.Debug("scroll capture failed (non-fatal): %v", captureErr)
 	}
+	logging.Info("Success: Viewport scrolled %s", direction)
 
 	return mcp.NewToolResultText(fmt.Sprintf(
 		`{"success": true, "x": %d, "y": %d, "direction": "%s", "amount": %d, "visible_text": %q, "note": "Use visible_text to check content BEFORE calling more tools. Only call find_elements if you need to interact with something not in visible_text."}`,
@@ -473,28 +486,27 @@ func scrollSearchForText(ctx context.Context, cfg scrollSearchConfig) (*scrollSe
 }
 
 func handleScrollUntilText(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	logging.Debug("Handling scroll_until_text request")
+	logging.Info("Agent is performing an automated scroll-search for specific text")
+	logging.Debug("ScrollUntilText parameters: %v", request.Params)
 
 	searchText, err := getStringParam(request, "text")
 	if err != nil {
-		logging.Error("Invalid text parameter: %v", err)
+		logging.Error("Missing target text for scroll-search")
 		return mcp.NewToolResultError(fmt.Sprintf("invalid text parameter: %v", err)), nil
 	}
 
 	direction, err := getStringParam(request, "direction")
 	if err != nil {
-		logging.Error("Invalid direction parameter: %v", err)
+		logging.Error("Invalid scroll direction")
 		return mcp.NewToolResultError(fmt.Sprintf("invalid direction parameter: %v", err)), nil
 	}
 
 	validDirections := map[string]bool{"up": true, "down": true, "left": true, "right": true}
 	if !validDirections[direction] {
-		err := fmt.Errorf("invalid direction '%s', must be 'up', 'down', 'left', or 'right'", direction)
-		logging.Error("%v", err)
-		return mcp.NewToolResultError(err.Error()), nil
+		logging.Error("Unsupported scroll direction: %s", direction)
+		return mcp.NewToolResultError(fmt.Sprintf("invalid direction '%s'", direction)), nil
 	}
 
-	// Default amount=15 for faster page coverage (was 5)
 	amount := 15
 	if a, err := getIntParam(request, "amount"); err == nil {
 		if a <= 0 {
@@ -532,7 +544,7 @@ func handleScrollUntilText(ctx context.Context, request mcp.CallToolRequest) (*m
 		scrollY = v
 	}
 	if err := validate.Coords(scrollX, scrollY, screenW, screenH); err != nil {
-		logging.Error("Scroll coordinate validation failed: %v", err)
+		logging.Error("Scroll search start position (%d, %d) out of bounds", scrollX, scrollY)
 		return mcp.NewToolResultError(fmt.Sprintf("invalid scroll coordinates: %v", err)), nil
 	}
 
@@ -551,10 +563,11 @@ func handleScrollUntilText(ctx context.Context, request mcp.CallToolRequest) (*m
 		regionH = v
 	}
 	if err := validate.ScreenRegion(regionX, regionY, regionW, regionH, screenW, screenH); err != nil {
-		logging.Error("Screen region validation failed: %v", err)
+		logging.Error("OCR search region out of bounds")
 		return mcp.NewToolResultError(fmt.Sprintf("invalid screen region: %v", err)), nil
 	}
 
+	logging.Info("Action: Searching for %q by scrolling %s (max %d attempts)", searchText, direction, maxScrolls)
 	result, searchErr := scrollSearchForText(ctx, scrollSearchConfig{
 		SearchText: searchText,
 		Direction:  direction,
@@ -570,45 +583,46 @@ func handleScrollUntilText(ctx context.Context, request mcp.CallToolRequest) (*m
 		Grayscale:  grayscale,
 	})
 	if searchErr != nil {
-		logging.Error("scroll_until_text failed: %v", searchErr)
+		logging.Error("Scroll search failed: %v", searchErr)
 		return mcp.NewToolResultError(searchErr.Error()), nil
 	}
 
 	if result.Found {
 		cx := regionX + (result.MinX+result.MaxX)/2
 		cy := regionY + (result.MinY+result.MaxY)/2
-		logging.Info("scroll_until_text: found %q after %d scrolls via %s pass", searchText, result.ScrollCount, result.PassName)
+		logging.Info("Success: Found %q after %d scrolls", searchText, result.ScrollCount)
 		return mcp.NewToolResultText(fmt.Sprintf(
 			`{"success":true,"found":%q,"box":{"x":%d,"y":%d,"width":%d,"height":%d},"center_x":%d,"center_y":%d,"scroll_count":%d,"direction":%q,"amount":%d,"pass":%q,"visible_text":%q}`,
 			searchText, regionX+result.MinX, regionY+result.MinY, result.MaxX-result.MinX, result.MaxY-result.MinY, cx, cy, result.ScrollCount, direction, amount, result.PassName, result.VisibleText,
 		)), nil
 	}
 	if result.RepeatedViewport {
-		logging.Info("scroll_until_text: viewport repeated after %d scrolls while searching for %q", result.ScrollCount, searchText)
+		logging.Info("Stop: Viewport stopped changing after %d scrolls; %q not found", result.ScrollCount, searchText)
 		return mcp.NewToolResultError(fmt.Sprintf(
-			`text %q not found after %d scrolls; viewport stopped changing, likely reached the end. Last visible_text: %q`,
-			searchText, result.ScrollCount, result.VisibleText,
+			`text %q not found after %d scrolls; viewport stopped changing.`,
+			searchText, result.ScrollCount,
 		)), nil
 	}
 
-	logging.Info("scroll_until_text: text %q not found after max_scrolls=%d", searchText, maxScrolls)
+	logging.Info("Not Found: Text %q not found within %d scroll attempts", searchText, maxScrolls)
 	return mcp.NewToolResultError(fmt.Sprintf(
-		`text %q not found after %d scrolls (%s by %d). Last visible_text: %q`,
-		searchText, maxScrolls, direction, amount, result.VisibleText,
+		`text %q not found after %d scrolls.`,
+		searchText, maxScrolls,
 	)), nil
 }
 
 func handleTypeText(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	logging.Debug("Handling type_text request")
+	logging.Info("Agent is typing text")
+	logging.Debug("TypeText parameters: %v", request.Params)
 
 	text, err := getStringParam(request, "text")
 	if err != nil {
-		logging.Error("Invalid text parameter: %v", err)
+		logging.Error("Missing text to type")
 		return mcp.NewToolResultError(fmt.Sprintf("invalid text parameter: %v", err)), nil
 	}
 
 	if err := validate.Text(text); err != nil {
-		logging.Error("Text validation failed: %v", err)
+		logging.Error("Text validation failed (contains forbidden characters)")
 		return mcp.NewToolResultError(fmt.Sprintf("invalid text: %v", err)), nil
 	}
 
@@ -619,20 +633,20 @@ func handleTypeText(ctx context.Context, request mcp.CallToolRequest) (*mcp.Call
 	if len(text) > 50 {
 		displayText = text[:47] + "..."
 	}
-	logging.Info("ACTION: Typing text: %q", displayText)
+	logging.Info("Action: Typing: %q (enter_pressed=%t)", displayText, pressEnter)
 	robotgo.TypeStr(text)
 
 	if pressEnter {
-		logging.Info("ACTION: Pressing enter after typing")
 		robotgo.KeyTap("enter")
 	}
 
-	logging.Info("ACTION COMPLETE: Typed %d characters", len(text))
+	logging.Info("Success: Typed %d characters", len(text))
 	return mcp.NewToolResultText(fmt.Sprintf(`{"success": true, "characters_typed": %d, "enter_pressed": %t}`, len(text), pressEnter)), nil
 }
 
 func handleClickAndType(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	logging.Debug("Handling click_and_type request")
+	logging.Info("Agent is clicking to focus and typing")
+	logging.Debug("ClickAndType parameters: %v", request.Params)
 
 	x, errX := getIntParam(request, "x")
 	y, errY := getIntParam(request, "y")
@@ -641,33 +655,36 @@ func handleClickAndType(ctx context.Context, request mcp.CallToolRequest) (*mcp.
 	if errVID == nil {
 		foundX, foundY, found := globalLearner.GetElementCoords(vid)
 		if !found {
+			logging.Error("Target element (visual_id=%d) not found", vid)
 			return mcp.NewToolResultError(fmt.Sprintf("visual_id %d not found in current view", vid)), nil
 		}
 		x, y = foundX, foundY
+		logging.Debug("Resolved visual_id %d to (%d, %d)", vid, x, y)
 	} else if errX != nil || errY != nil {
+		logging.Error("Missing click-and-type target")
 		return mcp.NewToolResultError("either 'visual_id' or both 'x' and 'y' must be provided"), nil
 	}
 
 	text, err := getStringParam(request, "text")
 	if err != nil {
-		logging.Error("Invalid text parameter: %v", err)
+		logging.Error("Missing text to type")
 		return mcp.NewToolResultError(fmt.Sprintf("invalid text parameter: %v", err)), nil
 	}
 
 	if err := validate.Text(text); err != nil {
-		logging.Error("Text validation failed: %v", err)
+		logging.Error("Text validation failed")
 		return mcp.NewToolResultError(fmt.Sprintf("invalid text: %v", err)), nil
 	}
 
 	screenW, screenH := robotgo.GetScreenSize()
 	if err := validate.Coords(x, y, screenW, screenH); err != nil {
-		logging.Error("Coordinate validation failed: %v", err)
+		logging.Error("Target position (%d, %d) out of bounds", x, y)
 		return mcp.NewToolResultError(fmt.Sprintf("invalid coordinates: %v", err)), nil
 	}
 
 	pressEnter := getBoolParam(request, "press_enter", false)
 
-	logging.Info("ACTION: Moving mouse to (%d, %d) for click and type", x, y)
+	logging.Info("Action: Moving to (%d, %d), clicking, then typing", x, y)
 	robotgo.Move(x, y)
 
 	if os.Getenv("GHOST_MCP_VISUAL") == "1" {
@@ -685,16 +702,15 @@ func handleClickAndType(ctx context.Context, request mcp.CallToolRequest) (*mcp.
 	if len(text) > 50 {
 		displayText = text[:47] + "..."
 	}
-	logging.Info("ACTION: Typing text: %q", displayText)
+	logging.Debug("Typing: %q (press_enter=%t)", displayText, pressEnter)
 	robotgo.TypeStr(text)
 
 	if pressEnter {
-		logging.Info("ACTION: Pressing enter after typing")
 		robotgo.KeyTap("enter")
 	}
 
 	finalX, finalY := robotgo.GetMousePos()
-	logging.Info("ACTION COMPLETE: Click and type at (%d, %d)", finalX, finalY)
+	logging.Info("Success: Click and type at (%d, %d) complete", finalX, finalY)
 
 	return mcp.NewToolResultText(fmt.Sprintf(
 		`{"success": true, "x": %d, "y": %d, "characters_typed": %d, "enter_pressed": %t}`,
@@ -703,27 +719,29 @@ func handleClickAndType(ctx context.Context, request mcp.CallToolRequest) (*mcp.
 }
 
 func handlePressKey(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	logging.Debug("Handling press_key request")
+	logging.Info("Agent is pressing a single key")
+	logging.Debug("PressKey parameters: %v", request.Params)
 
 	key, err := getStringParam(request, "key")
 	if err != nil {
-		logging.Error("Invalid key parameter: %v", err)
+		logging.Error("Missing key name")
 		return mcp.NewToolResultError(fmt.Sprintf("invalid key parameter: %v", err)), nil
 	}
 
 	if err := validate.Key(key); err != nil {
-		logging.Error("Key validation failed: %v", err)
+		logging.Error("Key validation failed: %v", key)
 		return mcp.NewToolResultError(fmt.Sprintf("invalid key: %v", err)), nil
 	}
 
-	logging.Info("ACTION: Pressing key: %s", key)
+	logging.Info("Action: Tapping key: %s", key)
 	robotgo.KeyTap(key)
-	logging.Info("ACTION COMPLETE: Key %s pressed", key)
+	logging.Info("Success: Key %s pressed", key)
 	return mcp.NewToolResultText(fmt.Sprintf(`{"success": true, "key": "%s"}`, key)), nil
 }
 
 func handleTakeScreenshot(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	logging.Debug("Handling take_screenshot request")
+	logging.Info("Agent is capturing a raw screenshot")
+	logging.Debug("TakeScreenshot parameters: %v", request.Params)
 
 	screenW, screenH := robotgo.GetScreenSize()
 	x, _ := getIntParam(request, "x")
@@ -738,13 +756,10 @@ func handleTakeScreenshot(ctx context.Context, request mcp.CallToolRequest) (*mc
 	}
 
 	if err := validate.ScreenRegion(x, y, width, height, screenW, screenH); err != nil {
-		logging.Error("Screenshot region validation failed: %v", err)
+		logging.Error("Screenshot region out of bounds")
 		return mcp.NewToolResultError(fmt.Sprintf("invalid screenshot region: %v", err)), nil
 	}
 
-	// quality=0 → PNG (lossless). quality=1–100 → JPEG at that quality.
-	// JPEG 85 is typically 10× smaller than PNG for screen content, significantly
-	// reducing the number of tokens the model processes and cutting transfer time.
 	quality, _ := getIntParam(request, "quality")
 	if quality < 0 {
 		quality = 0
@@ -753,39 +768,33 @@ func handleTakeScreenshot(ctx context.Context, request mcp.CallToolRequest) (*mc
 		quality = 100
 	}
 
-	logging.Info("Taking screenshot at (%d, %d) size %dx%d quality=%d", x, y, width, height, quality)
+	logging.Debug("Capturing region (%d, %d, %d, %d) at quality %d", x, y, width, height, quality)
 
 	img, captureErr := robotgo.CaptureImg(x, y, width, height)
 	if captureErr != nil {
-		logging.Error("Failed to capture screen: %v", captureErr)
+		logging.Error("System failed to capture screen: %v", captureErr)
 		return mcp.NewToolResultError(fmt.Sprintf("failed to capture screen: %v", captureErr)), nil
 	}
 
-	// Encode directly into a memory buffer — no temp file write or read.
-	// Previous pipeline: SavePng→disk, ReadFile←disk, Remove added ~200–400 ms
-	// of unnecessary file I/O on every screenshot call.
 	var buf bytes.Buffer
 	var mimeType string
 
 	if quality > 0 {
 		if err := jpeg.Encode(&buf, img, &jpeg.Options{Quality: quality}); err != nil {
-			logging.Error("Failed to encode screenshot as JPEG: %v", err)
+			logging.Error("Failed to encode JPEG")
 			return mcp.NewToolResultError(fmt.Sprintf("failed to encode screenshot: %v", err)), nil
 		}
 		mimeType = "image/jpeg"
 	} else {
-		// BestSpeed (level 1) is significantly faster than the default (level 6)
-		// with only a modest increase in file size — the right trade-off for
-		// interactive screenshots where the image is consumed immediately.
 		enc := &png.Encoder{CompressionLevel: png.BestSpeed}
 		if err := enc.Encode(&buf, img); err != nil {
-			logging.Error("Failed to encode screenshot as PNG: %v", err)
+			logging.Error("Failed to encode PNG")
 			return mcp.NewToolResultError(fmt.Sprintf("failed to encode screenshot: %v", err)), nil
 		}
 		mimeType = "image/png"
 	}
 
-	logging.Info("Screenshot encoded: %s %d bytes", mimeType, buf.Len())
+	logging.Info("Success: Captured screenshot (%d bytes)", buf.Len())
 
 	// Save to disk only when explicitly requested for debugging.
 	if os.Getenv("GHOST_MCP_KEEP_SCREENSHOTS") == "1" {
@@ -1114,7 +1123,8 @@ func logEnvConfig() {
 	vars := []envVar{
 		{TokenEnvVar, true, "(not set — server will exit)"},
 		{"GHOST_MCP_TRANSPORT", false, "stdio"},
-		{"GHOST_MCP_DEBUG", false, "0 (off)"},
+		{"GHOST_MCP_LOG_FILE", false, "application.log"},
+		{"GHOST_MCP_LOG_LEVEL", false, "INFO"},
 		{"GHOST_MCP_VISUAL", false, "0 (off)"},
 		{"GHOST_MCP_KEEP_SCREENSHOTS", false, "0 (screenshots deleted after use)"},
 		{"GHOST_MCP_SCREENSHOT_DIR", false, os.TempDir()},
@@ -1138,14 +1148,20 @@ func logEnvConfig() {
 	logging.Info("---------------------")
 }
 
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}
-
 func main() {
+	// Step 0: Initialize application logging
+	logFile := os.Getenv("GHOST_MCP_LOG_FILE")
+	if logFile == "" {
+		logFile = "application.log"
+	}
+	logLevelEnv := os.Getenv("GHOST_MCP_LOG_LEVEL")
+	if logLevelEnv == "" {
+		logLevelEnv = "INFO"
+	}
+	if err := logging.Init(logFile, logLevelEnv); err != nil {
+		fmt.Fprintf(os.Stderr, "Error initializing application logging: %v\n", err)
+	}
+
 	logging.Info("Starting %s v%s...", ServerName, ServerVersion)
 	logging.Info("Platform: %s/%s", runtime.GOOS, runtime.GOARCH)
 

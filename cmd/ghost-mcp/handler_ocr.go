@@ -319,7 +319,8 @@ func normalizeText(text string) string {
 }
 
 func handleFindAndClick(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	logging.Debug("Handling find_and_click request")
+	logging.Info("Agent is searching for text to click on screen")
+	logging.Debug("FindAndClick parameters: %v", request.Params)
 
 	searchText, err := getStringParam(request, "text")
 	if err != nil {
@@ -720,6 +721,7 @@ func findAndClickWithScroll(
 	maxScrolls, scrollAmount, screenW, screenH int,
 	elementTypeFilter string,
 ) (*mcp.CallToolResult, error) {
+	logging.Info("Agent is performing a scroll-and-search for %q", searchText)
 
 	// Scroll and search loop
 	for scroll := 0; scroll <= maxScrolls; scroll++ {
@@ -1658,6 +1660,8 @@ func tryTextVariations(ctx context.Context, request mcp.CallToolRequest, origina
 // handleFindElements discovers all text elements on screen with their bounding boxes.
 // Use this to get an overview of clickable elements before targeting specific ones.
 func handleFindElements(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	logging.Info("Agent is exploring the screen for visible elements")
+	logging.Debug("FindElements parameters: %v", request.Params)
 	logging.Debug("Handling find_elements request")
 
 	screenW, screenH := robotgo.GetScreenSize()
@@ -2079,7 +2083,8 @@ func addWidgetFields(elem map[string]interface{}, elementType learner.ElementTyp
 // Use this when you need to click multiple buttons (e.g., "Primary", "Success", "Warning")
 // without verification loops between each click.
 func handleFindAndClickAll(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	logging.Debug("Handling find_and_click_all request")
+	logging.Info("Agent is performing a sequence of clicks on multiple text elements")
+	logging.Debug("FindAndClickAll parameters: %v", request.Params)
 
 	texts, err := getStringArrayParam(request, "texts")
 	if err != nil {
@@ -2197,6 +2202,8 @@ func handleFindAndClickAll(ctx context.Context, request mcp.CallToolRequest) (*m
 // handleWaitForText waits for text to appear or disappear from the screen.
 // Use this to verify UI state changes after clicking a button.
 func handleWaitForText(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	logging.Info("Agent is waiting for text to change on screen")
+	logging.Debug("WaitForText parameters: %v", request.Params)
 	logging.Debug("Handling wait_for_text request")
 
 	text, err := getStringParam(request, "text")
@@ -2417,6 +2424,8 @@ func findNearbyLabel(ocrResult *ocr.Result, searchText string) (minX, minY, maxX
 // click target coordinates (applying `x_offset` and `y_offset`), moves mouse,
 // clicks, optionally waits, types `type_text`, and optionally presses enter.
 func handleFindClickAndType(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	logging.Info("Agent is searching for a label to click and type into")
+	logging.Debug("FindClickAndType parameters: %v", request.Params)
 	logging.Debug("Handling find_click_and_type request")
 
 	searchText, err := getStringParam(request, "text")
@@ -2876,7 +2885,8 @@ func handleClearRegionCache(ctx context.Context, request mcp.CallToolRequest) (*
 
 // handleClickUntilTextAppears clicks at coordinates and waits for text to appear
 func handleClickUntilTextAppears(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	logging.Debug("Handling click_until_text_appears request")
+	logging.Info("Agent is clicking at coordinates and waiting for confirmation text")
+	logging.Debug("ClickUntilTextAppears parameters: %v", request.Params)
 
 	x, err := getIntParam(request, "x")
 	if err != nil {

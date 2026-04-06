@@ -741,7 +741,8 @@ func TestLoggingFunctions(t *testing.T) {
 	logging.Debug("Test debug message")
 
 	// Enable debug mode and test again
-	t.Setenv("GHOST_MCP_DEBUG", "1")
+	t.Setenv("GHOST_MCP_LOG_LEVEL", "DEBUG")
+	logging.Init("", "DEBUG")
 	logging.Debug("Test debug message with debug enabled")
 }
 
