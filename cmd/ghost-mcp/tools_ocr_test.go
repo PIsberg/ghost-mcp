@@ -30,7 +30,7 @@ func TestHandleFindAndClickMissingText(t *testing.T) {
 }
 
 func TestHandleFindAndClickWithText(t *testing.T) {
-	if os.Getenv("CI") != "" || os.Getenv("GITHUB_ACTIONS") != "" {
+	if testing.Short() || os.Getenv("CI") != "" || os.Getenv("GITHUB_ACTIONS") != "" {
 		t.Skip("skipping: requires real desktop screen")
 	}
 	ctx := context.Background()
@@ -54,7 +54,7 @@ func TestHandleFindAndClickWithText(t *testing.T) {
 }
 
 func TestHandleFindAndClickWithAllParams(t *testing.T) {
-	if os.Getenv("CI") != "" || os.Getenv("GITHUB_ACTIONS") != "" {
+	if testing.Short() || os.Getenv("CI") != "" || os.Getenv("GITHUB_ACTIONS") != "" {
 		t.Skip("skipping: requires real desktop screen")
 	}
 	ctx := context.Background()
@@ -155,7 +155,7 @@ func TestHandleFindAndClickAllEmptyArray(t *testing.T) {
 }
 
 func TestHandleFindAndClickAllValidParams(t *testing.T) {
-	if os.Getenv("CI") != "" || os.Getenv("GITHUB_ACTIONS") != "" {
+	if testing.Short() || os.Getenv("CI") != "" || os.Getenv("GITHUB_ACTIONS") != "" {
 		t.Skip("skipping: requires real desktop screen")
 	}
 	ctx := context.Background()
@@ -201,7 +201,7 @@ func TestHandleWaitForTextMissingText(t *testing.T) {
 }
 
 func TestHandleWaitForTextWithParams(t *testing.T) {
-	if os.Getenv("CI") != "" || os.Getenv("GITHUB_ACTIONS") != "" {
+	if testing.Short() || os.Getenv("CI") != "" || os.Getenv("GITHUB_ACTIONS") != "" {
 		t.Skip("skipping: requires real desktop screen")
 	}
 	ctx := context.Background()
@@ -230,7 +230,7 @@ func TestHandleWaitForTextWithParams(t *testing.T) {
 }
 
 func TestHandleWaitForTextInvisible(t *testing.T) {
-	if os.Getenv("CI") != "" || os.Getenv("GITHUB_ACTIONS") != "" {
+	if testing.Short() || os.Getenv("CI") != "" || os.Getenv("GITHUB_ACTIONS") != "" {
 		t.Skip("skipping: requires real desktop screen")
 	}
 	ctx := context.Background()
@@ -254,7 +254,7 @@ func TestHandleWaitForTextInvisible(t *testing.T) {
 }
 
 func TestHandleFindElementsWithRegion(t *testing.T) {
-	if os.Getenv("CI") != "" || os.Getenv("GITHUB_ACTIONS") != "" {
+	if testing.Short() || os.Getenv("CI") != "" || os.Getenv("GITHUB_ACTIONS") != "" {
 		t.Skip("skipping: requires real desktop screen")
 	}
 	ctx := context.Background()
@@ -280,7 +280,7 @@ func TestHandleFindElementsWithRegion(t *testing.T) {
 }
 
 func TestHandleFindElementsNoRegion(t *testing.T) {
-	if os.Getenv("CI") != "" || os.Getenv("GITHUB_ACTIONS") != "" {
+	if testing.Short() || os.Getenv("CI") != "" || os.Getenv("GITHUB_ACTIONS") != "" {
 		t.Skip("skipping: requires real desktop screen")
 	}
 	ctx := context.Background()
@@ -348,7 +348,7 @@ func TestHandleFindClickAndTypeMissingParams(t *testing.T) {
 }
 
 func TestHandleFindClickAndTypeWithAllParams(t *testing.T) {
-	if os.Getenv("CI") != "" || os.Getenv("GITHUB_ACTIONS") != "" {
+	if testing.Short() || os.Getenv("CI") != "" || os.Getenv("GITHUB_ACTIONS") != "" {
 		t.Skip("skipping: requires real desktop screen")
 	}
 	ctx := context.Background()
@@ -477,7 +477,7 @@ func TestHandleClickUntilTextAppearsMissingParams(t *testing.T) {
 }
 
 func TestHandleClickUntilTextAppearsWithParams(t *testing.T) {
-	if os.Getenv("CI") != "" || os.Getenv("GITHUB_ACTIONS") != "" {
+	if testing.Short() || os.Getenv("CI") != "" || os.Getenv("GITHUB_ACTIONS") != "" {
 		t.Skip("skipping: requires real desktop screen")
 	}
 	ctx := context.Background()

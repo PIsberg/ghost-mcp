@@ -176,6 +176,9 @@ func TestHandleExecuteWorkflowMissingSteps(t *testing.T) {
 }
 
 func TestHandleExecuteWorkflowInvalidStepFormat(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping: triggers real screen capture and OCR via auto-learn")
+	}
 	ctx := context.Background()
 
 	req := mcp.CallToolRequest{
@@ -200,6 +203,9 @@ func TestHandleExecuteWorkflowInvalidStepFormat(t *testing.T) {
 }
 
 func TestHandleExecuteWorkflowUnknownAction(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping: triggers real screen capture and OCR via auto-learn")
+	}
 	ctx := context.Background()
 
 	req := mcp.CallToolRequest{
@@ -228,6 +234,9 @@ func TestHandleExecuteWorkflowUnknownAction(t *testing.T) {
 }
 
 func TestHandleExecuteWorkflowWaitAction(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping: triggers real screen capture and OCR via auto-learn")
+	}
 	ctx := context.Background()
 
 	req := mcp.CallToolRequest{
@@ -256,6 +265,9 @@ func TestHandleExecuteWorkflowWaitAction(t *testing.T) {
 }
 
 func TestHandleExecuteWorkflowClearViewAfter(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping: triggers real screen capture and OCR via auto-learn")
+	}
 	ctx := context.Background()
 
 	req := mcp.CallToolRequest{

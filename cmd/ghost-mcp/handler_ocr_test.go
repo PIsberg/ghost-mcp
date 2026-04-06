@@ -464,7 +464,7 @@ func TestParallelFindPreparedText_UsesPreparedBytes(t *testing.T) {
 		Color:      []byte("color"),
 	}
 
-	seen := make(chan string, 4)
+	seen := make(chan string, 6) // 1 normal + 5 grayscale variants
 	readPreparedOCRImage = func(imgBytes []byte, scaleFactor int) (*ocr.Result, error) {
 		seen <- string(imgBytes)
 		if scaleFactor != ocr.ScaleFactor {
@@ -1187,7 +1187,7 @@ func TestFindButtonLikeElements_Deduplicates(t *testing.T) {
 func TestVerifyTextOnScreen_ShortCircuitOnEmpty(t *testing.T) {
 	// Empty needle should still attempt captures but is a valid edge case
 	// This test just ensures no panic on empty input
-	if os.Getenv("CI") != "" || os.Getenv("GITHUB_ACTIONS") != "" {
+	if testing.Short() || os.Getenv("CI") != "" || os.Getenv("GITHUB_ACTIONS") != "" {
 		t.Skip("skipping: requires real desktop screen")
 	}
 	// Should not panic
@@ -1195,7 +1195,7 @@ func TestVerifyTextOnScreen_ShortCircuitOnEmpty(t *testing.T) {
 }
 
 func TestVerifyTextOnScreen_RespectsMaxAttempts(t *testing.T) {
-	if os.Getenv("CI") != "" || os.Getenv("GITHUB_ACTIONS") != "" {
+	if testing.Short() || os.Getenv("CI") != "" || os.Getenv("GITHUB_ACTIONS") != "" {
 		t.Skip("skipping: requires real desktop screen")
 	}
 	// Searching for gibberish that won't be on screen should return false

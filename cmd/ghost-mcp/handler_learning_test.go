@@ -931,8 +931,8 @@ func TestAutoLearnWithPages_RejectsZero(t *testing.T) {
 // calls learnScreen and returns a properly structured View. Since learnScreen
 // requires a real display, this test is skipped in CI.
 func TestAutoLearnWithPages_ReturnsViewStructure(t *testing.T) {
-	if os.Getenv("CI") != "" || os.Getenv("GITHUB_ACTIONS") != "" {
-		t.Skip("skipping: requires real desktop screen")
+	if testing.Short() || os.Getenv("CI") != "" || os.Getenv("GITHUB_ACTIONS") != "" {
+		t.Skip("skipping: requires real desktop screen and Tesseract")
 	}
 
 	view, err := autoLearnWithPages(2)
