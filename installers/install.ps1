@@ -443,8 +443,8 @@ if ($existingToken) {
 
 Write-Header "Step 4 - Optional Settings"
 
-$debugInput = Read-Host "  Enable debug logging? (y/N)"
-$debug      = if ($debugInput -match '^[Yy]') { "1" } else { "0" }
+$logLevelIdx = Prompt-Choice "Select log verbosity:" @("INFO (Narrative of agent actions)", "DEBUG (Full tool payloads)")
+$logLevel    = if ($logLevelIdx -eq 1) { "DEBUG" } else { "INFO" }
 
 $auditLog   = [System.IO.Path]::Combine(
     [System.Environment]::GetFolderPath("ApplicationData"),
@@ -470,7 +470,7 @@ Write-Header "Step 5 - Setting Environment Variables"
 $envVars = [ordered]@{
     GHOST_MCP_TOKEN         = $token
     GHOST_MCP_TRANSPORT     = $transport
-    GHOST_MCP_DEBUG         = $debug
+    GHOST_MCP_LOG_LEVEL     = $logLevel
     GHOST_MCP_AUDIT_LOG     = $auditLog
     GHOST_MCP_VISUAL        = $visual
     GHOST_MCP_SCREENSHOT_DIR = $screenshotDir
@@ -499,7 +499,7 @@ Write-Header "Step 6 - Claude Desktop settings.json"
 $envBlock = [ordered]@{
     GHOST_MCP_TOKEN         = $token
     GHOST_MCP_TRANSPORT     = $transport
-    GHOST_MCP_DEBUG         = $debug
+    GHOST_MCP_LOG_LEVEL     = $logLevel
     GHOST_MCP_AUDIT_LOG     = $auditLog
     GHOST_MCP_VISUAL        = $visual
     GHOST_MCP_SCREENSHOT_DIR = $screenshotDir

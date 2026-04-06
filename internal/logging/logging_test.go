@@ -31,47 +31,50 @@ func captureStderr(t *testing.T, f func()) string {
 
 func TestInfo(t *testing.T) {
 	got := captureStderr(t, func() {
+		Init("", "INFO")
 		Info("hello %s", "world")
 	})
-	if !strings.Contains(got, "[INFO]") {
-		t.Errorf("expected [INFO] prefix, got: %q", got)
+	if !strings.Contains(got, "level=INFO") {
+		t.Errorf("expected level=INFO, got: %q", got)
 	}
-	if !strings.Contains(got, "hello world") {
+	if !strings.Contains(got, "msg=\"hello world\"") {
 		t.Errorf("expected message body, got: %q", got)
 	}
 }
 
 func TestError(t *testing.T) {
 	got := captureStderr(t, func() {
+		Init("", "INFO")
 		Error("something went %s", "wrong")
 	})
-	if !strings.Contains(got, "[ERROR]") {
-		t.Errorf("expected [ERROR] prefix, got: %q", got)
+	if !strings.Contains(got, "level=ERROR") {
+		t.Errorf("expected level=ERROR, got: %q", got)
 	}
-	if !strings.Contains(got, "something went wrong") {
+	if !strings.Contains(got, "msg=\"something went wrong\"") {
 		t.Errorf("expected message body, got: %q", got)
 	}
 }
 
 func TestDebug_Disabled(t *testing.T) {
-	t.Setenv("GHOST_MCP_DEBUG", "")
 	got := captureStderr(t, func() {
+		Init("", "INFO")
 		Debug("should not appear")
 	})
-	if got != "" {
-		t.Errorf("expected no output when debug disabled, got: %q", got)
+	// Search in the output, excluding the initialization message
+	if strings.Contains(got, "level=DEBUG") {
+		t.Errorf("expected no level=DEBUG when level is INFO, got: %q", got)
 	}
 }
 
 func TestDebug_Enabled(t *testing.T) {
-	t.Setenv("GHOST_MCP_DEBUG", "1")
 	got := captureStderr(t, func() {
+		Init("", "DEBUG")
 		Debug("debug message %d", 42)
 	})
-	if !strings.Contains(got, "[DEBUG]") {
-		t.Errorf("expected [DEBUG] prefix, got: %q", got)
+	if !strings.Contains(got, "level=DEBUG") {
+		t.Errorf("expected level=DEBUG, got: %q", got)
 	}
-	if !strings.Contains(got, "debug message 42") {
+	if !strings.Contains(got, "msg=\"debug message 42\"") {
 		t.Errorf("expected message body, got: %q", got)
 	}
 }

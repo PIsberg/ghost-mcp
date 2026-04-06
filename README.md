@@ -21,7 +21,7 @@ Ghost MCP allows AI assistants like Claude to control your computer's mouse, key
 - 🔐 **Token Authentication**: Requires a secret token before the server will start
 - 📋 **Audit Logging**: Tamper-evident JSON Lines log of every tool call, auth failure, and lifecycle event
 - 🛡️ **Failsafe**: Emergency shutdown by moving mouse to top-left corner (0,0)
-- 📝 **Proper Logging**: All logs go to stderr, keeping stdout clean for MCP protocol
+- 📝 **Structured Storytelling Logging**: Narrative-driven audit of agent actions written to stderr and a configurable log file.
 - 🌐 **Dual Transport**: stdio (default) or HTTP/SSE for web-based clients
 
 ## Available Tools
@@ -449,7 +449,8 @@ Add this to your MCP client configuration to connect to Ghost MCP:
 | `TESSDATA_PREFIX` | **Required for OCR.** Directory that directly contains `eng.traineddata` (NOT its parent). | *(none — OCR will fail if unset)* |
 | `GHOST_MCP_OCR_FORMAT` | Injection format for sending screen buffers to OCR engine natively (`bmp` or `png`) | `bmp` (lossless, uncompressed speed) |
 | `GHOST_MCP_AUDIT_LOG` | Directory for audit log files. Created automatically if absent. | `<UserConfigDir>/ghost-mcp/audit/` |
-| `GHOST_MCP_DEBUG` | Enable debug logging (`1` = on) | `0` (disabled) |
+| `GHOST_MCP_LOG_FILE` | Path to the storyteller log file. | `application.log` |
+| `GHOST_MCP_LOG_LEVEL`| Log verbosity (`DEBUG`, `INFO`, `WARN`, `ERROR`). | `INFO` |
 | `GHOST_MCP_VISUAL` | Show visual cursor pulse on mouse actions (`1` = on) | `0` (disabled) |
 | `GHOST_MCP_KEEP_SCREENSHOTS` | Keep screenshot files on disk after use (`1` = keep, default deletes them) | `0` (deleted after use) |
 | `GHOST_MCP_SCREENSHOT_DIR` | Directory where screenshot files are written | System temp directory |
@@ -479,7 +480,7 @@ The server runs via stdio and is typically started by your MCP client automatica
 ./ghost-mcp
 
 # With debug logging
-GHOST_MCP_DEBUG=1 ./ghost-mcp
+GHOST_MCP_LOG_LEVEL=DEBUG ./ghost-mcp
 ```
 
 ### Example Tool Calls
@@ -700,12 +701,20 @@ Ghost MCP includes an emergency shutdown feature:
 ⚠️ WARNING: Do not move your mouse to (0,0) during normal operation!
 ```
 
-### Logging Safety
+### 📝 Structured Storytelling Logging
 
-All application logs are written to **stderr**, never to stdout. This ensures:
-- MCP JSON-RPC protocol on stdout remains clean
-- No corruption of messages between client and server
-- Debug output doesn't interfere with tool responses
+Ghost MCP implement a unique "storytelling" approach to logging. Instead of dry technical errors, `INFO` logs narrate the agent's intent, progress, and outcomes in a narrative style.
+
+**How it works:**
+1. All logs are written to **stderr** (as required by the MCP protocol to keep stdout clean).
+2. All logs are simultaneously written to a **narrative log file** (default: `application.log`).
+
+Check the log file for a blow-by-blow account of the agent's "journey":
+```text
+time=2024-04-06T19:26:26 level=INFO msg="Agent is searching for 'Submit' button"
+time=2024-04-06T19:26:27 level=INFO msg="Success: Found 'Submit' at (450, 720)"
+time=2024-04-06T19:26:27 level=INFO msg="ACTION COMPLETE: find_and_click 'Submit' at (450, 720)"
+```
 
 ## Troubleshooting
 
@@ -747,7 +756,7 @@ Enable verbose logging for troubleshooting:
     "ghost-mcp": {
       "command": "/path/to/ghost-mcp",
       "env": {
-        "GHOST_MCP_DEBUG": "1"
+        "GHOST_MCP_LOG_LEVEL": "DEBUG"
       }
     }
   }

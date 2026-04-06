@@ -126,7 +126,7 @@ Learning mode enables the server to build a full internal picture of the current
 - **Failsafe mechanism**: moving the mouse to (0,0) triggers an emergency shutdown. `checkFailsafe()` is called after every mouse movement. Do not bypass this.
 - **Parameter validation**: use `internal/validate` functions after parameter extraction, before any OS call.
 - **Authentication**: set `GHOST_MCP_TOKEN` to require a token. In stdio mode the token is checked via an MCP hook; in HTTP mode it's a Bearer header.
-- **Debug logging**: controlled by the `GHOST_MCP_DEBUG=1` environment variable.
+- **Debug logging**: controlled by the `GHOST_MCP_LOG_LEVEL=DEBUG` environment variable.
 - **Learning mode**: controlled by `GHOST_MCP_LEARNING=1`. When enabled, the first OCR tool call auto-scans the screen and subsequent calls use the cached view. Can also be toggled at runtime via `set_learning_mode`.
 
 ### Testing the Learning Mode Feature

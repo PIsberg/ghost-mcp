@@ -256,7 +256,7 @@ Captures a screen region and returns a PNG image. The response has two parts: a 
 { "success": true, "filepath": "/tmp/ghost-mcp-screenshot-....png", "width": 1920, "height": 1080 }
 ```
 
-All parameters are optional — omitting them captures the full screen. Set `GHOST_MCP_KEEP_SCREENSHOTS=1` to keep the file on disk after the response is sent.
+All parameters are optional — omitting them captures the full screen. Set `GHOST_MCP_KEEP_SCREENSHOTS=1` to keep the file on disk after the response is sent. Check `application.log` (or your configured `GHOST_MCP_LOG_FILE`) for the agent's narrative during capture.
 
 ---
 
@@ -1014,6 +1014,14 @@ Check `TESSDATA_PREFIX` points to the directory that **directly contains** `eng.
 ```bash
 ls $TESSDATA_PREFIX/eng.traineddata   # must find the file
 ```
+
+### 📝 Viewing the Agent's Narrative
+Ghost MCP now uses a structured "storytelling" logging system. If you encounter issues, check the narrative log file (default: `application.log`) for a blow-by-blow account of the agent's intent and actions.
+
+**Switching Log Levels:**
+Set the `GHOST_MCP_LOG_LEVEL` environment variable to one of: `DEBUG`, `INFO`, `WARN`, or `ERROR`.
+- `INFO` (Default): Descriptive narrative of agent actions.
+- `DEBUG`: Full tool payloads and internal OCR details.
 
 ### Fixture Port Already in Use
 ```bash
