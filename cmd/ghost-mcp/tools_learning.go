@@ -49,7 +49,18 @@ WORKFLOW:
    your target. Read the visual_id number from the overlay and use click_at(visual_id=N).
 
 Note: ocr_id is just an internal sequence number. It is NOT a visual_id.
-The visual_id comes ONLY from reading the annotated screenshot image.`),
+The visual_id comes ONLY from reading the annotated screenshot image.
+
+FILTERING BY TYPE:
+Pass element_types to limit results to one or more element types.
+Valid values: "button", "label", "input", "checkbox", "radio", "dropdown",
+              "toggle", "slider", "heading", "link", "value", "text", "unknown".
+Example: element_types=["button","link"] returns only buttons and links.
+Omit or leave empty to return all elements (default).`),
+		mcp.WithArray("element_types",
+			mcp.Description(`Optional filter — only return elements whose type matches one of these values.`),
+			mcp.Items(map[string]interface{}{"type": "string"}),
+		),
 	), handleGetLearnedView)
 
 	mcpServer.AddTool(mcp.NewTool("get_annotated_view",

@@ -401,6 +401,170 @@ func TestHandleGetLearnedView_WithView(t *testing.T) {
 	}
 }
 
+func TestHandleGetLearnedView_ElementTypeFilter_SingleType(t *testing.T) {
+	orig := globalLearner
+	defer func() { globalLearner = orig }()
+	globalLearner = learner.New()
+	globalLearner.SetView(&learner.View{
+		Elements: []learner.Element{
+			{ID: 1, Text: "Submit", Type: learner.ElementTypeButton, PageIndex: 0},
+			{ID: 2, Text: "Email:", Type: learner.ElementTypeLabel, PageIndex: 0},
+			{ID: 3, Text: "Cancel", Type: learner.ElementTypeButton, PageIndex: 0},
+			{ID: 4, Text: "Home", Type: learner.ElementTypeLink, PageIndex: 0},
+		},
+		PageCount:  1,
+		CapturedAt: time.Now(),
+		ScreenW:    1280,
+		ScreenH:    800,
+	})
+
+	req := makeLearnReq(map[string]interface{}{
+		"element_types": []interface{}{"button"},
+	})
+	result, err := handleGetLearnedView(context.TODO(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("unexpected error result: %v", result.Content)
+	}
+	text := textFromResult(t, result)
+
+	var v map[string]interface{}
+	if err := json.Unmarshal([]byte(text), &v); err != nil {
+		t.Fatalf("response is not valid JSON: %v\n%s", err, text)
+	}
+	elems := v["elements"].([]interface{})
+	if len(elems) != 2 {
+		t.Fatalf("expected 2 buttons, got %d", len(elems))
+	}
+	for _, raw := range elems {
+		e := raw.(map[string]interface{})
+		if e["type"] != "button" {
+			t.Errorf("expected type=button, got %q", e["type"])
+		}
+	}
+	// Label and link must not appear.
+	if strings.Contains(text, `"Email:"`) {
+		t.Error("label element should have been filtered out")
+	}
+	if strings.Contains(text, `"Home"`) {
+		t.Error("link element should have been filtered out")
+	}
+}
+
+func TestHandleGetLearnedView_ElementTypeFilter_MultipleTypes(t *testing.T) {
+	orig := globalLearner
+	defer func() { globalLearner = orig }()
+	globalLearner = learner.New()
+	globalLearner.SetView(&learner.View{
+		Elements: []learner.Element{
+			{ID: 1, Text: "Submit", Type: learner.ElementTypeButton, PageIndex: 0},
+			{ID: 2, Text: "Email:", Type: learner.ElementTypeLabel, PageIndex: 0},
+			{ID: 3, Text: "Home", Type: learner.ElementTypeLink, PageIndex: 0},
+			{ID: 4, Text: "Body text", Type: learner.ElementTypeText, PageIndex: 0},
+		},
+		PageCount:  1,
+		CapturedAt: time.Now(),
+		ScreenW:    1280,
+		ScreenH:    800,
+	})
+
+	req := makeLearnReq(map[string]interface{}{
+		"element_types": []interface{}{"button", "link"},
+	})
+	result, err := handleGetLearnedView(context.TODO(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	text := textFromResult(t, result)
+
+	var v map[string]interface{}
+	if err := json.Unmarshal([]byte(text), &v); err != nil {
+		t.Fatalf("response is not valid JSON: %v\n%s", err, text)
+	}
+	elems := v["elements"].([]interface{})
+	if len(elems) != 2 {
+		t.Fatalf("expected 2 elements (button+link), got %d", len(elems))
+	}
+	types := map[string]bool{}
+	for _, raw := range elems {
+		e := raw.(map[string]interface{})
+		types[e["type"].(string)] = true
+	}
+	if !types["button"] || !types["link"] {
+		t.Errorf("expected both button and link types, got %v", types)
+	}
+}
+
+func TestHandleGetLearnedView_ElementTypeFilter_Empty_ReturnsAll(t *testing.T) {
+	orig := globalLearner
+	defer func() { globalLearner = orig }()
+	globalLearner = learner.New()
+	globalLearner.SetView(&learner.View{
+		Elements: []learner.Element{
+			{ID: 1, Text: "Submit", Type: learner.ElementTypeButton, PageIndex: 0},
+			{ID: 2, Text: "Email:", Type: learner.ElementTypeLabel, PageIndex: 0},
+		},
+		PageCount:  1,
+		CapturedAt: time.Now(),
+		ScreenW:    1280,
+		ScreenH:    800,
+	})
+
+	// Empty array → no filter → return all.
+	req := makeLearnReq(map[string]interface{}{
+		"element_types": []interface{}{},
+	})
+	result, err := handleGetLearnedView(context.TODO(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	text := textFromResult(t, result)
+
+	var v map[string]interface{}
+	if err := json.Unmarshal([]byte(text), &v); err != nil {
+		t.Fatalf("response is not valid JSON: %v", err)
+	}
+	elems := v["elements"].([]interface{})
+	if len(elems) != 2 {
+		t.Fatalf("expected all 2 elements when filter is empty, got %d", len(elems))
+	}
+}
+
+func TestHandleGetLearnedView_ElementTypeFilter_NoMatch(t *testing.T) {
+	orig := globalLearner
+	defer func() { globalLearner = orig }()
+	globalLearner = learner.New()
+	globalLearner.SetView(&learner.View{
+		Elements: []learner.Element{
+			{ID: 1, Text: "Submit", Type: learner.ElementTypeButton, PageIndex: 0},
+		},
+		PageCount:  1,
+		CapturedAt: time.Now(),
+		ScreenW:    1280,
+		ScreenH:    800,
+	})
+
+	req := makeLearnReq(map[string]interface{}{
+		"element_types": []interface{}{"input"},
+	})
+	result, err := handleGetLearnedView(context.TODO(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	text := textFromResult(t, result)
+
+	var v map[string]interface{}
+	if err := json.Unmarshal([]byte(text), &v); err != nil {
+		t.Fatalf("response is not valid JSON: %v", err)
+	}
+	elems := v["elements"].([]interface{})
+	if len(elems) != 0 {
+		t.Fatalf("expected 0 elements when type filter matches nothing, got %d", len(elems))
+	}
+}
+
 // =============================================================================
 // handleClearLearnedView
 // =============================================================================
