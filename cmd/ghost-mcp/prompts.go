@@ -67,10 +67,11 @@ Use learning mode for major tasks. It is 10-25x faster than individual OCR calls
 {"tool": "get_learned_view", "arguments": {}}
 ` + "```" + `
 *Analyzes all pages (scrolled content). Look for ` + "`ocr_id`" + ` to use Path A.*
+*(Note: Pure visual icons like ⚙️ or 🏠 that contain no text will appear with type "icon" and empty text. For these, use Path B).*
 
 **Filtering by element type (optional):** When you only need a specific kind of
 element, pass ` + "`element_types`" + ` to reduce noise and speed up your search.
-Valid values: ` + "`button`" + `, ` + "`label`" + `, ` + "`input`" + `, ` + "`checkbox`" + `, ` + "`radio`" + `, ` + "`dropdown`" + `,
+Valid values: ` + "`button`" + `, ` + "`label`" + `, ` + "`input`" + `, ` + "`checkbox`" + `, ` + "`radio`" + `, ` + "`dropdown`" + `, ` + "`icon`" + `,
 ` + "`toggle`" + `, ` + "`slider`" + `, ` + "`heading`" + `, ` + "`link`" + `, ` + "`value`" + `, ` + "`text`" + `, ` + "`unknown`" + `.
 
 ` + "```" + `json

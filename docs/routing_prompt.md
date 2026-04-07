@@ -45,7 +45,7 @@ Use max_pages: 5-10 for long forms/lists.
 
 ### Step 2 — SEARCH: `get_learned_view`
 Returns a JSON list of all elements found by OCR with their coordinates.
-**Search this JSON for your target text.**
+**Search this JSON for your target text.** (Note: Pure visual icons like ⚙️ or 🏠 that contain no text will appear with `type: "icon"` and empty text. For these, use Path B).
 
 ```json
 {"tool": "get_learned_view", "arguments": {}}
@@ -55,7 +55,8 @@ Example output:
 ```json
 {"elements": [
   {"ocr_id": 1, "text": "Home",   "type": "link",   "x": 100, "y": 50,  "page_index": 0},
-  {"ocr_id": 2, "text": "Submit", "type": "button", "x": 350, "y": 780, "page_index": 0}
+  {"ocr_id": 2, "text": "Submit", "type": "button", "x": 350, "y": 780, "page_index": 0},
+  {"ocr_id": 3, "text": "",       "type": "icon",   "x": 40,  "y": 40,  "page_index": 0}
 ]}
 ```
 

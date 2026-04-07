@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ghost-mcp/internal/cv"
 	"github.com/ghost-mcp/internal/learner"
 	"github.com/ghost-mcp/internal/logging"
 	"github.com/ghost-mcp/internal/ocr"
@@ -147,6 +148,36 @@ func hammingDistance(h1, h2 uint64) int {
 	return bits.OnesCount64(h1 ^ h2)
 }
 
+func appendIconElements(existing []learner.Element, iconRects []image.Rectangle, pageIndex, offsetX, offsetY int) []learner.Element {
+	for _, ir := range iconRects {
+		ir = ir.Add(image.Pt(offsetX, offsetY))
+
+		isText := false
+		for _, e := range existing {
+			er := image.Rect(e.X, e.Y, e.X+e.Width, e.Y+e.Height)
+			intersect := ir.Intersect(er)
+			if !intersect.Empty() {
+				isText = true
+				break
+			}
+		}
+		if !isText {
+			existing = append(existing, learner.Element{
+				Text:       "", // pure icons have absolutely no text
+				X:          ir.Min.X,
+				Y:          ir.Min.Y,
+				Width:      ir.Dx(),
+				Height:     ir.Dy(),
+				Confidence: 100.0,
+				PageIndex:  pageIndex,
+				Type:       learner.ElementTypeIcon,
+				OcrPass:    learner.OcrPassNormal,
+			})
+		}
+	}
+	return existing
+}
+
 func learnScreenAsync(cfg learnCfg) (*learner.View, error) {
 	screenW, screenH := uiGetScreenSize()
 
@@ -169,6 +200,7 @@ func learnScreenAsync(cfg learnCfg) (*learner.View, error) {
 
 	type ocrJob struct {
 		page     int
+		img      image.Image
 		prepared *ocr.PreparedImageSet
 	}
 
@@ -191,7 +223,7 @@ func learnScreenAsync(cfg learnCfg) (*learner.View, error) {
 			return nil, fmt.Errorf("page %d: prepare OCR passes: %w", page, prepErr)
 		}
 
-		jobs = append(jobs, ocrJob{page: page, prepared: prepared})
+		jobs = append(jobs, ocrJob{page: page, img: img, prepared: prepared})
 
 		jpegBytes := encodeJPEG(img)
 		snap := learner.PageSnapshot{
@@ -265,6 +297,11 @@ func learnScreenAsync(cfg learnCfg) (*learner.View, error) {
 
 			elems := mergeOCRPasses(j.page, cfg.RegionX, cfg.RegionY,
 				normalResult, invertedResult, brightResult, darkResult, colorResult)
+
+			if os.Getenv("GHOST_MCP_CV_ICONS") != "0" {
+				iconRects := cv.FindIcons(j.img)
+				elems = appendIconElements(elems, iconRects, j.page, cfg.RegionX, cfg.RegionY)
+			}
 
 			resultsChan <- ocrResultStruct{page: j.page, elements: elems, err: nil}
 		}(job)
@@ -369,6 +406,12 @@ func learnScreenSync(cfg learnCfg) (*learner.View, error) {
 
 		pageElements := mergeOCRPasses(page, cfg.RegionX, cfg.RegionY,
 			normalResult, invertedResult, brightResult, darkResult, colorResult)
+
+		if os.Getenv("GHOST_MCP_CV_ICONS") != "0" {
+			iconRects := cv.FindIcons(img)
+			pageElements = appendIconElements(pageElements, iconRects, page, cfg.RegionX, cfg.RegionY)
+		}
+
 		allElements = append(allElements, pageElements...)
 
 		jpegBytes := encodeJPEG(img)
