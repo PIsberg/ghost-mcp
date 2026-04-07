@@ -238,6 +238,13 @@ go test -bench=Benchmark -benchmem ./cmd/ghost-mcp/...
 
 *After initial scan, all subsequent operations use cached view
 
+### Feature Flags for Learning Mode
+
+| Environment Variable | Default | Purpose |
+|----------------------|---------|---------|
+| `GHOST_MCP_ASYNC_SCAN` | `1` | Enables massively parallel OCR evaluation for scrolling pages, reducing discovery time by >50%. Set to `0` to revert to synchronous captures. |
+| `GHOST_MCP_PHASH` | `1` | Uses Perceptual Image Hashing (dHash) to detect the exact bottom of scrollable areas dynamically. Tolerates blinking cursors and minor noise better than absolute pixel comparison or text diffs. Set to `0` to use exact sub-pixel MSE matching. |
+
 ---
 
 ## Interpreting Test Results
