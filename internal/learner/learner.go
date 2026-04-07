@@ -44,6 +44,7 @@ const (
 	ElementTypeLink     ElementType = "link"     // hyperlink or navigation text
 	ElementTypeValue    ElementType = "value"    // numeric or status value
 	ElementTypeText     ElementType = "text"     // general body text
+	ElementTypeIcon     ElementType = "icon"     // non-text visual element
 )
 
 // OcrPass identifies which OCR preprocessing pass detected an element.
