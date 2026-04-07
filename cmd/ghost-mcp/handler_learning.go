@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"image"
 	"image/jpeg"
+	"math/bits"
 	"os"
 	"strings"
 	"time"
@@ -81,14 +82,20 @@ func imageSimilarity(img1, img2 image.Image) float64 {
 		for x := b.Min.X; x < b.Max.X; x += stepX {
 			r1, g1, b1, _ := img1.At(x, y).RGBA()
 			r2, g2, b2, _ := img2.At(x, y).RGBA()
-			
+
 			dr := float64(r1) - float64(r2)
 			dg := float64(g1) - float64(g2)
 			db := float64(b1) - float64(b2)
-			
-			if dr < 0 { dr = -dr }
-			if dg < 0 { dg = -dg }
-			if db < 0 { db = -db }
+
+			if dr < 0 {
+				dr = -dr
+			}
+			if dg < 0 {
+				dg = -dg
+			}
+			if db < 0 {
+				db = -db
+			}
 
 			diff += dr + dg + db
 			total += 3 * 65535
@@ -98,6 +105,46 @@ func imageSimilarity(img1, img2 image.Image) float64 {
 		return 1.0
 	}
 	return 1.0 - (diff / total)
+}
+
+func computeDHash(img image.Image) uint64 {
+	if img == nil {
+		return 0
+	}
+	b := img.Bounds()
+	stepX := float64(b.Dx()) / 9.0
+	stepY := float64(b.Dy()) / 8.0
+
+	gray := func(x, y int) uint32 {
+		r, g, bColor, _ := img.At(x, y).RGBA()
+		return (r*299 + g*587 + bColor*114) / 1000
+	}
+
+	pixels := make([][]uint32, 8)
+	for y := 0; y < 8; y++ {
+		pixels[y] = make([]uint32, 9)
+		py := b.Min.Y + int(float64(y)*stepY+stepY/2)
+		for x := 0; x < 9; x++ {
+			px := b.Min.X + int(float64(x)*stepX+stepX/2)
+			pixels[y][x] = gray(px, py)
+		}
+	}
+
+	var hash uint64
+	bitIndex := 0
+	for y := 0; y < 8; y++ {
+		for x := 0; x < 8; x++ {
+			if pixels[y][x] < pixels[y][x+1] {
+				hash |= (1 << bitIndex)
+			}
+			bitIndex++
+		}
+	}
+	return hash
+}
+
+func hammingDistance(h1, h2 uint64) int {
+	return bits.OnesCount64(h1 ^ h2)
 }
 
 func learnScreenAsync(cfg learnCfg) (*learner.View, error) {
@@ -128,10 +175,11 @@ func learnScreenAsync(cfg learnCfg) (*learner.View, error) {
 	var allElements []learner.Element
 	var pages []learner.PageSnapshot
 	var prevImg image.Image
+	var prevHash uint64
 	scrollsDone := 0
 
 	jobs := make([]ocrJob, 0, cfg.MaxPages)
-	
+
 	for page := 0; page < cfg.MaxPages; page++ {
 		img, err := uiCaptureImage(cfg.RegionX, cfg.RegionY, cfg.RegionW, cfg.RegionH)
 		if err != nil {
@@ -142,7 +190,7 @@ func learnScreenAsync(cfg learnCfg) (*learner.View, error) {
 		if prepErr != nil {
 			return nil, fmt.Errorf("page %d: prepare OCR passes: %w", page, prepErr)
 		}
-		
+
 		jobs = append(jobs, ocrJob{page: page, prepared: prepared})
 
 		jpegBytes := encodeJPEG(img)
@@ -157,11 +205,27 @@ func learnScreenAsync(cfg learnCfg) (*learner.View, error) {
 		saveScreenshotIfKeptFromBytes(jpegBytes, fmt.Sprintf("ghost-mcp-learn-page%d", page))
 		pages = append(pages, snap)
 
-		if page > 0 && imageSimilarity(prevImg, img) > 0.99 {
-			logging.Info("learn_screen: page %d image matches previous — reached end of scrollable area", page)
-			break
+		usePHash := os.Getenv("GHOST_MCP_PHASH") != "0"
+		currHash := uint64(0)
+		if usePHash {
+			currHash = computeDHash(img)
+		}
+
+		if page > 0 {
+			if usePHash {
+				if hammingDistance(prevHash, currHash) <= 2 {
+					logging.Info("learn_screen: page %d dHash matches previous (dist <= 2) — reached end of scrollable area", page)
+					break
+				}
+			} else {
+				if imageSimilarity(prevImg, img) > 0.99 {
+					logging.Info("learn_screen: page %d image matches previous — reached end of scrollable area", page)
+					break
+				}
+			}
 		}
 		prevImg = img
+		prevHash = currHash
 
 		if page < cfg.MaxPages-1 {
 			uiScrollDir(cfg.ScrollAmount, cfg.ScrollDirection)
@@ -176,17 +240,17 @@ func learnScreenAsync(cfg learnCfg) (*learner.View, error) {
 	}
 
 	scrollBack(scrollsDone, cfg.ScrollAmount)
-	
+
 	logging.Info("learn_screen: captured %d pages. Running OCR pipeline concurrently...", len(jobs))
-	
+
 	type ocrResultStruct struct {
 		page     int
 		elements []learner.Element
 		err      error
 	}
-	
+
 	resultsChan := make(chan ocrResultStruct, len(jobs))
-	
+
 	for _, job := range jobs {
 		go func(j ocrJob) {
 			normalResult, err := ocr.ReadPreparedBytes(j.prepared.Normal, ocr.ScaleFactor, ocr.Options{})
@@ -198,14 +262,14 @@ func learnScreenAsync(cfg learnCfg) (*learner.View, error) {
 			brightResult, _ := ocr.ReadPreparedBytes(j.prepared.BrightText, ocr.ScaleFactor, ocr.Options{})
 			darkResult, _ := ocr.ReadPreparedBytes(j.prepared.DarkText, ocr.ScaleFactor, ocr.Options{})
 			colorResult, _ := ocr.ReadPreparedBytes(j.prepared.Color, ocr.ScaleFactor, ocr.Options{})
-			
+
 			elems := mergeOCRPasses(j.page, cfg.RegionX, cfg.RegionY,
 				normalResult, invertedResult, brightResult, darkResult, colorResult)
-				
+
 			resultsChan <- ocrResultStruct{page: j.page, elements: elems, err: nil}
 		}(job)
 	}
-	
+
 	pageElementsMap := make(map[int][]learner.Element)
 	for i := 0; i < len(jobs); i++ {
 		res := <-resultsChan
