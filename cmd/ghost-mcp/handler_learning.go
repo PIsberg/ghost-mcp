@@ -60,6 +60,186 @@ type learnCfg struct {
 //
 // After scanning, the viewport is restored to its original position.
 func learnScreen(cfg learnCfg) (*learner.View, error) {
+	if os.Getenv("GHOST_MCP_ASYNC_SCAN") == "0" {
+		logging.Info("learn_screen: using SYNCHRONOUS scanning mode (GHOST_MCP_ASYNC_SCAN=0)")
+		return learnScreenSync(cfg)
+	}
+	logging.Info("learn_screen: using ASYNCHRONOUS pipeline scanning mode")
+	return learnScreenAsync(cfg)
+}
+
+func imageSimilarity(img1, img2 image.Image) float64 {
+	if img1 == nil || img2 == nil || img1.Bounds() != img2.Bounds() {
+		return 0.0
+	}
+	b := img1.Bounds()
+	stepX := max(1, b.Dx()/20)
+	stepY := max(1, b.Dy()/20)
+
+	var diff, total float64
+	for y := b.Min.Y; y < b.Max.Y; y += stepY {
+		for x := b.Min.X; x < b.Max.X; x += stepX {
+			r1, g1, b1, _ := img1.At(x, y).RGBA()
+			r2, g2, b2, _ := img2.At(x, y).RGBA()
+			
+			dr := float64(r1) - float64(r2)
+			dg := float64(g1) - float64(g2)
+			db := float64(b1) - float64(b2)
+			
+			if dr < 0 { dr = -dr }
+			if dg < 0 { dg = -dg }
+			if db < 0 { db = -db }
+
+			diff += dr + dg + db
+			total += 3 * 65535
+		}
+	}
+	if total == 0 {
+		return 1.0
+	}
+	return 1.0 - (diff / total)
+}
+
+func learnScreenAsync(cfg learnCfg) (*learner.View, error) {
+	screenW, screenH := uiGetScreenSize()
+
+	if cfg.RegionW <= 0 || cfg.RegionH <= 0 {
+		cfg.RegionX, cfg.RegionY = 0, 0
+		cfg.RegionW, cfg.RegionH = screenW, screenH
+	}
+	if cfg.MaxPages <= 0 {
+		cfg.MaxPages = 10
+	}
+	if cfg.ScrollAmount <= 0 {
+		cfg.ScrollAmount = 5
+	}
+	if cfg.ScrollDirection == "" {
+		cfg.ScrollDirection = "down"
+	}
+	if err := validate.ScreenRegion(cfg.RegionX, cfg.RegionY, cfg.RegionW, cfg.RegionH, screenW, screenH); err != nil {
+		return nil, fmt.Errorf("invalid scan region: %w", err)
+	}
+
+	type ocrJob struct {
+		page     int
+		prepared *ocr.PreparedImageSet
+	}
+
+	var allElements []learner.Element
+	var pages []learner.PageSnapshot
+	var prevImg image.Image
+	scrollsDone := 0
+
+	jobs := make([]ocrJob, 0, cfg.MaxPages)
+	
+	for page := 0; page < cfg.MaxPages; page++ {
+		img, err := uiCaptureImage(cfg.RegionX, cfg.RegionY, cfg.RegionW, cfg.RegionH)
+		if err != nil {
+			return nil, fmt.Errorf("page %d: capture failed: %w", page, err)
+		}
+
+		prepared, prepErr := ocr.PrepareParallelImageSet(img, true)
+		if prepErr != nil {
+			return nil, fmt.Errorf("page %d: prepare OCR passes: %w", page, prepErr)
+		}
+		
+		jobs = append(jobs, ocrJob{page: page, prepared: prepared})
+
+		jpegBytes := encodeJPEG(img)
+		snap := learner.PageSnapshot{
+			Index:                 page,
+			CumulativeScrollTicks: scrollsDone * cfg.ScrollAmount,
+			Width:                 cfg.RegionW,
+			Height:                cfg.RegionH,
+			ElementCount:          0, // Filled after OCR
+			JPEG:                  jpegBytes,
+		}
+		saveScreenshotIfKeptFromBytes(jpegBytes, fmt.Sprintf("ghost-mcp-learn-page%d", page))
+		pages = append(pages, snap)
+
+		if page > 0 && imageSimilarity(prevImg, img) > 0.99 {
+			logging.Info("learn_screen: page %d image matches previous — reached end of scrollable area", page)
+			break
+		}
+		prevImg = img
+
+		if page < cfg.MaxPages-1 {
+			uiScrollDir(cfg.ScrollAmount, cfg.ScrollDirection)
+			scrollsDone++
+			time.Sleep(300 * time.Millisecond)
+
+			if err := uiCheckFailsafe(); err != nil {
+				scrollBack(scrollsDone, cfg.ScrollAmount)
+				return nil, err
+			}
+		}
+	}
+
+	scrollBack(scrollsDone, cfg.ScrollAmount)
+	
+	logging.Info("learn_screen: captured %d pages. Running OCR pipeline concurrently...", len(jobs))
+	
+	type ocrResultStruct struct {
+		page     int
+		elements []learner.Element
+		err      error
+	}
+	
+	resultsChan := make(chan ocrResultStruct, len(jobs))
+	
+	for _, job := range jobs {
+		go func(j ocrJob) {
+			normalResult, err := ocr.ReadPreparedBytes(j.prepared.Normal, ocr.ScaleFactor, ocr.Options{})
+			if err != nil {
+				resultsChan <- ocrResultStruct{page: j.page, err: fmt.Errorf("normal OCR failed: %w", err)}
+				return
+			}
+			invertedResult, _ := ocr.ReadPreparedBytes(j.prepared.Inverted, ocr.ScaleFactor, ocr.Options{})
+			brightResult, _ := ocr.ReadPreparedBytes(j.prepared.BrightText, ocr.ScaleFactor, ocr.Options{})
+			darkResult, _ := ocr.ReadPreparedBytes(j.prepared.DarkText, ocr.ScaleFactor, ocr.Options{})
+			colorResult, _ := ocr.ReadPreparedBytes(j.prepared.Color, ocr.ScaleFactor, ocr.Options{})
+			
+			elems := mergeOCRPasses(j.page, cfg.RegionX, cfg.RegionY,
+				normalResult, invertedResult, brightResult, darkResult, colorResult)
+				
+			resultsChan <- ocrResultStruct{page: j.page, elements: elems, err: nil}
+		}(job)
+	}
+	
+	pageElementsMap := make(map[int][]learner.Element)
+	for i := 0; i < len(jobs); i++ {
+		res := <-resultsChan
+		if res.err != nil {
+			logging.Error("learn_screen async OCR error on page %d: %v", res.page, res.err)
+			continue
+		}
+		pageElementsMap[res.page] = res.elements
+		allElements = append(allElements, res.elements...)
+	}
+
+	for i := range pages {
+		pages[i].ElementCount = len(pageElementsMap[pages[i].Index])
+	}
+
+	deduped := learner.DeduplicateElements(allElements)
+	typed := inferTypes(deduped)
+	associated := learner.AssociateLabels(typed)
+
+	view := &learner.View{
+		Elements:         associated,
+		Pages:            pages,
+		PageCount:        scrollsDone + 1,
+		ScrollAmountUsed: cfg.ScrollAmount,
+		CapturedAt:       time.Now(),
+		ScreenW:          screenW,
+		ScreenH:          screenH,
+	}
+	logging.Info("learn_screen: async complete — %d elements across %d pages",
+		len(view.Elements), view.PageCount)
+	return view, nil
+}
+
+func learnScreenSync(cfg learnCfg) (*learner.View, error) {
 	screenW, screenH := uiGetScreenSize()
 
 	if cfg.RegionW <= 0 || cfg.RegionH <= 0 {
@@ -90,18 +270,6 @@ func learnScreen(cfg learnCfg) (*learner.View, error) {
 			return nil, fmt.Errorf("page %d: capture failed: %w", page, err)
 		}
 
-		// ── OCR: four passes ─────────────────────────────────────────────────
-		// 1. Normal — grayscale + contrast stretch. Best for most UI text.
-		// 2. Inverted — catches white text on dark/coloured backgrounds.
-		// 3. BrightText — isolates near-white pixels (white text on any background).
-		// 4. Color — full-colour pass for coloured-background buttons.
-		//
-		// PrepareParallelImageSet runs all four preprocessing variants concurrently,
-		// then each is decoded by a separate pooled Tesseract client. This bypasses
-		// ReadImage's single-slot cache which, when given the same image object,
-		// returns the cached normal result for every subsequent opts variant — so
-		// inverted, bright-text, and colour passes would silently produce duplicate
-		// normal-pass output instead of their own preprocessed results.
 		prepared, prepErr := ocr.PrepareParallelImageSet(img, true)
 		if prepErr != nil {
 			return nil, fmt.Errorf("page %d: prepare OCR passes: %w", page, prepErr)
@@ -139,7 +307,6 @@ func learnScreen(cfg learnCfg) (*learner.View, error) {
 			normalResult, invertedResult, brightResult, darkResult, colorResult)
 		allElements = append(allElements, pageElements...)
 
-		// ── Screenshot storage ───────────────────────────────────────────────
 		jpegBytes := encodeJPEG(img)
 		snap := learner.PageSnapshot{
 			Index:                 page,
@@ -152,7 +319,6 @@ func learnScreen(cfg learnCfg) (*learner.View, error) {
 		saveScreenshotIfKeptFromBytes(jpegBytes, fmt.Sprintf("ghost-mcp-learn-page%d", page))
 		pages = append(pages, snap)
 
-		// ── Repeat detection & Diagnostics ──────────────────────────────────
 		currentText := extractText(normalResult)
 		logging.Info("learn_screen: page %d — %d elements finalized", page, len(pageElements))
 		if normalResult != nil {
@@ -184,8 +350,6 @@ func learnScreen(cfg learnCfg) (*learner.View, error) {
 
 	scrollBack(scrollsDone, cfg.ScrollAmount)
 
-	// ── Post-processing ──────────────────────────────────────────────────────
-	// Deduplicate, infer element types, then associate labels with inputs.
 	deduped := learner.DeduplicateElements(allElements)
 	typed := inferTypes(deduped)
 	associated := learner.AssociateLabels(typed)
@@ -199,7 +363,7 @@ func learnScreen(cfg learnCfg) (*learner.View, error) {
 		ScreenW:          screenW,
 		ScreenH:          screenH,
 	}
-	logging.Info("learn_screen: complete — %d elements across %d pages (%d screenshots)",
+	logging.Info("learn_screen: sync complete — %d elements across %d pages (%d screenshots)",
 		len(view.Elements), view.PageCount, len(view.Pages))
 	return view, nil
 }
