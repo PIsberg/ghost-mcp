@@ -6,7 +6,7 @@ require (
 	github.com/go-vgo/robotgo v1.0.2
 	github.com/mark3labs/mcp-go v0.47.0
 	github.com/otiai10/gosseract/v2 v2.4.1
-	golang.org/x/image v0.38.0
+	golang.org/x/image v0.39.0
 )
 
 require (
