@@ -110,12 +110,17 @@ func TestScaleFactor_AtLeastThree(t *testing.T) {
 
 func TestPrimeClientPool_WarmsFourClients(t *testing.T) {
 	originalNewClient := newOCRClient
-	originalPool := clientPool
-	originalWarmOnce := warmClientOnce
 	t.Cleanup(func() {
 		newOCRClient = originalNewClient
-		clientPool = originalPool
-		warmClientOnce = originalWarmOnce
+		// Reset pool and once to default state for subsequent tests
+		clientPool = sync.Pool{
+			New: func() any {
+				c := newOCRClient()
+				_ = c.SetPageSegMode(gosseract.PSM_SPARSE_TEXT)
+				return c
+			},
+		}
+		warmClientOnce = sync.Once{}
 	})
 
 	created := make([]*fakeOCRClient, 0, pooledClientWarmCount)
@@ -153,12 +158,17 @@ func TestPrimeClientPool_WarmsFourClients(t *testing.T) {
 
 func TestGetPooledClient_ReusesPrimedClient(t *testing.T) {
 	originalNewClient := newOCRClient
-	originalPool := clientPool
-	originalWarmOnce := warmClientOnce
 	t.Cleanup(func() {
 		newOCRClient = originalNewClient
-		clientPool = originalPool
-		warmClientOnce = originalWarmOnce
+		// Reset pool and once to default state for subsequent tests
+		clientPool = sync.Pool{
+			New: func() any {
+				c := newOCRClient()
+				_ = c.SetPageSegMode(gosseract.PSM_SPARSE_TEXT)
+				return c
+			},
+		}
+		warmClientOnce = sync.Once{}
 	})
 
 	created := make([]*fakeOCRClient, 0, pooledClientWarmCount)

@@ -1,51 +1,60 @@
 # .goreleaser.yaml — GoReleaser v2 configuration for ghost-mcp
 # Docs: https://goreleaser.com
 #
-# CGo notes:
-#   This project uses CGo (robotgo, gosseract). Cross-compilation is not
-#   possible, so the release workflow builds natively on each OS runner and
-#   stages the binary under dist/prebuilt/{os}_{arch}/.
-#   GoReleaser's `prebuilt` builder picks them up — no Pro plan required.
+# CGo strategy:
+#   "builder: prebuilt" does not exist in goreleaser free — the only valid
+#   builders are go, rust, zig, bun, deno, uv, poetry, etc.  Using it silently
+#   fell back to the go builder, which ran `go build` → `go vet` → CGo failure.
 #
-# Windows DLL bundling:
-#   Before running goreleaser, CI copies vcpkg runtime DLLs into
-#   dist/windows-dlls/. The windows-archive config picks them up so the
-#   released .zip is fully self-contained.
+#   Fix: set `tool: "true"` (Linux's no-op binary) so goreleaser runs
+#   `true build … -o <path>` which exits 0 immediately without invoking the
+#   Go toolchain at all.  A pre-build hook places the correct native binary at
+#   <path> before the no-op command runs.  Goreleaser then archives it as usual.
 #
 # Workflow (see .github/workflows/release.yml):
-#   1. build-linux:   go build → dist/prebuilt/linux_amd64/ghost-mcp
-#   2. build-windows: go build → dist/prebuilt/windows_amd64/ghost-mcp.exe
-#                     + DLLs  → dist/windows-dlls/*.dll
-#   3. release:       download both dist/ dirs, goreleaser release
+#   1. build-linux   — native `go build` → dist/prebuilt/linux_amd64/ghost-mcp
+#   2. build-windows — native `go build` → dist/prebuilt/windows_amd64/ghost-mcp.exe
+#                    + vcpkg DLLs        → dist/windows-dlls/*.dll
+#   3. release       — download both dist/ dirs, run `goreleaser release --clean`
 
 version: 2
 
 project_name: ghost-mcp
 
-# ── builds (prebuilt — binaries are compiled by CI before goreleaser runs) ───
-# macOS is skipped: robotgo CGDisplayCreateImageForRect is deprecated on
-# macOS 15+ and the build fails. Re-enable once upstream is fixed.
+# ctx.Env is passed to every go invocation (go list -m in gomod pipe, etc.).
+# CGO_ENABLED=0 prevents any incidental go command from needing CGo headers.
+env:
+  - CGO_ENABLED=0
+
+# ── builds ───────────────────────────────────────────────────────────────────
+# macOS is skipped: robotgo CGDisplayCreateImageForRect deprecated on macOS 15+.
 
 builds:
   - id: ghost-mcp-linux
-    builder: prebuilt
     binary: ghost-mcp
     goos:
       - linux
     goarch:
       - amd64
-    prebuilt:
-      path: "dist/prebuilt/{{ .Os }}_{{ .Arch }}/{{ .Binary }}"
+    # no-op build: `true build … -o <path> …` exits 0 without compiling.
+    # The pre-hook copies the native binary to <path> first.
+    tool: "true"
+    no_main_check: true
+    hooks:
+      pre:
+        - cmd: cp dist/prebuilt/linux_amd64/ghost-mcp {{ .Path }}
 
   - id: ghost-mcp-windows
-    builder: prebuilt
     binary: ghost-mcp
     goos:
       - windows
     goarch:
       - amd64
-    prebuilt:
-      path: "dist/prebuilt/{{ .Os }}_{{ .Arch }}/{{ .Binary }}{{ .Ext }}"
+    tool: "true"
+    no_main_check: true
+    hooks:
+      pre:
+        - cmd: cp dist/prebuilt/windows_amd64/ghost-mcp.exe {{ .Path }}
 
 # ── archives ─────────────────────────────────────────────────────────────────
 
@@ -115,9 +124,6 @@ nfpms:
         dst: /usr/share/doc/ghost-mcp/install.sh
 
 # ── Scoop (Windows package manager) ──────────────────────────────────────────
-# Requires a "scoop-ghost-mcp" repo at github.com/PIsberg/scoop-ghost-mcp and
-# a SCOOP_TAP_GITHUB_TOKEN repository secret (PAT with repo scope on that repo).
-# Remove this section if you do not maintain a Scoop bucket.
 
 scoops:
   - name: ghost-mcp
