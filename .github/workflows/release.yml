@@ -1,0 +1,274 @@
+name: Release
+
+# Triggered on version tags: v1.2.3, v1.2.3-beta.1, etc.
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write   # create GitHub releases and upload assets
+
+# ── Split release strategy ────────────────────────────────────────────────────
+#
+# CGo requires a native toolchain — cross-compilation is not possible.
+# Each OS runner calls `goreleaser release --split` to build and package its
+# own artifacts (binaries + archives + Linux packages). The final "release" job
+# downloads everything and calls `goreleaser continue --merge` to publish the
+# unified GitHub release.
+
+jobs:
+
+  # ── Linux: build + package (tar.gz, deb, rpm) ────────────────────────────────
+  build-linux:
+    name: Build & Package (Linux)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@fe104658747b27e96e4f7e80cd0a94068e53901d # v2.16.1
+        with:
+          egress-policy: audit
+
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0   # GoReleaser needs full history for changelog
+
+      - name: Set up Go
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Cache apt packages
+        uses: awalsh128/cache-apt-pkgs-action@acb598e5ddbc6f68a970c5da0688d2f3a9f04d05 # v1.6.0
+        with:
+          packages: >-
+            gcc libx11-dev libx11-xcb-dev libxcb1-dev libxkbcommon-dev
+            libxkbcommon-x11-dev libxext-dev xorg-dev libxtst-dev libpng-dev
+            tesseract-ocr libleptonica-dev libtesseract-dev
+          version: 1
+
+      - name: Install Linux system dependencies
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y \
+            gcc libx11-dev libx11-xcb-dev libxcb1-dev libxkbcommon-dev \
+            libxkbcommon-x11-dev libxext-dev xorg-dev libxtst-dev libpng-dev \
+            tesseract-ocr libleptonica-dev libtesseract-dev
+
+      - name: Set up GoReleaser
+        uses: goreleaser/goreleaser-action@9c156ee8a17a598857e0b1cc4ac2d32a383e36c9 # v6.3.0
+        with:
+          distribution: goreleaser
+          version: '~> v2'
+          install-only: true
+
+      - name: Build and package (Linux split)
+        run: goreleaser release --split --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CGO_ENABLED: "1"
+
+      - name: Upload Linux dist
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: dist-linux
+          path: dist/
+          retention-days: 1
+
+  # ── Windows: build + package (zip with bundled DLLs) ─────────────────────────
+  build-windows:
+    name: Build & Package (Windows)
+    runs-on: windows-latest
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@fe104658747b27e96e4f7e80cd0a94068e53901d # v2.16.1
+        with:
+          egress-policy: audit
+
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Install MinGW (GCC for CGo)
+        run: |
+          $mingwBin = "C:\ProgramData\mingw64\mingw64\bin"
+          if (Test-Path "$mingwBin\gcc.exe") {
+            Write-Host "MinGW already present, skipping choco install"
+          } else {
+            choco install mingw -y --no-progress
+          }
+          echo "$mingwBin" >> $env:GITHUB_PATH
+
+      - name: Download pre-built Windows deps bundle
+        id: download-deps
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download deps-windows-v2 `
+            --repo $env:GITHUB_REPOSITORY `
+            --pattern "deps-windows-x64-mingw-dynamic.zip" `
+            --dir "$env:RUNNER_TEMP" `
+            --clobber 2>$null
+          if ($LASTEXITCODE -eq 0) {
+            $installDir = "$env:USERPROFILE\vcpkg\installed\x64-mingw-dynamic"
+            New-Item -ItemType Directory -Force -Path $installDir | Out-Null
+            Expand-Archive "$env:RUNNER_TEMP\deps-windows-x64-mingw-dynamic.zip" `
+              -DestinationPath $installDir -Force
+            Write-Host "Pre-built bundle restored successfully"
+            echo "DEPS_FROM_RELEASE=true" >> $env:GITHUB_ENV
+          } else {
+            Write-Host "Pre-built bundle not found — will build via vcpkg"
+            echo "DEPS_FROM_RELEASE=false" >> $env:GITHUB_ENV
+          }
+          exit 0
+
+      - name: Cache vcpkg binary archives (fallback)
+        if: env.DEPS_FROM_RELEASE != 'true'
+        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
+        with:
+          path: ~/AppData/Local/vcpkg/archives
+          key: vcpkg-x64-mingw-tesseract-leptonica-v2
+          restore-keys: vcpkg-x64-mingw-tesseract-leptonica-
+
+      - name: Build Windows deps via vcpkg (fallback)
+        if: env.DEPS_FROM_RELEASE != 'true'
+        run: |
+          $mingwBin = "C:\ProgramData\mingw64\mingw64\bin"
+          $env:CC  = "$mingwBin\gcc.exe"
+          $env:CXX = "$mingwBin\g++.exe"
+          $archivesDir = "$env:USERPROFILE\AppData\Local\vcpkg\archives"
+          New-Item -ItemType Directory -Force -Path $archivesDir | Out-Null
+          $env:VCPKG_BINARY_SOURCES = "clear;files,$archivesDir,readwrite"
+
+          git clone https://github.com/Microsoft/vcpkg.git $env:USERPROFILE\vcpkg
+          Set-Location $env:USERPROFILE\vcpkg
+          .\bootstrap-vcpkg.bat -disableMetrics
+          .\vcpkg install tesseract:x64-mingw-dynamic leptonica:x64-mingw-dynamic --disable-metrics
+
+          $libDir = "$env:USERPROFILE\vcpkg\installed\x64-mingw-dynamic\lib"
+          $tessLib = Get-Item "$libDir\libtesseract*.dll.a" | Select-Object -First 1
+          if ($tessLib -and -not (Test-Path "$libDir\libtesseract.dll.a")) {
+            Copy-Item $tessLib.FullName "$libDir\libtesseract.dll.a"
+          }
+
+          $tessdataDir = "$env:USERPROFILE\vcpkg\installed\x64-mingw-dynamic\share\tessdata"
+          New-Item -ItemType Directory -Force -Path $tessdataDir | Out-Null
+          Invoke-WebRequest "https://github.com/tesseract-ocr/tessdata_fast/raw/main/eng.traineddata" `
+            -OutFile "$tessdataDir\eng.traineddata"
+
+      - name: Configure CGO environment
+        run: |
+          $vcpkgInstall = ($env:USERPROFILE + "/vcpkg/installed/x64-mingw-dynamic").Replace('\', '/')
+          echo "CGO_CPPFLAGS=-I$vcpkgInstall/include" >> $env:GITHUB_ENV
+          echo "CGO_LDFLAGS=-L$vcpkgInstall/lib"      >> $env:GITHUB_ENV
+          echo "CGO_ENABLED=1"                         >> $env:GITHUB_ENV
+          echo "TESSDATA_PREFIX=$env:USERPROFILE\vcpkg\installed\x64-mingw-dynamic\share\tessdata" >> $env:GITHUB_ENV
+          echo "$env:USERPROFILE\vcpkg\installed\x64-mingw-dynamic\bin" >> $env:GITHUB_PATH
+
+      - name: Stage Windows DLLs for archive bundling
+        # GoReleaser picks these up via the windows-archive extra_files glob.
+        run: |
+          $dllSrc = "$env:USERPROFILE\vcpkg\installed\x64-mingw-dynamic\bin"
+          New-Item -ItemType Directory -Force -Path dist\windows-dlls | Out-Null
+          Copy-Item "$dllSrc\*.dll" dist\windows-dlls\ -Force
+          Write-Host "Staged $((Get-ChildItem dist\windows-dlls\).Count) DLLs"
+
+      - name: Set up GoReleaser
+        uses: goreleaser/goreleaser-action@9c156ee8a17a598857e0b1cc4ac2d32a383e36c9 # v6.3.0
+        with:
+          distribution: goreleaser
+          version: '~> v2'
+          install-only: true
+
+      - name: Build and package (Windows split)
+        # --clean would wipe dist/windows-dlls, so omit it here.
+        run: goreleaser release --split
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload Windows dist
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: dist-windows
+          path: dist/
+          retention-days: 1
+
+  # ── Merge and publish GitHub release ─────────────────────────────────────────
+  release:
+    name: Publish Release
+    needs: [build-linux, build-windows]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@fe104658747b27e96e4f7e80cd0a94068e53901d # v2.16.1
+        with:
+          egress-policy: audit
+
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+          # Push back to main requires write access via the token.
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Go
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Install git-cliff
+        uses: taiki-e/install-action@b1bdca6e3d2a36ede1c2dba6e2bb11498ddf72ab # v2.50.3
+        with:
+          tool: git-cliff
+
+      - name: Update CHANGELOG.md
+        # Regenerates the full changelog up to and including the new tag,
+        # then commits it back to main so the file stays current in the repo.
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          git-cliff --tag "$TAG" -o CHANGELOG.md
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add CHANGELOG.md
+          # Only commit if the file actually changed
+          if ! git diff --cached --quiet; then
+            git commit -m "docs: update CHANGELOG.md for $TAG [skip ci]"
+            git push origin HEAD:main
+          fi
+
+      - name: Download Linux dist
+        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4.1.8
+        with:
+          name: dist-linux
+          path: dist/
+
+      - name: Download Windows dist
+        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4.1.8
+        with:
+          name: dist-windows
+          path: dist/
+
+      - name: Set up GoReleaser
+        uses: goreleaser/goreleaser-action@9c156ee8a17a598857e0b1cc4ac2d32a383e36c9 # v6.3.0
+        with:
+          distribution: goreleaser
+          version: '~> v2'
+          install-only: true
+
+      - name: Merge and publish
+        run: goreleaser continue --merge
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Optional: push a Scoop manifest to github.com/PIsberg/scoop-ghost-mcp.
+          # Add a PAT (repo scope on that repo) as a secret named SCOOP_TAP_GITHUB_TOKEN.
+          SCOOP_TAP_GITHUB_TOKEN: ${{ secrets.SCOOP_TAP_GITHUB_TOKEN }}
