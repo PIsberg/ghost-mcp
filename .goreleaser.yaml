@@ -1,0 +1,186 @@
+# .goreleaser.yaml — GoReleaser v2 configuration for ghost-mcp
+# Docs: https://goreleaser.com
+#
+# CGo notes:
+#   This project uses CGo (robotgo, gosseract). Cross-compilation is not
+#   possible, so the release workflow uses --split: each OS runner builds its
+#   own artifacts, then a final merge job publishes everything together.
+#
+# Windows DLL bundling:
+#   Before the Windows split step, CI copies vcpkg runtime DLLs into
+#   dist/windows-dlls/. The windows-archive config below picks them up so the
+#   released .zip is fully self-contained.
+#
+# Split workflow (see .github/workflows/release.yml):
+#   1. build-linux:   goreleaser release --split  → produces Linux tar.gz + deb/rpm
+#   2. build-windows: goreleaser release --split  → produces Windows zip (+ DLLs)
+#   3. release:       goreleaser continue --merge → publishes GitHub release
+
+version: 2
+
+project_name: ghost-mcp
+
+# ── before hooks ─────────────────────────────────────────────────────────────
+
+before:
+  hooks:
+    - go mod tidy
+
+# ── builds ───────────────────────────────────────────────────────────────────
+# Separate build IDs per OS so archives can be filtered independently.
+# macOS is skipped: robotgo CGDisplayCreateImageForRect is deprecated on
+# macOS 15+ and the build fails. Re-enable once upstream is fixed.
+
+builds:
+  - id: ghost-mcp-linux
+    main: ./cmd/ghost-mcp/
+    binary: ghost-mcp
+    env:
+      - CGO_ENABLED=1
+    goos:
+      - linux
+    goarch:
+      - amd64
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+
+  - id: ghost-mcp-windows
+    main: ./cmd/ghost-mcp/
+    binary: ghost-mcp
+    env:
+      - CGO_ENABLED=1
+    goos:
+      - windows
+    goarch:
+      - amd64
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+
+# ── archives ─────────────────────────────────────────────────────────────────
+
+archives:
+  - id: linux-archive
+    ids:
+      - ghost-mcp-linux
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    formats:
+      - tar.gz
+    files:
+      - src: README.md
+        dst: .
+      - src: LICENSE
+        dst: .
+      - src: installers/install.sh
+        dst: installers/
+
+  - id: windows-archive
+    ids:
+      - ghost-mcp-windows
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    formats:
+      - zip
+    # DLLs staged into dist/windows-dlls/ by the CI step before goreleaser runs.
+    files:
+      - src: dist/windows-dlls/*.dll
+        dst: .
+        strip_parent: true
+        info:
+          mode: 0644
+      - src: README.md
+        dst: .
+      - src: LICENSE
+        dst: .
+      - src: installers/install.ps1
+        dst: installers/
+
+# ── Linux packages (NFPM) ────────────────────────────────────────────────────
+# GoReleaser bundles nfpm — no separate install needed.
+
+nfpms:
+  - id: linux-packages
+    ids:
+      - ghost-mcp-linux
+    package_name: ghost-mcp
+    vendor: Peter Isberg
+    homepage: https://github.com/PIsberg/ghost-mcp
+    maintainer: Peter Isberg
+    description: >-
+      OS-level UI automation MCP server. Exposes mouse, keyboard, screenshot,
+      and OCR tools to AI clients such as Claude via the Model Context Protocol.
+    license: MIT
+    formats:
+      - deb
+      - rpm
+    bindir: /usr/local/bin
+    dependencies:
+      - tesseract-ocr
+    recommends:
+      - tesseract-ocr-eng
+    contents:
+      - src: README.md
+        dst: /usr/share/doc/ghost-mcp/README.md
+      - src: LICENSE
+        dst: /usr/share/doc/ghost-mcp/LICENSE
+      - src: installers/install.sh
+        dst: /usr/share/doc/ghost-mcp/install.sh
+
+# ── Scoop (Windows package manager) ──────────────────────────────────────────
+# Requires a "scoop-ghost-mcp" repo at github.com/PIsberg/scoop-ghost-mcp and
+# a SCOOP_TAP_GITHUB_TOKEN repository secret (PAT with repo scope on that repo).
+# Remove this section if you do not maintain a Scoop bucket.
+
+scoops:
+  - name: ghost-mcp
+    ids:
+      - windows-archive
+    repository:
+      owner: PIsberg
+      name: scoop-ghost-mcp
+      token: "{{ .Env.SCOOP_TAP_GITHUB_TOKEN }}"
+    homepage: https://github.com/PIsberg/ghost-mcp
+    description: >-
+      OS-level UI automation MCP server for AI agents (Claude, etc.)
+    license: MIT
+    url_template: "https://github.com/PIsberg/ghost-mcp/releases/download/{{ .Tag }}/{{ .ArtifactName }}"
+
+# ── checksums ────────────────────────────────────────────────────────────────
+
+checksum:
+  name_template: "checksums.txt"
+  algorithm: sha256
+
+# ── changelog ────────────────────────────────────────────────────────────────
+# Uses git-cliff (cliff.toml) to produce grouped, conventional-commit-aware
+# release notes. Categories: Features, Bug Fixes, Performance, etc.
+
+changelog:
+  use: git-cliff
+  abbrev: 7
+  # cliff.toml controls grouping, filtering, and formatting.
+
+# ── release ──────────────────────────────────────────────────────────────────
+
+release:
+  github:
+    owner: PIsberg
+    name: ghost-mcp
+  draft: false
+  prerelease: auto   # tags like v1.0.0-beta become pre-releases automatically
+  name_template: "{{ .ProjectName }} {{ .Tag }}"
+  header: |
+    ## Installation
+
+    **Windows** — download the `.zip`, extract, run `installers\install.ps1`.
+
+    **Linux (Debian/Ubuntu)** — download and install the `.deb`:
+    ```sh
+    sudo dpkg -i ghost-mcp_{{ .Version }}_linux_amd64.deb
+    ```
+
+    **Linux (other)** — download the `_linux_amd64.tar.gz` and run `installers/install.sh`.
+
+    See [README](https://github.com/PIsberg/ghost-mcp#readme) for full setup instructions.
