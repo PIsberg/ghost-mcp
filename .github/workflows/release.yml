@@ -58,7 +58,7 @@ jobs:
             tesseract-ocr libleptonica-dev libtesseract-dev
 
       - name: Set up GoReleaser
-        uses: goreleaser/goreleaser-action@9c156ee8a17a598857e0b1cc4ac2d32a383e36c9 # v6.3.0
+        uses: goreleaser/goreleaser-action@9c156ee8a17a598857849441385a2041ef570552 # v6.3.0
         with:
           distribution: goreleaser
           version: '~> v2'
@@ -183,7 +183,7 @@ jobs:
           Write-Host "Staged $((Get-ChildItem dist\windows-dlls\).Count) DLLs"
 
       - name: Set up GoReleaser
-        uses: goreleaser/goreleaser-action@9c156ee8a17a598857e0b1cc4ac2d32a383e36c9 # v6.3.0
+        uses: goreleaser/goreleaser-action@9c156ee8a17a598857849441385a2041ef570552 # v6.3.0
         with:
           distribution: goreleaser
           version: '~> v2'
@@ -259,7 +259,7 @@ jobs:
           path: dist/
 
       - name: Set up GoReleaser
-        uses: goreleaser/goreleaser-action@9c156ee8a17a598857e0b1cc4ac2d32a383e36c9 # v6.3.0
+        uses: goreleaser/goreleaser-action@9c156ee8a17a598857849441385a2041ef570552 # v6.3.0
         with:
           distribution: goreleaser
           version: '~> v2'
