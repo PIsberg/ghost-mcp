@@ -3,7 +3,7 @@
 **The Ghost in the Machine** - An MCP (Model Context Protocol) server that exposes OS-level UI automation capabilities to AI clients.
 
 [![Tests](https://github.com/PIsberg/ghost-mcp/actions/workflows/test.yml/badge.svg?branch=main)](https://github.com/PIsberg/ghost-mcp/actions/workflows/test.yml)
-[![codecov](https://codecov.io/gh/PIsberg/ghost-mcp/branch/main/graph/badge.svg)](https://codecov.io/gh/PIsberg/ghost-mcp)
+[![codecov](https://codecov.io/gh/PIsberg/ghost-mcp/graph/badge.svg)](https://codecov.io/gh/PIsberg/ghost-mcp)
 [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/PIsberg/ghost-mcp/badge)](https://scorecard.dev/viewer/?uri=github.com/PIsberg/ghost-mcp)
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/10972/badge)](https://www.bestpractices.dev/projects/10972)
 [![Go Version](https://img.shields.io/github/go-mod/go-version/PIsberg/ghost-mcp)](https://go.dev/doc/devel/release)
