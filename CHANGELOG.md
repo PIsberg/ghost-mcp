@@ -8,6 +8,7 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Documentation
 - Update CHANGELOG.md for v0.5.2 [skip ci]
+- Update CHANGELOG.md for v0.5.2 [skip ci]
 
 
 ## [0.5.1] — 2026-04-11
