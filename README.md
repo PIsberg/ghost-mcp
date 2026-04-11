@@ -2,9 +2,15 @@
 
 **The Ghost in the Machine** - An MCP (Model Context Protocol) server that exposes OS-level UI automation capabilities to AI clients.
 
-**License:** Free for personal and hobby use ([PolyForm Noncommercial](LICENSE)). Commercial use requires a license — contact [Peter Isberg](mailto:isberg.peter+gm@gmail.com).
+[![Tests](https://github.com/PIsberg/ghost-mcp/actions/workflows/test.yml/badge.svg?branch=main)](https://github.com/PIsberg/ghost-mcp/actions/workflows/test.yml)
+[![codecov](https://codecov.io/gh/PIsberg/ghost-mcp/branch/main/graph/badge.svg)](https://codecov.io/gh/PIsberg/ghost-mcp)
+[![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/PIsberg/ghost-mcp/badge)](https://scorecard.dev/viewer/?uri=github.com/PIsberg/ghost-mcp)
+[![OpenSSF Best Practices](https://www.bestpractices.dev/projects/10972/badge)](https://www.bestpractices.dev/projects/10972)
+[![Go Version](https://img.shields.io/github/go-mod/go-version/PIsberg/ghost-mcp)](https://go.dev/doc/devel/release)
+[![Release](https://img.shields.io/github/v/release/PIsberg/ghost-mcp)](https://github.com/PIsberg/ghost-mcp/releases/latest)
+[![License: PolyForm Noncommercial](https://img.shields.io/badge/license-PolyForm%20Noncommercial-blue)](LICENSE)
 
-[![codecov](https://codecov.io/gh/PIsberg/ghost-mcp/graph/visual_id overlay.svg)](https://codecov.io/gh/PIsberg/ghost-mcp) [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/PIsberg/ghost-mcp/visual_id overlay)](https://scorecard.dev/viewer/?uri=github.com/PIsberg/ghost-mcp/)
+**License:** Free for personal and hobby use ([PolyForm Noncommercial](LICENSE)). Commercial use requires a license — contact [Peter Isberg](mailto:isberg.peter+gm@gmail.com).
 
 ## Overview
 
