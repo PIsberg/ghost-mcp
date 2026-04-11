@@ -4,9 +4,16 @@ All notable changes to ghost-mcp are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/);
 versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.5.0] — 2026-04-10
+## [0.5.1] — 2026-04-11
 
 ### Bug Fixes
+- Use force-with-lease to push CHANGELOG commit from detached HEAD
+
+
+## [0.5.0] — 2026-04-11
+
+### Bug Fixes
+- Move tag to CHANGELOG commit to satisfy goreleaser validation
 - **test**: Relax overly aggressive dHash test threshold
 - Make short-mode test suite pass cleanly
 - Update handleMoveMouse to return JSON instead of plain text. this resolves the JSON parsing error in TestHandleMoveMouseValid and ensures consistent tool output formatting. confirmed terminology hardening is complete.
@@ -37,6 +44,7 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
 ### Documentation
+- Update CHANGELOG.md for v0.5.0 [skip ci]
 - Document element_types filter in ghost_mcp_guide prompt
 - Synchronize documentation with high-precision Visual ID workflow
 - Sync visual anchors and fix formatting
