@@ -10,6 +10,10 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Use force-with-lease to push CHANGELOG commit from detached HEAD
 
 
+### Documentation
+- Update CHANGELOG.md for v0.5.1 [skip ci]
+
+
 ## [0.5.0] — 2026-04-11
 
 ### Bug Fixes
