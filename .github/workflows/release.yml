@@ -242,7 +242,11 @@ jobs:
           git add CHANGELOG.md
           if ! git diff --cached --quiet; then
             git commit -m "docs: update CHANGELOG.md for $TAG [skip ci]"
+            # Move the tag to this commit (the release trigger) since goreleaser
+            # requires the tag to point to the current HEAD
+            git tag -f "$TAG" HEAD
             git push origin HEAD:main
+            git push origin "$TAG" --force
           fi
 
       - name: Set up GoReleaser
