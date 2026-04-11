@@ -39,4 +39,8 @@ go.work
 # Benchmark report (generated output — tracked results are in benchmarks/results/)
 benchmarks/report.html
 
+# CI staging directories (downloaded artifacts, not source)
+/prebuilt/
+/windows-dlls/
+
 screenshots
