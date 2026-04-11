@@ -61,18 +61,18 @@ jobs:
 
       - name: Build Linux binary
         run: |
-          mkdir -p dist/prebuilt/linux_amd64
+          mkdir -p prebuilt/linux_amd64
           CGO_ENABLED=1 go build \
             -trimpath \
             -ldflags="-s -w" \
-            -o dist/prebuilt/linux_amd64/ghost-mcp \
+            -o prebuilt/linux_amd64/ghost-mcp \
             ./cmd/ghost-mcp/
 
-      - name: Upload Linux dist
+      - name: Upload Linux prebuilt
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
-          name: dist-linux
-          path: dist/
+          name: prebuilt-linux
+          path: prebuilt/
           retention-days: 1
 
   # ── Windows: compile binary + stage DLLs ─────────────────────────────────────
@@ -174,23 +174,30 @@ jobs:
 
       - name: Build Windows binary
         run: |
-          New-Item -ItemType Directory -Force -Path dist\prebuilt\windows_amd64 | Out-Null
+          New-Item -ItemType Directory -Force -Path prebuilt\windows_amd64 | Out-Null
           go build -trimpath -ldflags="-s -w" `
-            -o dist\prebuilt\windows_amd64\ghost-mcp.exe `
+            -o prebuilt\windows_amd64\ghost-mcp.exe `
             .\cmd\ghost-mcp\
 
       - name: Stage Windows DLLs for archive bundling
         run: |
           $dllSrc = "$env:USERPROFILE\vcpkg\installed\x64-mingw-dynamic\bin"
-          New-Item -ItemType Directory -Force -Path dist\windows-dlls | Out-Null
-          Copy-Item "$dllSrc\*.dll" dist\windows-dlls\ -Force
-          Write-Host "Staged $((Get-ChildItem dist\windows-dlls\).Count) DLLs"
+          New-Item -ItemType Directory -Force -Path windows-dlls | Out-Null
+          Copy-Item "$dllSrc\*.dll" windows-dlls\ -Force
+          Write-Host "Staged $((Get-ChildItem windows-dlls\).Count) DLLs"
 
-      - name: Upload Windows dist
+      - name: Upload Windows prebuilt
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
-          name: dist-windows
-          path: dist/
+          name: prebuilt-windows
+          path: prebuilt/
+          retention-days: 1
+
+      - name: Upload Windows DLLs
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: windows-dlls
+          path: windows-dlls/
           retention-days: 1
 
   # ── Package and publish GitHub release ───────────────────────────────────────
@@ -218,39 +225,31 @@ jobs:
           go-version-file: go.mod
           cache: true
 
-      - name: Download Linux dist
+      - name: Download Linux prebuilt
         uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4.1.8
         with:
-          name: dist-linux
-          path: dist/
+          name: prebuilt-linux
+          path: prebuilt/
 
-      - name: List Linux artifact contents
-        run: |
-          echo "=== Linux artifact contents ==="
-          ls -lah dist/ 2>/dev/null || echo "dist/ not found after Linux download"
-          ls -lahR dist/prebuilt/ 2>/dev/null || echo "prebuilt/ not found"
-          echo "================================"
-
-      - name: Download Windows dist
+      - name: Download Windows prebuilt
         uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4.1.8
         with:
-          name: dist-windows
-          path: dist/
+          name: prebuilt-windows
+          path: prebuilt/
 
-      - name: List Windows artifact contents
-        run: |
-          echo "=== Full dist/ after both downloads ==="
-          ls -lahR dist/
-          echo "================================"
+      - name: Download Windows DLLs
+        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4.1.8
+        with:
+          name: windows-dlls
+          path: windows-dlls/
 
-      - name: Verify dist directory structure
+      - name: Verify prebuilt binaries
         run: |
-          echo "=== Dist directory contents ==="
-          find dist/ -type f | head -50
-          echo "================================"
-          # Verify required files exist
-          test -f dist/prebuilt/linux_amd64/ghost-mcp || { echo "ERROR: Linux binary not found"; exit 1; }
-          test -f dist/prebuilt/windows_amd64/ghost-mcp.exe || { echo "ERROR: Windows binary not found"; exit 1; }
+          echo "=== Prebuilt binaries ==="
+          find prebuilt/ windows-dlls/ -type f | head -50
+          echo "========================="
+          test -f prebuilt/linux_amd64/ghost-mcp || { echo "ERROR: Linux binary not found"; exit 1; }
+          test -f prebuilt/windows_amd64/ghost-mcp.exe || { echo "ERROR: Windows binary not found"; exit 1; }
           echo "All required binaries found"
 
       - name: Install git-cliff

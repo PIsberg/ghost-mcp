@@ -42,7 +42,7 @@ builds:
     no_main_check: true
     hooks:
       pre:
-        - cmd: cp dist/prebuilt/linux_amd64/ghost-mcp {{ .Path }}
+        - cmd: cp prebuilt/linux_amd64/ghost-mcp {{ .Path }}
 
   - id: ghost-mcp-windows
     binary: ghost-mcp
@@ -54,7 +54,7 @@ builds:
     no_main_check: true
     hooks:
       pre:
-        - cmd: cp dist/prebuilt/windows_amd64/ghost-mcp.exe {{ .Path }}
+        - cmd: cp prebuilt/windows_amd64/ghost-mcp.exe {{ .Path }}
 
 # ── archives ─────────────────────────────────────────────────────────────────
 
@@ -81,7 +81,7 @@ archives:
       - zip
     # DLLs staged into dist/windows-dlls/ by the Windows CI runner.
     files:
-      - src: dist/windows-dlls/*.dll
+      - src: windows-dlls/*.dll
         dst: .
         strip_parent: true
         info:
