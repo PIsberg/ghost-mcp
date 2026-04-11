@@ -4,10 +4,20 @@ All notable changes to ghost-mcp are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/);
 versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.2] — 2026-04-11
+
+### Documentation
+- Update CHANGELOG.md for v0.5.2 [skip ci]
+
+
 ## [0.5.1] — 2026-04-11
 
 ### Bug Fixes
 - Use force-with-lease to push CHANGELOG commit from detached HEAD
+
+
+### Documentation
+- Update CHANGELOG.md for v0.5.1 [skip ci]
 
 
 ## [0.5.0] — 2026-04-11
