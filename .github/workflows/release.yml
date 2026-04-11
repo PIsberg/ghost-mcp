@@ -198,6 +198,7 @@ jobs:
     name: Publish Release
     needs: [build-linux, build-windows]
     runs-on: ubuntu-latest
+    if: success()
     steps:
       - name: Harden runner
         uses: step-security/harden-runner@fe104658747b27e96e4f7e80cd0a94068e53901d # v2.16.1
@@ -223,11 +224,34 @@ jobs:
           name: dist-linux
           path: dist/
 
+      - name: List Linux artifact contents
+        run: |
+          echo "=== Linux artifact contents ==="
+          ls -lah dist/ 2>/dev/null || echo "dist/ not found after Linux download"
+          ls -lahR dist/prebuilt/ 2>/dev/null || echo "prebuilt/ not found"
+          echo "================================"
+
       - name: Download Windows dist
         uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4.1.8
         with:
           name: dist-windows
           path: dist/
+
+      - name: List Windows artifact contents
+        run: |
+          echo "=== Full dist/ after both downloads ==="
+          ls -lahR dist/
+          echo "================================"
+
+      - name: Verify dist directory structure
+        run: |
+          echo "=== Dist directory contents ==="
+          find dist/ -type f | head -50
+          echo "================================"
+          # Verify required files exist
+          test -f dist/prebuilt/linux_amd64/ghost-mcp || { echo "ERROR: Linux binary not found"; exit 1; }
+          test -f dist/prebuilt/windows_amd64/ghost-mcp.exe || { echo "ERROR: Windows binary not found"; exit 1; }
+          echo "All required binaries found"
 
       - name: Install git-cliff
         uses: taiki-e/install-action@ab3728c7ba6948b9b429627f4d55a68842b27f18 # v2.50.3
