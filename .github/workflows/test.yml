@@ -317,6 +317,21 @@ jobs:
     - name: Download Go modules
       run: go mod download
 
+    - name: Cache apt packages (Linux)
+      uses: awalsh128/cache-apt-pkgs-action@acb598e5ddbc6f68a970c5da0688d2f3a9f04d05 # v1.6.0
+      with:
+        packages: >-
+          gcc libx11-dev libx11-xcb-dev libxcb1-dev libxkbcommon-dev
+          libxkbcommon-x11-dev libxext-dev xorg-dev libxtst-dev libpng-dev
+          xvfb tesseract-ocr libleptonica-dev libtesseract-dev
+        version: 1
+
+    - name: Install dependencies (Linux)
+      run: |
+        sudo apt-get update -q
+        sudo apt-get install -y gcc libx11-dev libx11-xcb-dev libxcb1-dev libxkbcommon-dev libxkbcommon-x11-dev libxext-dev xorg-dev libxtst-dev libpng-dev xvfb
+        sudo apt-get install -y tesseract-ocr libleptonica-dev libtesseract-dev
+
     - name: Run AI judge comparison tests (offline)
       run: go test -v -short -run TestAIJudge_Comparison ./cmd/ghost-mcp/... -timeout 60s
 
