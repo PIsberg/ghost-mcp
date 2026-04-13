@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
+	"time"
 
 	"google.golang.org/genai"
 )
@@ -87,15 +89,48 @@ func (j *Judge) AnalyzeScreenshot(ctx context.Context, imageBytes []byte, mimeTy
 		}},
 	}
 
-	result, err := j.client.Models.GenerateContent(ctx, j.model, []*genai.Content{
-		{Parts: parts},
-	}, &genai.GenerateContentConfig{
+	config := &genai.GenerateContentConfig{
 		Temperature:     genai.Ptr(float32(0.1)), // Low temperature for deterministic output
 		TopP:            genai.Ptr(float32(0.8)),
 		MaxOutputTokens: 8192, // GUI can have many elements
-	})
-	if err != nil {
-		return nil, fmt.Errorf("aijudge: Gemini API call failed: %w", err)
+	}
+
+	content := []*genai.Content{{Parts: parts}}
+
+	// Retry with exponential backoff for transient errors (503, 429)
+	var result *genai.GenerateContentResponse
+	var lastErr error
+	retryDelays := []time.Duration{15 * time.Second, 30 * time.Second, 60 * time.Second}
+
+	for attempt := 0; attempt <= len(retryDelays); attempt++ {
+		result, lastErr = j.client.Models.GenerateContent(ctx, j.model, content, config)
+		if lastErr == nil {
+			break
+		}
+
+		errStr := lastErr.Error()
+		isRetryable := strings.Contains(errStr, "503") ||
+			strings.Contains(errStr, "429") ||
+			strings.Contains(errStr, "UNAVAILABLE") ||
+			strings.Contains(errStr, "RESOURCE_EXHAUSTED")
+
+		if !isRetryable || attempt >= len(retryDelays) {
+			return nil, fmt.Errorf("aijudge: Gemini API call failed: %w", lastErr)
+		}
+
+		delay := retryDelays[attempt]
+		fmt.Fprintf(os.Stderr, "aijudge: retryable error (attempt %d/%d), waiting %v: %v\n",
+			attempt+1, len(retryDelays), delay, lastErr)
+
+		select {
+		case <-ctx.Done():
+			return nil, fmt.Errorf("aijudge: context cancelled during retry: %w", ctx.Err())
+		case <-time.After(delay):
+		}
+	}
+
+	if lastErr != nil {
+		return nil, fmt.Errorf("aijudge: Gemini API call failed after retries: %w", lastErr)
 	}
 
 	// Extract text from the response
