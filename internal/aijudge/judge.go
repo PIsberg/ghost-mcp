@@ -1,0 +1,179 @@
+package aijudge
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"strings"
+
+	"google.golang.org/genai"
+)
+
+// =============================================================================
+// Gemini Vision Judge
+// =============================================================================
+
+// Judge wraps the Gemini API for GUI element analysis.
+type Judge struct {
+	client *genai.Client
+	model  string
+}
+
+// NewJudge creates a new AI judge using the given API key.
+// Model defaults to "gemini-2.5-flash" if empty.
+func NewJudge(apiKey string, model string) (*Judge, error) {
+	if apiKey == "" {
+		return nil, fmt.Errorf("aijudge: GOOGLE_API_KEY is required")
+	}
+	if model == "" {
+		model = "gemini-2.5-flash"
+	}
+
+	client, err := genai.NewClient(context.Background(), &genai.ClientConfig{
+		APIKey:  apiKey,
+		Backend: genai.BackendGeminiAPI,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("aijudge: failed to create Gemini client: %w", err)
+	}
+
+	return &Judge{client: client, model: model}, nil
+}
+
+// analysisPrompt is the system prompt for GUI element identification.
+const analysisPrompt = `You are a GUI element identification expert. Analyze the provided screenshot and identify ALL visible GUI elements.
+
+For each element, provide:
+- "text": The visible text content of the element (exactly as displayed). For non-text elements (icons, color swatches), describe briefly.
+- "type": One of: "button", "label", "input", "heading", "link", "checkbox", "radio", "dropdown", "toggle", "slider", "icon", "text", "value"
+- "rect": Approximate bounding box as {"x": ..., "y": ..., "width": ..., "height": ...} in pixels from top-left.
+
+Type definitions:
+- "button": Clickable action element (Submit, Cancel, OK, etc.)
+- "label": Form field label (usually followed by an input, often ends with ":")
+- "input": Text input field, text area, or search box
+- "heading": Section or page title (larger/bolder text)
+- "link": Hyperlink or navigation text
+- "checkbox": Checkbox control with label
+- "radio": Radio button control with label
+- "dropdown": Dropdown/select control
+- "toggle": Toggle/switch control
+- "slider": Slider/range control
+- "icon": Non-text visual element
+- "text": General body text, descriptions, paragraphs
+- "value": Numeric display, status indicator, counter
+
+Rules:
+1. Include EVERY visible text element, no matter how small.
+2. Be precise with bounding box estimates - they should tightly wrap the element.
+3. Classify each element by its VISUAL appearance and context, not just its text.
+4. For composite elements (e.g., a labeled checkbox), report the checkbox and label separately.
+5. Do NOT include browser chrome, window decorations, or OS UI elements.
+
+Respond with ONLY a valid JSON array. No markdown, no explanation, no code fences. Example:
+[{"text":"Submit","type":"button","rect":{"x":100,"y":200,"width":80,"height":30}}]`
+
+// AnalyzeScreenshot sends a screenshot to Gemini and returns the identified elements.
+func (j *Judge) AnalyzeScreenshot(ctx context.Context, imageBytes []byte, mimeType string) ([]JudgedElement, error) {
+	if mimeType == "" {
+		mimeType = "image/png"
+	}
+
+	parts := []*genai.Part{
+		{Text: analysisPrompt},
+		{InlineData: &genai.Blob{
+			MIMEType: mimeType,
+			Data:     imageBytes,
+		}},
+	}
+
+	result, err := j.client.Models.GenerateContent(ctx, j.model, []*genai.Content{
+		{Parts: parts},
+	}, &genai.GenerateContentConfig{
+		Temperature:     genai.Ptr(float32(0.1)), // Low temperature for deterministic output
+		TopP:            genai.Ptr(float32(0.8)),
+		MaxOutputTokens: 8192, // GUI can have many elements
+	})
+	if err != nil {
+		return nil, fmt.Errorf("aijudge: Gemini API call failed: %w", err)
+	}
+
+	// Extract text from the response
+	text := extractResponseText(result)
+	if text == "" {
+		return nil, fmt.Errorf("aijudge: empty response from Gemini")
+	}
+
+	// Parse the JSON array from the response
+	elements, err := parseJudgeResponse(text)
+	if err != nil {
+		return nil, fmt.Errorf("aijudge: failed to parse response: %w\nraw response: %s", err, truncate(text, 500))
+	}
+
+	return elements, nil
+}
+
+// extractResponseText pulls the text content from a Gemini response.
+func extractResponseText(result *genai.GenerateContentResponse) string {
+	if result == nil || len(result.Candidates) == 0 {
+		return ""
+	}
+	candidate := result.Candidates[0]
+	if candidate.Content == nil || len(candidate.Content.Parts) == 0 {
+		return ""
+	}
+
+	var texts []string
+	for _, part := range candidate.Content.Parts {
+		if part.Text != "" {
+			texts = append(texts, part.Text)
+		}
+	}
+	return strings.Join(texts, "")
+}
+
+// parseJudgeResponse extracts a JSON array of JudgedElement from the response text.
+// It handles cases where the model wraps the JSON in markdown code fences.
+func parseJudgeResponse(text string) ([]JudgedElement, error) {
+	text = strings.TrimSpace(text)
+
+	// Strip markdown code fences if present
+	if strings.HasPrefix(text, "```") {
+		lines := strings.Split(text, "\n")
+		// Find the opening and closing fence
+		start := 1 // skip first line (```)
+		end := len(lines) - 1
+		if end > start && strings.HasPrefix(lines[end], "```") {
+			end--
+		}
+		if start <= end {
+			text = strings.Join(lines[start:end+1], "\n")
+		}
+	}
+
+	text = strings.TrimSpace(text)
+
+	// Find the JSON array boundaries
+	startIdx := strings.Index(text, "[")
+	endIdx := strings.LastIndex(text, "]")
+	if startIdx == -1 || endIdx == -1 || endIdx <= startIdx {
+		return nil, fmt.Errorf("no JSON array found in response")
+	}
+
+	jsonStr := text[startIdx : endIdx+1]
+
+	var elements []JudgedElement
+	if err := json.Unmarshal([]byte(jsonStr), &elements); err != nil {
+		return nil, fmt.Errorf("JSON parse error: %w", err)
+	}
+
+	return elements, nil
+}
+
+// truncate shortens a string with an ellipsis if it exceeds maxLen.
+func truncate(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+	return s[:maxLen] + "..."
+}
