@@ -56,11 +56,11 @@ type GhostElement struct {
 
 // ElementMatch pairs a Ghost element with its matching Judge element.
 type ElementMatch struct {
-	Ghost      GhostElement  `json:"ghost"`
-	Judge      JudgedElement `json:"judge"`
-	TextScore  float64       `json:"text_score"`  // 0..1, how well text matches
-	IoU        float64       `json:"iou"`         // intersection over union of bounding boxes
-	TypeMatch  bool          `json:"type_match"`  // whether element type agrees
+	Ghost     GhostElement  `json:"ghost"`
+	Judge     JudgedElement `json:"judge"`
+	TextScore float64       `json:"text_score"` // 0..1, how well text matches
+	IoU       float64       `json:"iou"`        // intersection over union of bounding boxes
+	TypeMatch bool          `json:"type_match"` // whether element type agrees
 }
 
 // TypeMismatch records a case where both pipelines found the same element
@@ -80,16 +80,16 @@ type TypeMismatch struct {
 type AccuracyReport struct {
 	Timestamp      time.Time       `json:"timestamp"`
 	FixtureName    string          `json:"fixture_name"`
-	GhostCount     int             `json:"ghost_count"`      // elements Ghost MCP found
-	JudgeCount     int             `json:"judge_count"`      // elements Gemini found
-	MatchedCount   int             `json:"matched_count"`    // elements both found
-	Precision      float64         `json:"precision"`        // matched / ghost_count
-	Recall         float64         `json:"recall"`           // matched / judge_count
-	F1             float64         `json:"f1"`               // harmonic mean of P & R
-	TypeAccuracy   float64         `json:"type_accuracy"`    // % of matched elems with correct type
+	GhostCount     int             `json:"ghost_count"`   // elements Ghost MCP found
+	JudgeCount     int             `json:"judge_count"`   // elements Gemini found
+	MatchedCount   int             `json:"matched_count"` // elements both found
+	Precision      float64         `json:"precision"`     // matched / ghost_count
+	Recall         float64         `json:"recall"`        // matched / judge_count
+	F1             float64         `json:"f1"`            // harmonic mean of P & R
+	TypeAccuracy   float64         `json:"type_accuracy"` // % of matched elems with correct type
 	Matches        []ElementMatch  `json:"matches"`
-	MissedByGhost  []JudgedElement `json:"missed_by_ghost"`  // judge found, ghost missed
-	FalsePositives []GhostElement  `json:"false_positives"`  // ghost found, judge didn't see
+	MissedByGhost  []JudgedElement `json:"missed_by_ghost"` // judge found, ghost missed
+	FalsePositives []GhostElement  `json:"false_positives"` // ghost found, judge didn't see
 	TypeMismatches []TypeMismatch  `json:"type_mismatches"`
 }
 

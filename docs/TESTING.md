@@ -9,6 +9,7 @@ This document describes how to test the Ghost MCP server, including unit tests, 
 - [Running Tests](#running-tests)
 - [Benchmarks](#benchmarks)
 - [Test Fixture](#test-fixture)
+- [AI Judge Testing](#ai-judge-testing)
 - [Writing New Tests](#writing-new-tests)
 - [Troubleshooting](#troubleshooting)
 
@@ -451,6 +452,90 @@ go test -v ./...
 - Run integration tests before commits
 - Use `-short` flag to skip slow tests during development
 - Run full suite in CI/CD
+
+## AI Judge Testing
+
+Ghost MCP includes an AI-powered accuracy evaluation system that uses the **Gemini Vision API** as an independent judge to measure how well the OCR + heuristic pipeline identifies GUI elements.
+
+### How It Works
+
+```
+Screenshot → Ghost MCP Pipeline (OCR) → ghostElements[]
+                                              ↓
+Screenshot → Gemini Vision API → judgedElements[]
+                                              ↓
+                                      CompareResults()
+                                              ↓
+                                     AccuracyReport
+                                     (Precision / Recall / F1 / Type%)
+```
+
+1. The same screenshot is processed by both Ghost MCP's OCR and the Gemini Vision API
+2. Both outputs are compared using text similarity (trigram + containment) and IoU spatial matching
+3. A structured accuracy report is generated with precision, recall, F1 score, and element type accuracy
+
+### Test Modes
+
+| Mode | Requirements | What it tests |
+|------|-------------|---------------|
+| **Offline** | None (or `GOOGLE_API_KEY`) | Comparison logic against ground-truth manifests |
+| **Live** | `INTEGRATION=1` + `GOOGLE_API_KEY` + display | Full pipeline: screenshot → OCR → Gemini → comparison |
+
+### Running AI Judge Tests
+
+```bash
+# Offline comparison tests (no API key, no display)
+go test -v -run TestAIJudge_Comparison ./cmd/ghost-mcp/...
+
+# Element type inference accuracy
+go test -v -run TestAIJudge_ElementType ./cmd/ghost-mcp/...
+
+# Full Gemini-powered judge (requires API key)
+GOOGLE_API_KEY=your_key go test -v -run TestAIJudge_Gemini ./cmd/ghost-mcp/... -timeout 120s
+
+# Live AI judge (requires API key + display)
+GOOGLE_API_KEY=your_key INTEGRATION=1 go test -v -run TestAIJudge_Live ./cmd/ghost-mcp/... -timeout 180s
+```
+
+### Setting Up the API Key
+
+1. Go to [Google AI Studio](https://aistudio.google.com/)
+2. Create a free API key (no billing required)
+3. Set it as `GOOGLE_API_KEY` environment variable
+4. For CI, add it as a GitHub repository secret named `GOOGLE_API_KEY`
+
+The free tier supports ~1,500 requests/day, more than sufficient for testing.
+
+### Accuracy Reports
+
+Reports are saved as JSON files in `benchmarks/ai-judge/` with fields:
+- **Precision**: How many elements Ghost MCP found are real (matched / ghost_count)
+- **Recall**: How many real elements Ghost MCP found (matched / judge_count)
+- **F1 Score**: Harmonic mean of precision and recall
+- **Type Accuracy**: What percentage of matched elements have the correct type classification
+- **Missed elements**: Elements the judge found but Ghost MCP missed
+- **False positives**: Elements Ghost MCP found but the judge didn't see (OCR noise)
+- **Type mismatches**: Elements both found but classified differently
+
+### Key Files
+
+| File | Purpose |
+|------|--------|
+| `internal/aijudge/types.go` | Core types, comparison engine, accuracy report |
+| `internal/aijudge/judge.go` | Gemini API wrapper with structured prompt |
+| `internal/aijudge/testdata/manifest.go` | Ground-truth element lists for fixtures |
+| `cmd/ghost-mcp/ai_judge_test.go` | Offline AI judge test suite |
+| `cmd/ghost-mcp/ai_judge_live_test.go` | Live AI judge integration tests |
+
+### Customizing the Model
+
+Set the `GEMINI_MODEL` environment variable to use a different Gemini model:
+
+```bash
+GEMINI_MODEL=gemini-2.5-pro GOOGLE_API_KEY=xxx go test -v -run TestAIJudge_Gemini ./cmd/ghost-mcp/...
+```
+
+Default: `gemini-2.5-flash` (fast, free, good enough for element identification).
 
 ## CI/CD Integration
 
