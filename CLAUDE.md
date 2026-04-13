@@ -152,10 +152,29 @@ See [`docs/LEARNING_MODE_TESTING.md`](docs/LEARNING_MODE_TESTING.md) for complet
 - `cmd/ghost-mcp/handler_learning_test.go` — unit tests for learning mode helpers and handlers (no robotgo required)
 - `cmd/ghost-mcp/integration_test.go` — full MCP server tests using the helper client in `mcpclient/`
 - `cmd/ghost-mcp/integration_learning_test.go` — learning mode integration tests against the fixture page
+- `cmd/ghost-mcp/ai_judge_test.go` — AI-powered accuracy evaluation: compares Ghost MCP OCR output against Gemini Vision API results. Runs offline without API key; uses Gemini when `GOOGLE_API_KEY` is set.
+- `cmd/ghost-mcp/ai_judge_live_test.go` — live AI judge tests (requires `INTEGRATION=1` + `GOOGLE_API_KEY` + display)
 - `cmd/ghost-mcp/test_fixture/` — a Go HTTP server + HTML/JS page that renders interactive UI elements for integration tests to automate against. Includes a scrollable "Learning Mode Test Section" below the fold for scroll-discovery tests.
 - `internal/*/..._test.go` — unit and fuzz tests for each internal package (run with `go test ./internal/...`)
 
 Integration tests are gated behind the `INTEGRATION=1` env var because they require a real display (or Xvfb on Linux) and a GCC toolchain for CGo.
+
+### AI Judge Testing
+
+The `internal/aijudge` package uses the Gemini Vision API as an independent "judge" to evaluate OCR accuracy. It sends screenshots to Gemini, which independently identifies all GUI elements, then compares Gemini's output against Ghost MCP's OCR output to produce precision/recall/F1 metrics.
+
+```bash
+# Unit tests only (comparison engine, no API key needed)
+go test -v ./internal/aijudge/...
+
+# Offline AI judge (optional API key, no display)
+GOOGLE_API_KEY=xxx go test -v -run TestAIJudge ./cmd/ghost-mcp/... -timeout 120s
+
+# Live AI judge (full pipeline)
+GOOGLE_API_KEY=xxx INTEGRATION=1 go test -v -run TestAIJudge_Live ./cmd/ghost-mcp/... -timeout 180s
+```
+
+See [`docs/TESTING.md`](docs/TESTING.md#ai-judge-testing) for the full AI judge testing guide.
 
 ### Platform Notes
 
@@ -165,4 +184,4 @@ Integration tests are gated behind the `INTEGRATION=1` env var because they requ
 
 ### CI/CD
 
-GitHub Actions (`.github/workflows/test.yml`) runs a matrix over Ubuntu/Windows/macOS × Go 1.22/1.23. Coverage is uploaded to Codecov from the Linux/Go 1.23 job.
+GitHub Actions (`.github/workflows/test.yml`) runs a matrix over Ubuntu/Windows/macOS × Go 1.22/1.23. Coverage is uploaded to Codecov from the Linux/Go 1.23 job. An optional `ai-judge` job runs after the main tests to evaluate OCR accuracy using Gemini (requires `GOOGLE_API_KEY` secret; non-blocking).
