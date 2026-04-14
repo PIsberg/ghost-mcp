@@ -407,13 +407,13 @@ func TestIsTitleCased(t *testing.T) {
 		words []string
 		want  bool
 	}{
-		{[]string{"Button", "Click", "Tests"}, true},     // all title-cased
-		{[]string{"Input", "Tests"}, true},               // both title-cased
+		{[]string{"Button", "Click", "Tests"}, true},           // all title-cased
+		{[]string{"Input", "Tests"}, true},                     // both title-cased
 		{[]string{"Welcome", "to", "the", "Dashboard"}, false}, // only 2/4 capped (50%, not majority)
-		{[]string{"hello", "world"}, false},              // none title-cased
-		{[]string{"Hello"}, true},                        // single word title-cased
-		{[]string{}, false},                              // empty
-		{[]string{"the", "quick", "brown", "fox"}, false}, // none
+		{[]string{"hello", "world"}, false},                    // none title-cased
+		{[]string{"Hello"}, true},                              // single word title-cased
+		{[]string{}, false},                                    // empty
+		{[]string{"the", "quick", "brown", "fox"}, false},      // none
 		// Strict majority: 3/5 = 60% > 50%
 		{[]string{"One", "Two", "Three", "four", "five"}, true},
 		// Exactly 50% is NOT a majority

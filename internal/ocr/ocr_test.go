@@ -1156,8 +1156,8 @@ func TestIsInteractivePattern_NotInteractive(t *testing.T) {
 		"Submit", "Cancel", "Hello World",
 		"The quick brown fox",
 		"$99.99", "Email:", "Username:",
-		"50px",  // px not %
-		"",      // empty
+		"50px",                 // px not %
+		"",                     // empty
 		"50% off this weekend", // % not at end
 	}
 	for _, p := range notInteractive {
