@@ -109,7 +109,8 @@ func TestAIJudge_GeminiLive(t *testing.T) {
 		t.Fatalf("failed to create judge: %v", err)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	// 3 retries × worst-case delay (60s) + buffer = 3 min minimum
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
 
 	t.Log("Sending screenshot to Gemini for analysis...")
@@ -295,7 +296,7 @@ func TestAIJudge_ChallengeFixture_Gemini(t *testing.T) {
 		t.Fatalf("failed to create judge: %v", err)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
 
 	t.Log("Sending challenge screenshot to Gemini for analysis (dark-theme)...")
