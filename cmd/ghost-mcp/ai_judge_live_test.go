@@ -181,6 +181,163 @@ func TestAIJudge_LiveFixtureNormal(t *testing.T) {
 	}
 }
 
+// TestAIJudge_LiveFixtureChallenge navigates to the challenge (dark-theme) page
+// and runs the full Ghost MCP + Gemini comparison pipeline.
+// This stress-tests the 6-pass OCR pipeline on gradient buttons and white-on-dark text.
+func TestAIJudge_LiveFixtureChallenge(t *testing.T) {
+	apiKey := os.Getenv("GOOGLE_API_KEY")
+	if apiKey == "" {
+		t.Skip("GOOGLE_API_KEY not set; skipping challenge fixture live test")
+	}
+
+	skipIfNoGCC(t)
+	skipIfNoDisplay(t)
+
+	// Start the fixture server and navigate to challenge page
+	_, cleanup := startFixtureServer(t)
+	defer cleanup()
+	waitForFixture(t)
+	time.Sleep(settleTime)
+
+	client, err := mcpclient.NewClient(mcpclient.Config{
+		Timeout: 90 * time.Second,
+		Env:     []string{"GHOST_MCP_KEEP_SCREENSHOTS=1", "INTEGRATION=1"},
+	})
+	if err != nil {
+		t.Fatalf("Failed to create MCP client: %v", err)
+	}
+	defer client.Close()
+
+	ctx := context.Background()
+
+	// Navigate to the challenge page (dark theme)
+	t.Log("Clicking challenge page link...")
+	_, err = client.CallToolString(ctx, "find_and_click", map[string]interface{}{
+		"text": "Challenge page",
+	})
+	if err != nil {
+		t.Fatalf("Failed to navigate to challenge page: %v", err)
+	}
+	time.Sleep(settleTime)
+
+	// Take screenshot
+	screenshotJSON, err := client.CallToolString(ctx, "take_screenshot", nil)
+	if err != nil {
+		t.Fatalf("take_screenshot failed: %v", err)
+	}
+	var ssResp struct {
+		Path string `json:"path"`
+	}
+	json.Unmarshal([]byte(screenshotJSON), &ssResp)
+
+	// Save a copy as fixture_challenge.png for future offline tests
+	if ssResp.Path != "" {
+		targetPath := filepath.Join("internal", "aijudge", "testdata", "fixture_challenge.png")
+		if err := copyFile(ssResp.Path, targetPath); err == nil {
+			t.Logf("Saved challenge screenshot to %s", targetPath)
+		}
+	}
+
+	// Learn the screen
+	t.Log("Running Ghost MCP learn_screen on challenge page...")
+	learnResult, err := client.CallToolString(ctx, "learn_screen", map[string]interface{}{
+		"max_pages": 1,
+	})
+	if err != nil {
+		t.Fatalf("learn_screen failed: %v", err)
+	}
+	var learnResp struct {
+		ElementsFound int `json:"elements_found"`
+	}
+	json.Unmarshal([]byte(learnResult), &learnResp)
+	t.Logf("Ghost MCP found %d elements on challenge page", learnResp.ElementsFound)
+
+	// Get learned elements
+	viewJSON, err := client.CallToolString(ctx, "get_learned_view", nil)
+	if err != nil {
+		t.Fatalf("get_learned_view failed: %v", err)
+	}
+	var viewResp struct {
+		Elements []struct {
+			ID         int     `json:"ocr_id"`
+			Text       string  `json:"text"`
+			Type       string  `json:"type"`
+			X          int     `json:"x"`
+			Y          int     `json:"y"`
+			Width      int     `json:"width"`
+			Height     int     `json:"height"`
+			Confidence float64 `json:"confidence"`
+			OcrPass    string  `json:"ocr_pass"`
+		} `json:"elements"`
+	}
+	if err := json.Unmarshal([]byte(viewJSON), &viewResp); err != nil {
+		t.Fatalf("Failed to parse learned view: %v", err)
+	}
+
+	ghostElements := make([]aijudge.GhostElement, len(viewResp.Elements))
+	for i, e := range viewResp.Elements {
+		ghostElements[i] = aijudge.GhostElement{
+			ID:         e.ID,
+			Text:       e.Text,
+			Type:       e.Type,
+			Rect:       aijudge.Rect{X: e.X, Y: e.Y, Width: e.Width, Height: e.Height},
+			Confidence: e.Confidence,
+			OcrPass:    e.OcrPass,
+		}
+	}
+
+	// Send screenshot to Gemini
+	screenshotBytes, err := getScreenshotBytes(ssResp.Path)
+	if err != nil {
+		t.Skip("Screenshot file not accessible for Gemini analysis")
+	}
+
+	model := os.Getenv("GEMINI_MODEL")
+	if model == "" {
+		model = "gemini-2.5-flash"
+	}
+	judge, err := aijudge.NewJudge(apiKey, model)
+	if err != nil {
+		t.Fatalf("Failed to create AI judge: %v", err)
+	}
+
+	t.Log("Sending challenge screenshot to Gemini (dark-theme, gradient buttons)...")
+	judgeCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
+	defer cancel()
+
+	judgedElements, err := judge.AnalyzeScreenshot(judgeCtx, screenshotBytes, "image/png")
+	if err != nil {
+		t.Fatalf("Gemini analysis failed: %v", err)
+	}
+	t.Logf("Gemini identified %d elements on challenge page", len(judgedElements))
+
+	report := aijudge.CompareResults("live_challenge_fixture", ghostElements, judgedElements, aijudge.DefaultCompareConfig())
+	t.Logf("\n%s", report.String())
+	saveLiveReport(t, report)
+
+	t.Logf("Challenge Results: Precision=%.1f%%, Recall=%.1f%%, F1=%.1f%%",
+		report.Precision*100, report.Recall*100, report.F1*100)
+
+	// Challenge page is harder — lower thresholds, but still check for catastrophic failure
+	if report.Recall < 0.20 {
+		t.Errorf("Challenge recall %.1f%% is critically low (< 20%%) — OCR pipeline failing on dark theme", report.Recall*100)
+	} else if report.Recall < 0.40 {
+		t.Logf("WARNING: Challenge recall %.1f%% is below target (< 40%%) — dark-theme OCR needs improvement", report.Recall*100)
+	}
+}
+
+// copyFile copies a file from src to dst, creating parent directories as needed.
+func copyFile(src, dst string) error {
+	data, err := os.ReadFile(src)
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+		return err
+	}
+	return os.WriteFile(dst, data, 0o644)
+}
+
 // getScreenshotBytes reads a screenshot file from disk.
 func getScreenshotBytes(path string) ([]byte, error) {
 	if path == "" {

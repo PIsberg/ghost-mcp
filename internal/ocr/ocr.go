@@ -123,6 +123,60 @@ type Options struct {
 // Lowered from 50 to 35 to catch more UI elements at the cost of some noise.
 const MinConfidence = 35.0
 
+// MinConfidenceInteractive is a lower confidence threshold for words that match
+// known interactive element patterns (checkboxes, radio buttons, dropdowns).
+// These elements have predictable text patterns so false positives are less
+// likely even at lower confidence, which improves recall for these element types.
+const MinConfidenceInteractive = 20.0
+
+// IsInteractivePattern returns true when text matches a predictable interactive
+// element pattern — specifically checkbox options ("Option 1"), radio choices
+// ("Choice A"), dropdown selections ("-- Select an option --"), and slider
+// values ("50%").
+//
+// These patterns have well-structured text, so accepting them at lower OCR
+// confidence (MinConfidenceInteractive) meaningfully improves recall without
+// substantially increasing noise.
+func IsInteractivePattern(text string) bool {
+	s := strings.ToLower(strings.TrimSpace(text))
+	if s == "" {
+		return false
+	}
+
+	// Checkbox option patterns: "Option 1", "Option A", "option_name"
+	if strings.HasPrefix(s, "option ") {
+		return true
+	}
+
+	// Radio choice patterns: "Choice A", "Choice 1", "choice_name"
+	if strings.HasPrefix(s, "choice ") {
+		return true
+	}
+
+	// Dropdown selection patterns: "-- Select", "Select an", "Choose", etc.
+	for _, prefix := range []string{"-- select", "-- choose", "-- pick", "select an", "choose an"} {
+		if strings.HasPrefix(s, prefix) {
+			return true
+		}
+	}
+
+	// Slider / progress values: pure numeric percentage (e.g. "50%", "75%")
+	if len(s) >= 2 && s[len(s)-1] == '%' {
+		allDigits := true
+		for _, c := range s[:len(s)-1] {
+			if c < '0' || c > '9' {
+				allDigits = false
+				break
+			}
+		}
+		if allDigits {
+			return true
+		}
+	}
+
+	return false
+}
+
 // brightTextMaxSpread is the maximum allowed channel spread (max−min across R,G,B)
 // for a pixel to be classified as near-white/near-dark achromatic text in
 // brightTextToGray and darkTextToGray.
@@ -600,31 +654,47 @@ func applyOCROptions(client ocrClient, opts Options) {
 	}
 }
 
+// applyConfidenceFilter converts Tesseract bounding boxes into Word values,
+// dropping words that fall below the appropriate confidence threshold.
+// Most words require at least MinConfidence; words that match a known
+// interactive element pattern (Option N, Choice A, dropdown, slider %) are
+// accepted at the lower MinConfidenceInteractive threshold.
+func applyConfidenceFilter(boxes []gosseract.BoundingBox, scaleFactor int) []Word {
+	words := make([]Word, 0, len(boxes))
+	for _, b := range boxes {
+		if b.Word == "" {
+			continue
+		}
+		threshold := MinConfidence
+		if b.Confidence >= MinConfidenceInteractive && IsInteractivePattern(b.Word) {
+			threshold = MinConfidenceInteractive
+		}
+		if b.Confidence < threshold {
+			continue
+		}
+		sf := scaleFactor
+		if sf <= 0 {
+			sf = 1
+		}
+		words = append(words, Word{
+			Text:       b.Word,
+			X:          b.Box.Min.X / sf,
+			Y:          b.Box.Min.Y / sf,
+			Width:      (b.Box.Max.X - b.Box.Min.X) / sf,
+			Height:     (b.Box.Max.Y - b.Box.Min.Y) / sf,
+			Confidence: b.Confidence,
+		})
+	}
+	return words
+}
+
 func readClientResult(client ocrClient, scaleFactor int) (*Result, error) {
 	boxes, err := client.GetBoundingBoxes(gosseract.RIL_WORD)
 	if err != nil {
 		return nil, fmt.Errorf("get bounding boxes: %w", err)
 	}
 
-	words := make([]Word, 0, len(boxes))
-	filtered := 0
-	for _, b := range boxes {
-		if b.Word == "" {
-			continue
-		}
-		if b.Confidence < MinConfidence {
-			filtered++
-			continue
-		}
-		words = append(words, Word{
-			Text:       b.Word,
-			X:          b.Box.Min.X / scaleFactor,
-			Y:          b.Box.Min.Y / scaleFactor,
-			Width:      (b.Box.Max.X - b.Box.Min.X) / scaleFactor,
-			Height:     (b.Box.Max.Y - b.Box.Min.Y) / scaleFactor,
-			Confidence: b.Confidence,
-		})
-	}
+	words := applyConfidenceFilter(boxes, scaleFactor)
 
 	var sb strings.Builder
 	for i, w := range words {
