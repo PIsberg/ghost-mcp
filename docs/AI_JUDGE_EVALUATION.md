@@ -2,7 +2,7 @@
 
 ## Test Environment
 
-- **Branch:** `feature/ai-gui-testing`
+- **Branch:** `feature/ai-judge-improvements`
 - **Platform:** Windows, MinGW-w64 GCC, Tesseract OCR
 - **Gemini API:** Daily quota exhausted (503/429 errors) — Gemini live comparison pending
 - **Evaluation method:** Offline comparison of simulated Ghost MCP output vs. curated ground-truth manifests
@@ -82,29 +82,44 @@ The low recall stems from the **simulated** Ghost MCP output only capturing 10 e
 
 ---
 
-## Recommendations
+## Recommendations & Implementation Status
 
 ### Short-term (High Impact)
 
-1. **Lower OCR confidence threshold** for known interactive element patterns (checkboxes, radios, dropdowns). These have predictable text patterns.
+1. **✅ Lower OCR confidence threshold** for known interactive element patterns (checkboxes, radios, dropdowns).
+   - **Implemented:** Added `IsInteractivePattern()` and `MinConfidenceInteractive = 20.0` to `internal/ocr/ocr.go`.
+   - Patterns: `"Option N"`, `"Choice A"`, `"-- Select..."`, `"50%"` (slider values).
+   - Extracted `applyConfidenceFilter()` for testability; 7 new unit tests added.
 
-2. **Add heading detection heuristic** — Text that appears at the start of a visual section and has larger font size should be classified as `heading`, even without common title words.
+2. **✅ Add heading detection heuristic** — Text that appears at the start of a visual section and has larger font size should be classified as `heading`, even without common title words.
+   - **Implemented:** Added `isTitleCased()` helper and a secondary heading rule in `InferElementType` (in `internal/learner/learner.go`):
+     - Fires for multi-word (2–8), title-cased text at height ≥ 22px with wide aspect ratio (width/height ≥ 4.0)
+     - Catches "Button Click Tests", "Input Tests", "Slider Test", "OCR Text Recognition" etc.
+     - Narrow aspect ratio guard prevents multi-word buttons ("Log In", "Create Account") from being misclassified.
+   - 2 new unit tests added (`TestInferElementType_SectionHeading`, `TestIsTitleCased`).
 
-3. **Improve small text detection** — Menu bar items ("File", "Edit", "View", "Help") are commonly missed. Consider a separate OCR pass at higher DPI for small regions.
+3. **🔲 Improve small text detection** — Menu bar items ("File", "Edit", "View", "Help") are commonly missed. Consider a separate OCR pass at higher DPI for small regions.
+   - Not yet implemented; requires further investigation into DPI scaling for small-font regions.
 
 ### Medium-term
 
-4. **Run the Gemini live judge** once quota resets — this will give the definitive comparison against a state-of-the-art vision model's understanding of the same screenshot.
+4. **🔲 Run the Gemini live judge** once quota resets — this will give the definitive comparison against a state-of-the-art vision model's understanding of the same screenshot.
 
-5. **Calibrate thresholds** using the AI judge reports — track precision/recall over time and adjust OCR confidence thresholds to maximize F1.
+5. **🔲 Calibrate thresholds** using the AI judge reports — track precision/recall over time and adjust OCR confidence thresholds to maximize F1.
 
-6. **Add challenge fixture test** — The dark-theme challenge page (gradient buttons, white-on-dark text) will stress-test the OCR pipeline's luminance handling.
+6. **✅ Add challenge fixture test** — The dark-theme challenge page (gradient buttons, white-on-dark text) stress-tests the OCR pipeline's luminance handling.
+   - **Implemented:** Added `TestAIJudge_ChallengeFixture_GroundTruth` (offline) and `TestAIJudge_ChallengeFixture_Gemini` (live) in `ai_judge_test.go`.
+   - Added `TestAIJudge_LiveFixtureChallenge` in `ai_judge_live_test.go` — navigates to dark-theme page, captures screenshot as `fixture_challenge.png` for future offline tests.
 
 ### Long-term
 
-7. **Trend tracking** — Store AI judge reports in `benchmarks/ai-judge/` and compare across commits to detect regressions.
+7. **✅ Trend tracking** — Store AI judge reports in `benchmarks/ai-judge/` and compare across commits to detect regressions.
+   - **Implemented:** `saveReport()` now loads the most-recent previous report and calls `logTrend()` to log Precision/Recall/F1 deltas.
+   - New `TestAIJudge_TrendTracking` unit test validates the mechanism.
 
-8. **CI alerting** — Emit warnings when recall drops below a calibrated threshold (e.g., 50%).
+8. **✅ CI alerting** — Emit warnings when recall drops below a calibrated threshold (e.g., 50%).
+   - **Implemented:** `checkRecallThreshold(t, report, 0.50)` emits a `t.Logf("WARNING: ...")` when recall falls below 50%.
+   - Called from `saveReport()` so all live judge runs check the threshold automatically.
 
 ---
 
@@ -115,4 +130,9 @@ The Gemini API daily quota reset (midnight PT) will allow the live comparison te
 Run when quota resets:
 ```bash
 GOOGLE_API_KEY=AIza... GEMINI_MODEL=gemini-2.0-flash go test -v -run TestAIJudge_GeminiLive ./cmd/ghost-mcp/... -timeout 300s
+```
+
+Run the full challenge page live test:
+```bash
+GOOGLE_API_KEY=AIza... INTEGRATION=1 go test -v -run TestAIJudge_LiveFixtureChallenge ./cmd/ghost-mcp/... -timeout 300s
 ```

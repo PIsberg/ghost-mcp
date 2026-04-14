@@ -363,6 +363,70 @@ func TestInferElementType_Heading(t *testing.T) {
 	}
 }
 
+// TestInferElementType_SectionHeading verifies that title-cased section headings
+// just below the primary 28px threshold are correctly classified as headings.
+// These are the common "Input Tests", "Slider Test" etc. headings that were
+// previously classified as button due to fitting button proportions (<=5 words,
+// w>=40, h 16-65px).
+func TestInferElementType_SectionHeading(t *testing.T) {
+	tests := []struct {
+		text   string
+		width  int
+		height int
+		want   ElementType
+		note   string
+	}{
+		// Section headings at height=24 with wide aspect ratios (≥4:1).
+		// Previously all fell through to ElementTypeButton (fits 5w/40w/16h/65h rule).
+		{"Button Click Tests", 200, 24, ElementTypeHeading, "3-word section heading, ratio=8.3"},
+		{"Input Tests", 150, 24, ElementTypeHeading, "2-word section heading, ratio=6.25"},
+		{"Selection Tests", 180, 24, ElementTypeHeading, "2-word section heading, ratio=7.5"},
+		{"Slider Test", 140, 24, ElementTypeHeading, "2-word section heading, ratio=5.8"},
+		{"OCR Text Recognition", 250, 24, ElementTypeHeading, "3-word section heading, ratio=10.4"},
+		// Primary threshold still works unchanged.
+		{"Welcome to the Dashboard", 400, 36, ElementTypeHeading, "primary threshold >28px"},
+		// Multi-word button with narrow aspect ratio must NOT become heading (ratio=2.3 < 4.0).
+		{"Log In", 70, 30, ElementTypeButton, "button — narrow ratio keeps it as button"},
+		// Single-word button still a button (len(words) < 2 skips title-case check).
+		{"Save", 60, 30, ElementTypeButton, "single-word button"},
+		// Non-title-cased multi-word text stays as button even at heading height+ratio.
+		{"welcome back", 200, 24, ElementTypeButton, "all-lowercase, not title-cased"},
+	}
+	for _, tc := range tests {
+		got := InferElementType(tc.text, tc.width, tc.height)
+		if got != tc.want {
+			t.Errorf("InferElementType(%q, %d, %d) = %v, want %v [%s]",
+				tc.text, tc.width, tc.height, got, tc.want, tc.note)
+		}
+	}
+}
+
+// TestIsTitleCased verifies the title-case helper used by the section heading heuristic.
+func TestIsTitleCased(t *testing.T) {
+	tests := []struct {
+		words []string
+		want  bool
+	}{
+		{[]string{"Button", "Click", "Tests"}, true},     // all title-cased
+		{[]string{"Input", "Tests"}, true},               // both title-cased
+		{[]string{"Welcome", "to", "the", "Dashboard"}, false}, // only 2/4 capped (50%, not majority)
+		{[]string{"hello", "world"}, false},              // none title-cased
+		{[]string{"Hello"}, true},                        // single word title-cased
+		{[]string{}, false},                              // empty
+		{[]string{"the", "quick", "brown", "fox"}, false}, // none
+		// Strict majority: 3/5 = 60% > 50%
+		{[]string{"One", "Two", "Three", "four", "five"}, true},
+		// Exactly 50% is NOT a majority
+		{[]string{"One", "two"}, false},
+	}
+	for _, tc := range tests {
+		got := isTitleCased(tc.words)
+		if got != tc.want {
+			t.Errorf("isTitleCased(%v) = %v, want %v", tc.words, got, tc.want)
+		}
+	}
+}
+
 func TestInferElementType_Button(t *testing.T) {
 	tests := []struct {
 		text   string

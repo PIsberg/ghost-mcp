@@ -258,8 +258,9 @@ var linkPhrases = []string{"click here", "learn more", "see all", "read more", "
 //  3. URL-like or known link phrase → link
 //  4. Pure numeric / currency / percentage → value
 //  5. Large height (>28px), few words → heading
-//  6. Short text with button proportions → button
-//  7. Everything else → text
+//  6. Title-cased multi-word at heading height (>=22px) with wide aspect ratio → heading
+//  7. Short text with button proportions → button
+//  8. Everything else → text
 func InferElementType(text string, width, height int) ElementType {
 	trimmed := strings.TrimSpace(text)
 	if trimmed == "" {
@@ -326,6 +327,16 @@ func InferElementType(text string, width, height int) ElementType {
 
 	// Heading: tall text (>28px), few words (max 8), and NOT a button keyword.
 	if height > 28 && len(words) <= 8 {
+		return ElementTypeHeading
+	}
+
+	// Section heading: title-cased multi-word text at heading height (22-28px).
+	// Catches "Button Click Tests", "Input Tests", "Slider Test" etc. that fall
+	// just below the primary 28px threshold. Requires a wide aspect ratio
+	// (width/height >= 4) so that multi-word button labels like "Create Account"
+	// (typically ~2.5:1) are not misclassified.
+	if height >= 22 && len(words) >= 2 && len(words) <= 8 && isTitleCased(words) &&
+		width > 0 && float64(width)/float64(height) >= 4.0 {
 		return ElementTypeHeading
 	}
 
@@ -437,6 +448,25 @@ func isRadioText(s string) bool {
 		}
 	}
 	return false
+}
+
+// isTitleCased returns true if the majority of words (>50%) start with an
+// uppercase letter. Used to distinguish section headings like "Button Click
+// Tests" from regular body text. Relies on unicode.IsUpper for correctness
+// across non-ASCII scripts.
+func isTitleCased(words []string) bool {
+	if len(words) == 0 {
+		return false
+	}
+	upper := 0
+	for _, w := range words {
+		runes := []rune(w)
+		if len(runes) > 0 && unicode.IsUpper(runes[0]) {
+			upper++
+		}
+	}
+	// Strict majority: more than half the words start with uppercase.
+	return upper*2 > len(words)
 }
 
 // IsCheckedSymbol returns true when text contains a symbol indicating a

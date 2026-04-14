@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"testing"
 	"time"
 
@@ -206,6 +207,116 @@ func TestAIJudge_ReportJSON(t *testing.T) {
 	}
 }
 
+// TestAIJudge_ChallengeFixture_GroundTruth validates the comparison engine
+// against the dark-theme challenge fixture ground truth. The challenge page
+// uses gradient buttons and white-on-dark text, which is the hardest case for
+// OCR. This offline test uses a simulated Ghost MCP output to stress-test the
+// comparison framework; a live display test is in ai_judge_live_test.go.
+func TestAIJudge_ChallengeFixture_GroundTruth(t *testing.T) {
+	// Simulate what Ghost MCP's 6-pass OCR pipeline would find on the dark-theme
+	// challenge page. In practice it captures fewer elements than the light theme
+	// because gradient/dark backgrounds are harder for OCR.
+	simulatedGhost := []aijudge.GhostElement{
+		// Primary heading — large white text on dark background (inverted pass)
+		{ID: 1, Text: "Ghost MCP Test Fixture", Type: "heading", Rect: aijudge.Rect{X: 250, Y: 10, Width: 400, Height: 40}},
+		// Buttons found via bright-text pass (white text on gradient)
+		{ID: 2, Text: "PRIMARY", Type: "button", Rect: aijudge.Rect{X: 30, Y: 200, Width: 200, Height: 45}},
+		{ID: 3, Text: "SUCCESS", Type: "button", Rect: aijudge.Rect{X: 240, Y: 200, Width: 200, Height: 45}},
+		{ID: 4, Text: "WARNING", Type: "button", Rect: aijudge.Rect{X: 450, Y: 200, Width: 200, Height: 45}},
+		// INFO button sometimes missed due to cyan background (color-inverted pass needed)
+		// OCR targets — white-on-dark, found via inverted pass
+		{ID: 5, Text: "Hello World", Type: "text", Rect: aijudge.Rect{X: 50, Y: 985, Width: 120, Height: 20}},
+		{ID: 6, Text: "Ghost MCP Automation", Type: "text", Rect: aijudge.Rect{X: 50, Y: 1010, Width: 200, Height: 20}},
+	}
+
+	report := aijudge.CompareResults(
+		"simulated_challenge",
+		simulatedGhost,
+		testdata.FixtureChallenge.Elements,
+		aijudge.DefaultCompareConfig(),
+	)
+
+	t.Logf("Challenge fixture simulated accuracy:\n%s", report.String())
+
+	// Validate report structure
+	if report.GhostCount != len(simulatedGhost) {
+		t.Errorf("ghost count: expected %d, got %d", len(simulatedGhost), report.GhostCount)
+	}
+	if report.JudgeCount != len(testdata.FixtureChallenge.Elements) {
+		t.Errorf("judge count: expected %d, got %d", len(testdata.FixtureChallenge.Elements), report.JudgeCount)
+	}
+
+	// Expect the primary heading and buttons to match
+	if report.MatchedCount == 0 {
+		t.Error("expected at least some matched elements on challenge fixture")
+	}
+
+	// Challenge fixture has harder elements (checkboxes, radios, dark-bg links)
+	// so we expect significant misses — but the comparison framework should work
+	if len(report.MissedByGhost) == 0 {
+		t.Error("expected some missed elements on the harder challenge fixture")
+	}
+
+	// Precision should be high (what we find, we find correctly)
+	if report.Precision < 0.6 {
+		t.Errorf("challenge fixture precision too low: %.1f%%", report.Precision*100)
+	}
+
+	t.Logf("Summary: Precision=%.1f%%, Recall=%.1f%%, F1=%.1f%%",
+		report.Precision*100, report.Recall*100, report.F1*100)
+}
+
+// TestAIJudge_ChallengeFixture_Gemini sends the challenge fixture screenshot to
+// Gemini for independent evaluation of the dark-theme page.
+// Requires GOOGLE_API_KEY and a pre-captured fixture_challenge.png.
+func TestAIJudge_ChallengeFixture_Gemini(t *testing.T) {
+	apiKey := os.Getenv("GOOGLE_API_KEY")
+	if apiKey == "" {
+		t.Skip("GOOGLE_API_KEY not set; skipping challenge fixture Gemini test")
+	}
+
+	screenshotPath := findChallengeScreenshot(t)
+	if screenshotPath == "" {
+		t.Skip("No challenge fixture screenshot found; capture with test_runner.bat fixture first")
+	}
+
+	imgBytes, err := os.ReadFile(screenshotPath)
+	if err != nil {
+		t.Fatalf("failed to read challenge screenshot: %v", err)
+	}
+
+	model := os.Getenv("GEMINI_MODEL")
+	if model == "" {
+		model = "gemini-2.5-flash"
+	}
+
+	judge, err := aijudge.NewJudge(apiKey, model)
+	if err != nil {
+		t.Fatalf("failed to create judge: %v", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	t.Log("Sending challenge screenshot to Gemini for analysis (dark-theme)...")
+	judgedElements, err := judge.AnalyzeScreenshot(ctx, imgBytes, "image/png")
+	if err != nil {
+		t.Fatalf("Gemini analysis failed: %v", err)
+	}
+
+	t.Logf("Gemini identified %d elements on the dark-theme challenge page", len(judgedElements))
+
+	report := aijudge.CompareResults(
+		"gemini_challenge",
+		ghostElementsFromJudged(judgedElements),
+		testdata.FixtureChallenge.Elements,
+		aijudge.DefaultCompareConfig(),
+	)
+
+	t.Logf("\nChallenge page Gemini self-consistency report:\n%s", report.String())
+	saveReport(t, report)
+}
+
 // =============================================================================
 // Helpers
 // =============================================================================
@@ -217,6 +328,21 @@ func findFixtureScreenshot(t *testing.T) string {
 		filepath.Join("internal", "aijudge", "testdata", "fixture_normal.png"),
 		filepath.Join("testdata", "fixture_normal.png"),
 		filepath.Join("..", "..", "internal", "aijudge", "testdata", "fixture_normal.png"),
+	}
+	for _, c := range candidates {
+		if _, err := os.Stat(c); err == nil {
+			return c
+		}
+	}
+	return ""
+}
+
+func findChallengeScreenshot(t *testing.T) string {
+	t.Helper()
+	candidates := []string{
+		filepath.Join("internal", "aijudge", "testdata", "fixture_challenge.png"),
+		filepath.Join("testdata", "fixture_challenge.png"),
+		filepath.Join("..", "..", "internal", "aijudge", "testdata", "fixture_challenge.png"),
 	}
 	for _, c := range candidates {
 		if _, err := os.Stat(c); err == nil {
@@ -240,6 +366,9 @@ func ghostElementsFromJudged(judged []aijudge.JudgedElement) []aijudge.GhostElem
 	return ghost
 }
 
+// saveReport persists an AccuracyReport to benchmarks/ai-judge/ and compares
+// it against the most recent previous report for the same fixture to detect
+// regressions or improvements across runs.
 func saveReport(t *testing.T, report *aijudge.AccuracyReport) {
 	t.Helper()
 	dir := filepath.Join("benchmarks", "ai-judge")
@@ -247,6 +376,15 @@ func saveReport(t *testing.T, report *aijudge.AccuracyReport) {
 		t.Logf("WARN: could not create report dir: %v", err)
 		return
 	}
+
+	// Load the previous report for this fixture for trend comparison.
+	prev := loadLatestReport(t, dir, report.FixtureName)
+	if prev != nil {
+		logTrend(t, prev, report)
+	}
+
+	// Check recall threshold — emit a warning if recall has regressed.
+	checkRecallThreshold(t, report, 0.50)
 
 	filename := fmt.Sprintf("report_%s_%s.json",
 		report.FixtureName,
@@ -264,4 +402,125 @@ func saveReport(t *testing.T, report *aijudge.AccuracyReport) {
 		return
 	}
 	t.Logf("Report saved to %s", path)
+}
+
+// loadLatestReport finds the most-recent saved JSON report for a given fixture.
+// Returns nil if no prior report exists.
+func loadLatestReport(t *testing.T, dir, fixtureName string) *aijudge.AccuracyReport {
+	t.Helper()
+	prefix := fmt.Sprintf("report_%s_", fixtureName)
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil // dir may not exist yet
+	}
+
+	// Collect matching filenames (sorted by name = chronological order since
+	// the timestamp format is YYYYMMDD_HHMMSS).
+	var matches []string
+	for _, e := range entries {
+		if !e.IsDir() && len(e.Name()) > len(prefix) &&
+			e.Name()[:len(prefix)] == prefix &&
+			filepath.Ext(e.Name()) == ".json" {
+			matches = append(matches, e.Name())
+		}
+	}
+	if len(matches) == 0 {
+		return nil
+	}
+	sort.Strings(matches)
+	latest := matches[len(matches)-1]
+
+	data, err := os.ReadFile(filepath.Join(dir, latest))
+	if err != nil {
+		return nil
+	}
+	var rep aijudge.AccuracyReport
+	if err := json.Unmarshal(data, &rep); err != nil {
+		return nil
+	}
+	return &rep
+}
+
+// logTrend logs the delta between the previous and current report so regressions
+// or improvements are visible in the test output.
+func logTrend(t *testing.T, prev, curr *aijudge.AccuracyReport) {
+	t.Helper()
+	dPrec := (curr.Precision - prev.Precision) * 100
+	dRec := (curr.Recall - prev.Recall) * 100
+	dF1 := (curr.F1 - prev.F1) * 100
+
+	sign := func(v float64) string {
+		if v > 0 {
+			return fmt.Sprintf("+%.1f%%", v)
+		}
+		return fmt.Sprintf("%.1f%%", v)
+	}
+
+	t.Logf("Trend vs previous %s report:", prev.FixtureName)
+	t.Logf("  Precision: %.1f%% → %.1f%% (%s)",
+		prev.Precision*100, curr.Precision*100, sign(dPrec))
+	t.Logf("  Recall:    %.1f%% → %.1f%% (%s)",
+		prev.Recall*100, curr.Recall*100, sign(dRec))
+	t.Logf("  F1:        %.1f%% → %.1f%% (%s)",
+		prev.F1*100, curr.F1*100, sign(dF1))
+}
+
+// checkRecallThreshold emits a test warning when recall drops below the given
+// threshold. This implements CI alerting without failing the test outright,
+// since recall is subject to Gemini API variation and quota fluctuations.
+func checkRecallThreshold(t *testing.T, report *aijudge.AccuracyReport, minRecall float64) {
+	t.Helper()
+	if report.Recall < minRecall {
+		t.Logf("WARNING: recall %.1f%% is below calibrated threshold %.0f%% for fixture %q — consider investigating OCR pipeline",
+			report.Recall*100, minRecall*100, report.FixtureName)
+	}
+}
+
+// TestAIJudge_TrendTracking verifies that saveReport correctly loads a previous
+// report and produces a meaningful delta when a newer report is compared.
+func TestAIJudge_TrendTracking(t *testing.T) {
+	dir := t.TempDir()
+
+	// Write a "previous" report
+	prev := &aijudge.AccuracyReport{
+		Timestamp:   time.Now().Add(-1 * time.Hour),
+		FixtureName: "trend_test",
+		Precision:   0.70,
+		Recall:      0.40,
+		F1:          0.51,
+	}
+	prevBytes, _ := json.MarshalIndent(prev, "", "  ")
+	prevFile := filepath.Join(dir, fmt.Sprintf("report_trend_test_%s.json", prev.Timestamp.Format("20060102_150405")))
+	if err := os.WriteFile(prevFile, prevBytes, 0o644); err != nil {
+		t.Fatalf("failed to write previous report: %v", err)
+	}
+
+	// Load it back
+	loaded := loadLatestReport(t, dir, "trend_test")
+	if loaded == nil {
+		t.Fatal("expected loadLatestReport to find previous report")
+	}
+	if loaded.Precision != 0.70 {
+		t.Errorf("expected precision 0.70, got %.2f", loaded.Precision)
+	}
+	if loaded.Recall != 0.40 {
+		t.Errorf("expected recall 0.40, got %.2f", loaded.Recall)
+	}
+
+	// Verify logTrend doesn't panic and produces output
+	curr := &aijudge.AccuracyReport{
+		Timestamp:   time.Now(),
+		FixtureName: "trend_test",
+		Precision:   0.85,
+		Recall:      0.55,
+		F1:          0.67,
+	}
+	logTrend(t, loaded, curr) // Should log improvement without panicking
+
+	// Verify checkRecallThreshold warns when below target
+	lowRecall := &aijudge.AccuracyReport{FixtureName: "trend_test", Recall: 0.30}
+	checkRecallThreshold(t, lowRecall, 0.50) // Should log a warning
+
+	highRecall := &aijudge.AccuracyReport{FixtureName: "trend_test", Recall: 0.75}
+	checkRecallThreshold(t, highRecall, 0.50) // Should be silent (no warning)
 }

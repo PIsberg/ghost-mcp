@@ -1096,3 +1096,124 @@ func TestColorInvertGray_ComparisonWithRegularInverted(t *testing.T) {
 	// black-on-medium which Tesseract handles better.
 	t.Logf("White-on-cyan comparison: regular_inverted bg=%d, color_inverted bg=%d", bgNormal, bgCI)
 }
+
+// =============================================================================
+// IsInteractivePattern tests
+// =============================================================================
+
+func TestIsInteractivePattern_CheckboxOptions(t *testing.T) {
+	patterns := []string{
+		"Option 1", "Option 2", "Option 3",
+		"option a", "OPTION B", // case-insensitive
+	}
+	for _, p := range patterns {
+		if !IsInteractivePattern(p) {
+			t.Errorf("IsInteractivePattern(%q) = false, want true", p)
+		}
+	}
+}
+
+func TestIsInteractivePattern_RadioChoices(t *testing.T) {
+	patterns := []string{
+		"Choice A", "Choice B", "Choice C",
+		"choice 1", "CHOICE 2", // case-insensitive
+	}
+	for _, p := range patterns {
+		if !IsInteractivePattern(p) {
+			t.Errorf("IsInteractivePattern(%q) = false, want true", p)
+		}
+	}
+}
+
+func TestIsInteractivePattern_DropdownPatterns(t *testing.T) {
+	patterns := []string{
+		"-- Select an option --",
+		"-- Choose --",
+		"-- Pick one --",
+		"select an item",
+		"choose an option",
+	}
+	for _, p := range patterns {
+		if !IsInteractivePattern(p) {
+			t.Errorf("IsInteractivePattern(%q) = false, want true", p)
+		}
+	}
+}
+
+func TestIsInteractivePattern_SliderValues(t *testing.T) {
+	patterns := []string{
+		"0%", "25%", "50%", "75%", "100%",
+	}
+	for _, p := range patterns {
+		if !IsInteractivePattern(p) {
+			t.Errorf("IsInteractivePattern(%q) = false, want true", p)
+		}
+	}
+}
+
+func TestIsInteractivePattern_NotInteractive(t *testing.T) {
+	notInteractive := []string{
+		"Submit", "Cancel", "Hello World",
+		"The quick brown fox",
+		"$99.99", "Email:", "Username:",
+		"50px",  // px not %
+		"",      // empty
+		"50% off this weekend", // % not at end
+	}
+	for _, p := range notInteractive {
+		if IsInteractivePattern(p) {
+			t.Errorf("IsInteractivePattern(%q) = true, want false", p)
+		}
+	}
+}
+
+// TestIsInteractivePattern_LowerConfidenceIsApplied uses the fake OCR client to
+// verify that interactive-pattern words at confidence between
+// MinConfidenceInteractive and MinConfidence survive the filter, while
+// non-interactive words at the same confidence are dropped.
+func TestIsInteractivePattern_LowerConfidenceIsApplied(t *testing.T) {
+	// Pick a confidence that sits between the two thresholds so we can
+	// distinguish which rule is applied.
+	confidenceBetweenThresholds := (MinConfidenceInteractive + MinConfidence) / 2.0
+
+	boxes := []gosseract.BoundingBox{
+		// Interactive patterns — should survive at confidenceBetweenThresholds.
+		{Word: "Option 1", Confidence: confidenceBetweenThresholds, Box: image.Rect(10, 10, 90, 30)},
+		{Word: "Choice A", Confidence: confidenceBetweenThresholds, Box: image.Rect(10, 40, 90, 60)},
+		// Non-interactive word at same confidence — should be filtered out.
+		{Word: "noisexyz", Confidence: confidenceBetweenThresholds, Box: image.Rect(10, 70, 90, 90)},
+		// Word at full confidence — always kept.
+		{Word: "Submit", Confidence: MinConfidence + 10, Box: image.Rect(10, 100, 90, 130)},
+	}
+
+	result := applyConfidenceFilter(boxes, 1)
+
+	found := map[string]bool{}
+	for _, w := range result {
+		found[w.Text] = true
+	}
+
+	if !found["Option 1"] {
+		t.Error("expected 'Option 1' to survive (interactive pattern, lower threshold)")
+	}
+	if !found["Choice A"] {
+		t.Error("expected 'Choice A' to survive (interactive pattern, lower threshold)")
+	}
+	if found["noisexyz"] {
+		t.Error("expected 'noisexyz' to be filtered (not an interactive pattern, standard threshold)")
+	}
+	if !found["Submit"] {
+		t.Error("expected 'Submit' to survive (above standard threshold)")
+	}
+}
+
+// TestConfidenceThresholdConstants verifies the ordering of the two thresholds.
+func TestConfidenceThresholdConstants(t *testing.T) {
+	if MinConfidenceInteractive >= MinConfidence {
+		t.Errorf("MinConfidenceInteractive (%.1f) must be less than MinConfidence (%.1f)",
+			MinConfidenceInteractive, MinConfidence)
+	}
+	if MinConfidenceInteractive <= 0 {
+		t.Errorf("MinConfidenceInteractive must be positive, got %.1f", MinConfidenceInteractive)
+	}
+}
