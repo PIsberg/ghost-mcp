@@ -101,11 +101,16 @@ func NewClient(config Config) (*Client, error) {
 		return nil, fmt.Errorf("failed to start MCP server: %w", err)
 	}
 
+	scanner := bufio.NewScanner(stdout)
+	// Screenshot responses include an inline base64-encoded PNG (often >100KB),
+	// which blows past bufio.Scanner's 64KB default and causes "token too long".
+	scanner.Buffer(make([]byte, 1<<20), 32<<20) // 1 MB initial, 32 MB max
+
 	client := &Client{
 		cmd:     cmd,
 		stdin:   stdin,
 		stdout:  stdout,
-		scanner: bufio.NewScanner(stdout),
+		scanner: scanner,
 		timeout: config.Timeout,
 		nextID:  1,
 	}

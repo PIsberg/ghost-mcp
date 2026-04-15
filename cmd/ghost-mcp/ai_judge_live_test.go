@@ -20,14 +20,109 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/ghost-mcp/internal/aijudge"
 	"github.com/ghost-mcp/mcpclient"
 )
+
+// Controlled fixture browser geometry for AI judge tests. We launch Edge in
+// --kiosk mode (true fullscreen, no chrome, takes focus), so the entire
+// primary monitor IS the fixture page — no other windows can pollute the
+// capture. The actual screen bounds are queried at runtime via get_screen_size.
+var (
+	fixtureBrowserX      = 0
+	fixtureBrowserY      = 0
+	fixtureBrowserWidth  = 0 // filled in from get_screen_size
+	fixtureBrowserHeight = 0
+)
+
+// launchControlledBrowser opens the fixture URL in Microsoft Edge's app mode
+// at a known position and size, so the screenshot region is deterministic and
+// other windows on screen can't pollute the capture.
+func launchControlledBrowser(t *testing.T, url string) func() {
+	t.Helper()
+	args := []string{
+		"--kiosk", url,
+		"--new-window",
+		"--no-first-run",
+		"--no-default-browser-check",
+		"--disable-features=Translate",
+	}
+	// Use a unique temp dir for each test run to avoid profile corruption
+	userDataDir, err := os.MkdirTemp(os.TempDir(), "ghost-mcp-aijudge-edge-*")
+	if err != nil {
+		t.Skipf("Failed to create temp dir for browser user data: %v", err)
+	}
+	args = append(args, "--user-data-dir="+userDataDir)
+	candidates := []string{
+		`C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe`,
+		`C:\Program Files\Microsoft\Edge\Application\msedge.exe`,
+		`C:\Program Files\Google\Chrome\Application\chrome.exe`,
+		`C:\Program Files (x86)\Google\Chrome\Application\chrome.exe`,
+	}
+	var browserPath string
+	for _, c := range candidates {
+		if _, err := os.Stat(c); err == nil {
+			browserPath = c
+			break
+		}
+	}
+	if browserPath == "" {
+		t.Skip("No suitable browser (Edge/Chrome) found for controlled fixture window")
+	}
+	cmd := exec.Command(browserPath, args...)
+	if err := cmd.Start(); err != nil {
+		t.Skipf("Failed to launch controlled browser: %v", err)
+	}
+	t.Logf("Launched %s in --kiosk mode (pid=%d)", filepath.Base(browserPath), cmd.Process.Pid)
+
+	return func() {
+		_ = cmd.Process.Kill()
+		// Add timeout to prevent blocking on hang
+		done := make(chan struct{})
+		go func() {
+			_, _ = cmd.Process.Wait()
+			close(done)
+		}()
+		select {
+		case <-done:
+		case <-time.After(5 * time.Second):
+			// Process didn't exit in time, force kill
+			_ = cmd.Process.Kill()
+		}
+		// Clean up the temp user data dir
+		_ = os.RemoveAll(userDataDir)
+	}
+}
+
+// waitForBrowserReady polls until the browser has rendered the page.
+// It attempts to take a screenshot and verifies that we get a non-empty result.
+func waitForBrowserReady(ctx context.Context, client *mcpclient.Client, t *testing.T) {
+	t.Helper()
+	const (
+		maxWait    = 10 * time.Second
+		pollInterval = 500 * time.Millisecond
+	)
+
+	deadline := time.Now().Add(maxWait)
+	for time.Now().Before(deadline) {
+		if _, err := client.CallToolString(ctx, "take_screenshot", nil); err == nil {
+			t.Log("Browser rendered page (screenshot successful)")
+			return
+		}
+		time.Sleep(pollInterval)
+	}
+	// If we get here, the browser didn't render in time, but we'll proceed anyway
+	// and let the test fail later with a more meaningful error.
+	t.Logf("WARNING: Browser did not render within %v, proceeding anyway", maxWait)
+}
 
 // TestAIJudge_LiveFixtureNormal takes a live screenshot of the normal fixture,
 // runs Ghost MCP's OCR pipeline, then uses Gemini as an independent judge.
@@ -40,11 +135,16 @@ func TestAIJudge_LiveFixtureNormal(t *testing.T) {
 	skipIfNoGCC(t)
 	skipIfNoDisplay(t)
 
-	// Start the fixture server
+	// Start the fixture server (do not rely on its auto-opened browser — we
+	// launch our own controlled window below).
 	_, cleanup := startFixtureServer(t)
 	defer cleanup()
-	waitForFixture(t)
-	time.Sleep(settleTime)
+	// Wait briefly for HTTP to be reachable; skip waitForFixture's focus dance.
+	time.Sleep(1 * time.Second)
+
+	// Launch a controlled Edge --app window at known position and size.
+	browserCleanup := launchControlledBrowser(t, fixtureURL)
+	defer browserCleanup()
 
 	// Create MCP client
 	client, err := mcpclient.NewClient(mcpclient.Config{
@@ -58,7 +158,24 @@ func TestAIJudge_LiveFixtureNormal(t *testing.T) {
 
 	ctx := context.Background()
 
-	// Step 1: Take a screenshot via MCP
+	// Wait for browser to render before taking screenshots.
+	waitForBrowserReady(ctx, client, t)
+
+	// Discover screen size — kiosk fills the primary monitor.
+	if sizeJSON, err := client.CallToolString(ctx, "get_screen_size", nil); err == nil {
+		var sz struct{ Width, Height int }
+		if err := json.Unmarshal([]byte(sizeJSON), &sz); err == nil && sz.Width > 0 {
+			fixtureBrowserWidth = sz.Width
+			fixtureBrowserHeight = sz.Height
+			t.Logf("Screen size: %dx%d", sz.Width, sz.Height)
+		}
+	}
+	if fixtureBrowserWidth == 0 {
+		fixtureBrowserWidth = 1707
+		fixtureBrowserHeight = 1067
+	}
+
+	// Step 1: Take a fullscreen screenshot (kiosk browser should fill the screen).
 	t.Log("Taking screenshot via Ghost MCP...")
 	screenshotJSON, err := client.CallToolString(ctx, "take_screenshot", nil)
 	if err != nil {
@@ -71,13 +188,19 @@ func TestAIJudge_LiveFixtureNormal(t *testing.T) {
 		Path   string `json:"path"`
 	}
 	if err := json.Unmarshal([]byte(screenshotJSON), &ssResp); err != nil {
-		t.Logf("Screenshot response: %s", screenshotJSON)
+		t.Logf("take_screenshot raw response (unmarshal failed: %v): %s", err, truncateForLog(screenshotJSON, 400))
+	} else {
+		t.Logf("take_screenshot path=%q size=%dx%d", ssResp.Path, ssResp.Width, ssResp.Height)
 	}
 
-	// Step 2: Learn the screen with Ghost MCP (our pipeline)
+	// Step 2: Learn the screen with Ghost MCP (same region as the screenshot)
 	t.Log("Running Ghost MCP learn_screen...")
 	learnResult, err := client.CallToolString(ctx, "learn_screen", map[string]interface{}{
 		"max_pages": 1,
+		"x":         fixtureBrowserX,
+		"y":         fixtureBrowserY,
+		"width":     fixtureBrowserWidth,
+		"height":    fixtureBrowserHeight,
 	})
 	if err != nil {
 		t.Fatalf("learn_screen failed: %v", err)
@@ -87,8 +210,11 @@ func TestAIJudge_LiveFixtureNormal(t *testing.T) {
 		Success       bool `json:"success"`
 		ElementsFound int  `json:"elements_found"`
 	}
-	json.Unmarshal([]byte(learnResult), &learnResp)
-	t.Logf("Ghost MCP found %d elements", learnResp.ElementsFound)
+	if err := json.Unmarshal([]byte(learnResult), &learnResp); err != nil {
+		t.Logf("WARNING: Failed to parse learn_screen response: %v", err)
+	} else {
+		t.Logf("Ghost MCP found %d elements", learnResp.ElementsFound)
+	}
 
 	// Step 3: Get the learned view
 	viewJSON, err := client.CallToolString(ctx, "get_learned_view", nil)
@@ -126,6 +252,14 @@ func TestAIJudge_LiveFixtureNormal(t *testing.T) {
 		}
 	}
 
+	// Sanity check: did we actually capture the fixture page? If the controlled
+	// browser failed to take over the screen (other windows blocking, multi-
+	// monitor setup, focus stealing prevented), Ghost MCP will be OCRing
+	// unrelated content and the resulting score is meaningless.
+	if !containsAny(ghostElements, "PRIMARY", "SUCCESS", "WARNING") {
+		t.Skipf("Fixture canary not found in OCR output (%d elements). The controlled browser likely failed to claim the screen — run on a clean desktop or VM.", len(ghostElements))
+	}
+
 	// Step 4: Get the screenshot image bytes for Gemini
 	// Use take_screenshot's saved file if available, otherwise take a fresh one
 	screenshotBytes, err := getScreenshotBytes(ssResp.Path)
@@ -146,7 +280,7 @@ func TestAIJudge_LiveFixtureNormal(t *testing.T) {
 	}
 
 	t.Log("Sending screenshot to Gemini for independent analysis...")
-	judgeCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
+	judgeCtx, cancel := context.WithTimeout(ctx, 3*time.Minute)
 	defer cancel()
 
 	judgedElements, err := judge.AnalyzeScreenshot(judgeCtx, screenshotBytes, "image/png")
@@ -210,6 +344,9 @@ func TestAIJudge_LiveFixtureChallenge(t *testing.T) {
 
 	ctx := context.Background()
 
+	// Wait for browser to render before taking screenshots.
+	waitForBrowserReady(ctx, client, t)
+
 	// Navigate to the challenge page (dark theme)
 	t.Log("Clicking challenge page link...")
 	_, err = client.CallToolString(ctx, "find_and_click", map[string]interface{}{
@@ -228,7 +365,9 @@ func TestAIJudge_LiveFixtureChallenge(t *testing.T) {
 	var ssResp struct {
 		Path string `json:"path"`
 	}
-	json.Unmarshal([]byte(screenshotJSON), &ssResp)
+	if err := json.Unmarshal([]byte(screenshotJSON), &ssResp); err != nil {
+		t.Logf("WARNING: Failed to parse screenshot response: %v", err)
+	}
 
 	// Save a copy as fixture_challenge.png for future offline tests
 	if ssResp.Path != "" {
@@ -249,8 +388,11 @@ func TestAIJudge_LiveFixtureChallenge(t *testing.T) {
 	var learnResp struct {
 		ElementsFound int `json:"elements_found"`
 	}
-	json.Unmarshal([]byte(learnResult), &learnResp)
-	t.Logf("Ghost MCP found %d elements on challenge page", learnResp.ElementsFound)
+	if err := json.Unmarshal([]byte(learnResult), &learnResp); err != nil {
+		t.Logf("WARNING: Failed to parse learn_screen response on challenge page: %v", err)
+	} else {
+		t.Logf("Ghost MCP found %d elements on challenge page", learnResp.ElementsFound)
+	}
 
 	// Get learned elements
 	viewJSON, err := client.CallToolString(ctx, "get_learned_view", nil)
@@ -302,7 +444,7 @@ func TestAIJudge_LiveFixtureChallenge(t *testing.T) {
 	}
 
 	t.Log("Sending challenge screenshot to Gemini (dark-theme, gradient buttons)...")
-	judgeCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
+	judgeCtx, cancel := context.WithTimeout(ctx, 3*time.Minute)
 	defer cancel()
 
 	judgedElements, err := judge.AnalyzeScreenshot(judgeCtx, screenshotBytes, "image/png")
@@ -326,16 +468,48 @@ func TestAIJudge_LiveFixtureChallenge(t *testing.T) {
 	}
 }
 
+// containsAny returns true if any element's text contains any of the needles
+// (case-insensitive substring match).
+func containsAny(elems []aijudge.GhostElement, needles ...string) bool {
+	for _, e := range elems {
+		lower := strings.ToLower(e.Text)
+		for _, n := range needles {
+			if strings.Contains(lower, strings.ToLower(n)) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func truncateForLog(s string, max int) string {
+	if len(s) <= max {
+		return s
+	}
+	return s[:max] + "..."
+}
+
 // copyFile copies a file from src to dst, creating parent directories as needed.
+// Uses io.Copy for memory efficiency with large files (e.g. multi-MB screenshots).
 func copyFile(src, dst string) error {
-	data, err := os.ReadFile(src)
+	srcFile, err := os.Open(src)
 	if err != nil {
 		return err
 	}
+	defer srcFile.Close()
+
 	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
 		return err
 	}
-	return os.WriteFile(dst, data, 0o644)
+
+	dstFile, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+	defer dstFile.Close()
+
+	_, err = io.Copy(dstFile, srcFile)
+	return err
 }
 
 // getScreenshotBytes reads a screenshot file from disk.

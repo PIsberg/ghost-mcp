@@ -1,0 +1,279 @@
+{
+  "timestamp": "2026-04-15T19:50:28.7610394+02:00",
+  "fixture_name": "live_normal_fixture",
+  "ghost_count": 10,
+  "judge_count": 10,
+  "matched_count": 4,
+  "precision": 0.4,
+  "recall": 0.4,
+  "f1": 0.4000000000000001,
+  "type_accuracy": 0.5,
+  "matches": [
+    {
+      "ghost": {
+        "id": 9,
+        "text": "Ready",
+        "type": "heading",
+        "rect": {
+          "x": 880,
+          "y": 405,
+          "width": 103,
+          "height": 39
+        },
+        "confidence": 95.43427276611328,
+        "ocr_pass": "normal"
+      },
+      "judge": {
+        "text": "Ready",
+        "type": "value",
+        "rect": {
+          "x": 490,
+          "y": 375,
+          "width": 45,
+          "height": 18
+        }
+      },
+      "text_score": 1,
+      "iou": 0,
+      "type_match": false
+    },
+    {
+      "ghost": {
+        "id": 4,
+        "text": "Norm",
+        "type": "button",
+        "rect": {
+          "x": 1613,
+          "y": 278,
+          "width": 93,
+          "height": 28
+        },
+        "confidence": 96.23333740234375,
+        "ocr_pass": "normal"
+      },
+      "judge": {
+        "text": "Normal",
+        "type": "link",
+        "rect": {
+          "x": 930,
+          "y": 128,
+          "width": 60,
+          "height": 18
+        }
+      },
+      "text_score": 0.8333333333333333,
+      "iou": 0,
+      "type_match": false
+    },
+    {
+      "ghost": {
+        "id": 3,
+        "text": "Tests",
+        "type": "heading",
+        "rect": {
+          "x": 1113,
+          "y": 667,
+          "width": 103,
+          "height": 32
+        },
+        "confidence": 96.26211547851562,
+        "ocr_pass": "normal"
+      },
+      "judge": {
+        "text": "Input Tests",
+        "type": "heading",
+        "rect": {
+          "x": 490,
+          "y": 660,
+          "width": 120,
+          "height": 22
+        }
+      },
+      "text_score": 0.7272727272727273,
+      "iou": 0,
+      "type_match": true
+    },
+    {
+      "ghost": {
+        "id": 6,
+        "text": "Button",
+        "type": "heading",
+        "rect": {
+          "x": 845,
+          "y": 667,
+          "width": 141,
+          "height": 32
+        },
+        "confidence": 95.99064636230469,
+        "ocr_pass": "normal"
+      },
+      "judge": {
+        "text": "Button Click Tests",
+        "type": "heading",
+        "rect": {
+          "x": 490,
+          "y": 500,
+          "width": 190,
+          "height": 22
+        }
+      },
+      "text_score": 0.6666666666666666,
+      "iou": 0,
+      "type_match": true
+    }
+  ],
+  "missed_by_ghost": [
+    {
+      "text": "Chat",
+      "type": "heading",
+      "rect": {
+        "x": 844,
+        "y": 36,
+        "width": 70,
+        "height": 28
+      }
+    },
+    {
+      "text": "Avsluta hels",
+      "type": "button",
+      "rect": {
+        "x": 870,
+        "y": 74,
+        "width": 120,
+        "height": 30
+      }
+    },
+    {
+      "text": "Red dot",
+      "type": "icon",
+      "rect": {
+        "x": 470,
+        "y": 378,
+        "width": 10,
+        "height": 10
+      }
+    },
+    {
+      "text": "",
+      "type": "input",
+      "rect": {
+        "x": 450,
+        "y": 430,
+        "width": 540,
+        "height": 40
+      }
+    },
+    {
+      "text": "PRIMARY",
+      "type": "button",
+      "rect": {
+        "x": 550,
+        "y": 550,
+        "width": 220,
+        "height": 50
+      }
+    },
+    {
+      "text": "SUCCESS",
+      "type": "button",
+      "rect": {
+        "x": 770,
+        "y": 550,
+        "width": 220,
+        "height": 50
+      }
+    }
+  ],
+  "false_positives": [
+    {
+      "id": 1,
+      "text": "",
+      "type": "unknown",
+      "rect": {
+        "x": 1536,
+        "y": 144,
+        "width": 108,
+        "height": 30
+      },
+      "confidence": 100,
+      "ocr_pass": "normal"
+    },
+    {
+      "id": 2,
+      "text": "",
+      "type": "unknown",
+      "rect": {
+        "x": 1656,
+        "y": 144,
+        "width": 48,
+        "height": 30
+      },
+      "confidence": 100,
+      "ocr_pass": "normal"
+    },
+    {
+      "id": 5,
+      "text": "Input",
+      "type": "heading",
+      "rect": {
+        "x": 845,
+        "y": 1028,
+        "width": 109,
+        "height": 39
+      },
+      "confidence": 96.20816040039062,
+      "ocr_pass": "normal"
+    },
+    {
+      "id": 7,
+      "text": "Click",
+      "type": "heading",
+      "rect": {
+        "x": 1002,
+        "y": 665,
+        "width": 100,
+        "height": 34
+      },
+      "confidence": 95.9714584350586,
+      "ocr_pass": "normal"
+    },
+    {
+      "id": 8,
+      "text": "Tests",
+      "type": "heading",
+      "rect": {
+        "x": 967,
+        "y": 1028,
+        "width": 103,
+        "height": 32
+      },
+      "confidence": 95.54076385498047,
+      "ocr_pass": "normal"
+    },
+    {
+      "id": 10,
+      "text": "®",
+      "type": "heading",
+      "rect": {
+        "x": 827,
+        "y": 404,
+        "width": 30,
+        "height": 29
+      },
+      "confidence": 80.32743072509766,
+      "ocr_pass": "normal"
+    }
+  ],
+  "type_mismatches": [
+    {
+      "text": "Ready",
+      "ghost_type": "heading",
+      "judge_type": "value"
+    },
+    {
+      "text": "Norm",
+      "ghost_type": "button",
+      "judge_type": "link"
+    }
+  ]
+}

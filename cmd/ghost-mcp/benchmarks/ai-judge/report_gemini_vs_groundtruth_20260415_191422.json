@@ -1,0 +1,1440 @@
+{
+  "timestamp": "2026-04-15T19:14:22.8404572+02:00",
+  "fixture_name": "gemini_vs_groundtruth",
+  "ghost_count": 67,
+  "judge_count": 37,
+  "matched_count": 29,
+  "precision": 0.43283582089552236,
+  "recall": 0.7837837837837838,
+  "f1": 0.5576923076923076,
+  "type_accuracy": 0.7586206896551724,
+  "matches": [
+    {
+      "ghost": {
+        "id": 1,
+        "text": "Ghost MCP Test Fixture",
+        "type": "heading",
+        "rect": {
+          "x": 218,
+          "y": 36,
+          "width": 498,
+          "height": 38
+        },
+        "confidence": 90,
+        "ocr_pass": ""
+      },
+      "judge": {
+        "text": "Ghost MCP Test Fixture",
+        "type": "heading",
+        "rect": {
+          "x": 200,
+          "y": 10,
+          "width": 500,
+          "height": 40
+        }
+      },
+      "text_score": 1,
+      "iou": 0.2097215315763302,
+      "type_match": true
+    },
+    {
+      "ghost": {
+        "id": 15,
+        "text": "WARNING",
+        "type": "button",
+        "rect": {
+          "x": 480,
+          "y": 236,
+          "width": 120,
+          "height": 40
+        },
+        "confidence": 90,
+        "ocr_pass": ""
+      },
+      "judge": {
+        "text": "WARNING",
+        "type": "button",
+        "rect": {
+          "x": 450,
+          "y": 210,
+          "width": 200,
+          "height": 40
+        }
+      },
+      "text_score": 1,
+      "iou": 0.1510791366906475,
+      "type_match": true
+    },
+    {
+      "ghost": {
+        "id": 14,
+        "text": "SUCCESS",
+        "type": "button",
+        "rect": {
+          "x": 350,
+          "y": 236,
+          "width": 120,
+          "height": 40
+        },
+        "confidence": 90,
+        "ocr_pass": ""
+      },
+      "judge": {
+        "text": "SUCCESS",
+        "type": "button",
+        "rect": {
+          "x": 240,
+          "y": 210,
+          "width": 200,
+          "height": 40
+        }
+      },
+      "text_score": 1,
+      "iou": 0.10918544194107452,
+      "type_match": true
+    },
+    {
+      "ghost": {
+        "id": 16,
+        "text": "INFO",
+        "type": "button",
+        "rect": {
+          "x": 610,
+          "y": 236,
+          "width": 120,
+          "height": 40
+        },
+        "confidence": 90,
+        "ocr_pass": ""
+      },
+      "judge": {
+        "text": "INFO",
+        "type": "button",
+        "rect": {
+          "x": 660,
+          "y": 210,
+          "width": 200,
+          "height": 40
+        }
+      },
+      "text_score": 1,
+      "iou": 0.0829103214890017,
+      "type_match": true
+    },
+    {
+      "ghost": {
+        "id": 13,
+        "text": "PRIMARY",
+        "type": "button",
+        "rect": {
+          "x": 220,
+          "y": 236,
+          "width": 120,
+          "height": 40
+        },
+        "confidence": 90,
+        "ocr_pass": ""
+      },
+      "judge": {
+        "text": "PRIMARY",
+        "type": "button",
+        "rect": {
+          "x": 30,
+          "y": 210,
+          "width": 200,
+          "height": 40
+        }
+      },
+      "text_score": 1,
+      "iou": 0.011058451816745656,
+      "type_match": true
+    },
+    {
+      "ghost": {
+        "id": 12,
+        "text": "Button Click Tests",
+        "type": "heading",
+        "rect": {
+          "x": 220,
+          "y": 196,
+          "width": 178,
+          "height": 24
+        },
+        "confidence": 90,
+        "ocr_pass": ""
+      },
+      "judge": {
+        "text": "Button Click Tests",
+        "type": "heading",
+        "rect": {
+          "x": 30,
+          "y": 175,
+          "width": 200,
+          "height": 24
+        }
+      },
+      "text_score": 1,
+      "iou": 0.0033178500331785005,
+      "type_match": true
+    },
+    {
+      "ghost": {
+        "id": 26,
+        "text": "Option 1",
+        "type": "label",
+        "rect": {
+          "x": 342,
+          "y": 510,
+          "width": 68,
+          "height": 19
+        },
+        "confidence": 90,
+        "ocr_pass": ""
+      },
+      "judge": {
+        "text": "Option 1",
+        "type": "checkbox",
+        "rect": {
+          "x": 30,
+          "y": 475,
+          "width": 100,
+          "height": 20
+        }
+      },
+      "text_score": 1,
+      "iou": 0,
+      "type_match": false
+    },
+    {
+      "ghost": {
+        "id": 41,
+        "text": "Slider Test",
+        "type": "heading",
+        "rect": {
+          "x": 220,
+          "y": 702,
+          "width": 105,
+          "height": 24
+        },
+        "confidence": 90,
+        "ocr_pass": ""
+      },
+      "judge": {
+        "text": "Slider Test",
+        "type": "heading",
+        "rect": {
+          "x": 30,
+          "y": 665,
+          "width": 140,
+          "height": 24
+        }
+      },
+      "text_score": 1,
+      "iou": 0,
+      "type_match": true
+    },
+    {
+      "ghost": {
+        "id": 5,
+        "text": "Challenge page",
+        "type": "link",
+        "rect": {
+          "x": 608,
+          "y": 109,
+          "width": 110,
+          "height": 19
+        },
+        "confidence": 90,
+        "ocr_pass": ""
+      },
+      "judge": {
+        "text": "Challenge page",
+        "type": "link",
+        "rect": {
+          "x": 470,
+          "y": 80,
+          "width": 100,
+          "height": 16
+        }
+      },
+      "text_score": 1,
+      "iou": 0,
+      "type_match": true
+    },
+    {
+      "ghost": {
+        "id": 17,
+        "text": "Input Tests",
+        "type": "heading",
+        "rect": {
+          "x": 220,
+          "y": 306,
+          "width": 110,
+          "height": 24
+        },
+        "confidence": 90,
+        "ocr_pass": ""
+      },
+      "judge": {
+        "text": "Input Tests",
+        "type": "heading",
+        "rect": {
+          "x": 30,
+          "y": 270,
+          "width": 150,
+          "height": 24
+        }
+      },
+      "text_score": 1,
+      "iou": 0,
+      "type_match": true
+    },
+    {
+      "ghost": {
+        "id": 18,
+        "text": "Text Input:",
+        "type": "label",
+        "rect": {
+          "x": 220,
+          "y": 346,
+          "width": 88,
+          "height": 19
+        },
+        "confidence": 90,
+        "ocr_pass": ""
+      },
+      "judge": {
+        "text": "Text Input:",
+        "type": "label",
+        "rect": {
+          "x": 30,
+          "y": 305,
+          "width": 80,
+          "height": 20
+        }
+      },
+      "text_score": 1,
+      "iou": 0,
+      "type_match": true
+    },
+    {
+      "ghost": {
+        "id": 20,
+        "text": "CLEAR",
+        "type": "button",
+        "rect": {
+          "x": 930,
+          "y": 340,
+          "width": 80,
+          "height": 30
+        },
+        "confidence": 90,
+        "ocr_pass": ""
+      },
+      "judge": {
+        "text": "CLEAR",
+        "type": "button",
+        "rect": {
+          "x": 780,
+          "y": 300,
+          "width": 70,
+          "height": 35
+        }
+      },
+      "text_score": 1,
+      "iou": 0,
+      "type_match": true
+    },
+    {
+      "ghost": {
+        "id": 21,
+        "text": "Text Area:",
+        "type": "label",
+        "rect": {
+          "x": 220,
+          "y": 390,
+          "width": 80,
+          "height": 19
+        },
+        "confidence": 90,
+        "ocr_pass": ""
+      },
+      "judge": {
+        "text": "Text Area:",
+        "type": "label",
+        "rect": {
+          "x": 30,
+          "y": 345,
+          "width": 80,
+          "height": 20
+        }
+      },
+      "text_score": 1,
+      "iou": 0,
+      "type_match": true
+    },
+    {
+      "ghost": {
+        "id": 23,
+        "text": "Selection Tests",
+        "type": "heading",
+        "rect": {
+          "x": 220,
+          "y": 470,
+          "width": 150,
+          "height": 24
+        },
+        "confidence": 90,
+        "ocr_pass": ""
+      },
+      "judge": {
+        "text": "Selection Tests",
+        "type": "heading",
+        "rect": {
+          "x": 30,
+          "y": 420,
+          "width": 180,
+          "height": 24
+        }
+      },
+      "text_score": 1,
+      "iou": 0,
+      "type_match": true
+    },
+    {
+      "ghost": {
+        "id": 24,
+        "text": "Checkboxes:",
+        "type": "label",
+        "rect": {
+          "x": 220,
+          "y": 510,
+          "width": 98,
+          "height": 19
+        },
+        "confidence": 90,
+        "ocr_pass": ""
+      },
+      "judge": {
+        "text": "Checkboxes:",
+        "type": "label",
+        "rect": {
+          "x": 30,
+          "y": 455,
+          "width": 100,
+          "height": 18
+        }
+      },
+      "text_score": 1,
+      "iou": 0,
+      "type_match": true
+    },
+    {
+      "ghost": {
+        "id": 33,
+        "text": "Choice A",
+        "type": "label",
+        "rect": {
+          "x": 342,
+          "y": 554,
+          "width": 68,
+          "height": 19
+        },
+        "confidence": 90,
+        "ocr_pass": ""
+      },
+      "judge": {
+        "text": "Choice A",
+        "type": "radio",
+        "rect": {
+          "x": 30,
+          "y": 535,
+          "width": 100,
+          "height": 20
+        }
+      },
+      "text_score": 1,
+      "iou": 0,
+      "type_match": false
+    },
+    {
+      "ghost": {
+        "id": 35,
+        "text": "Choice B",
+        "type": "label",
+        "rect": {
+          "x": 442,
+          "y": 554,
+          "width": 68,
+          "height": 19
+        },
+        "confidence": 90,
+        "ocr_pass": ""
+      },
+      "judge": {
+        "text": "Choice B",
+        "type": "radio",
+        "rect": {
+          "x": 140,
+          "y": 535,
+          "width": 100,
+          "height": 20
+        }
+      },
+      "text_score": 1,
+      "iou": 0,
+      "type_match": false
+    },
+    {
+      "ghost": {
+        "id": 31,
+        "text": "Radio Buttons:",
+        "type": "label",
+        "rect": {
+          "x": 220,
+          "y": 554,
+          "width": 110,
+          "height": 19
+        },
+        "confidence": 90,
+        "ocr_pass": ""
+      },
+      "judge": {
+        "text": "Radio Buttons:",
+        "type": "label",
+        "rect": {
+          "x": 30,
+          "y": 510,
+          "width": 110,
+          "height": 18
+        }
+      },
+      "text_score": 1,
+      "iou": 0,
+      "type_match": true
+    },
+    {
+      "ghost": {
+        "id": 43,
+        "text": "50%",
+        "type": "value",
+        "rect": {
+          "x": 610,
+          "y": 774,
+          "width": 35,
+          "height": 19
+        },
+        "confidence": 90,
+        "ocr_pass": ""
+      },
+      "judge": {
+        "text": "50%",
+        "type": "value",
+        "rect": {
+          "x": 400,
+          "y": 710,
+          "width": 50,
+          "height": 25
+        }
+      },
+      "text_score": 1,
+      "iou": 0,
+      "type_match": true
+    },
+    {
+      "ghost": {
+        "id": 3,
+        "text": "Normal page",
+        "type": "link",
+        "rect": {
+          "x": 494,
+          "y": 109,
+          "width": 90,
+          "height": 19
+        },
+        "confidence": 90,
+        "ocr_pass": ""
+      },
+      "judge": {
+        "text": "Normal page",
+        "type": "link",
+        "rect": {
+          "x": 380,
+          "y": 80,
+          "width": 80,
+          "height": 16
+        }
+      },
+      "text_score": 1,
+      "iou": 0,
+      "type_match": true
+    },
+    {
+      "ghost": {
+        "id": 30,
+        "text": "Option 3",
+        "type": "label",
+        "rect": {
+          "x": 542,
+          "y": 510,
+          "width": 68,
+          "height": 19
+        },
+        "confidence": 90,
+        "ocr_pass": ""
+      },
+      "judge": {
+        "text": "Option 3",
+        "type": "checkbox",
+        "rect": {
+          "x": 250,
+          "y": 475,
+          "width": 100,
+          "height": 20
+        }
+      },
+      "text_score": 1,
+      "iou": 0,
+      "type_match": false
+    },
+    {
+      "ghost": {
+        "id": 39,
+        "text": "-- Select an option --",
+        "type": "dropdown",
+        "rect": {
+          "x": 220,
+          "y": 648,
+          "width": 230,
+          "height": 30
+        },
+        "confidence": 90,
+        "ocr_pass": ""
+      },
+      "judge": {
+        "text": "-- Select an option --",
+        "type": "dropdown",
+        "rect": {
+          "x": 30,
+          "y": 610,
+          "width": 200,
+          "height": 35
+        }
+      },
+      "text_score": 1,
+      "iou": 0,
+      "type_match": true
+    },
+    {
+      "ghost": {
+        "id": 28,
+        "text": "Option 2",
+        "type": "label",
+        "rect": {
+          "x": 442,
+          "y": 510,
+          "width": 68,
+          "height": 19
+        },
+        "confidence": 90,
+        "ocr_pass": ""
+      },
+      "judge": {
+        "text": "Option 2",
+        "type": "checkbox",
+        "rect": {
+          "x": 140,
+          "y": 475,
+          "width": 100,
+          "height": 20
+        }
+      },
+      "text_score": 1,
+      "iou": 0,
+      "type_match": false
+    },
+    {
+      "ghost": {
+        "id": 38,
+        "text": "Dropdown Test",
+        "type": "heading",
+        "rect": {
+          "x": 220,
+          "y": 608,
+          "width": 140,
+          "height": 24
+        },
+        "confidence": 90,
+        "ocr_pass": ""
+      },
+      "judge": {
+        "text": "Dropdown Test",
+        "type": "heading",
+        "rect": {
+          "x": 30,
+          "y": 575,
+          "width": 160,
+          "height": 24
+        }
+      },
+      "text_score": 1,
+      "iou": 0,
+      "type_match": true
+    },
+    {
+      "ghost": {
+        "id": 2,
+        "text": "Interactive GUI for testing MCP UI automation tools",
+        "type": "text",
+        "rect": {
+          "x": 218,
+          "y": 79,
+          "width": 435,
+          "height": 19
+        },
+        "confidence": 90,
+        "ocr_pass": ""
+      },
+      "judge": {
+        "text": "Interactive GUI for testing MCP UI automation tools",
+        "type": "text",
+        "rect": {
+          "x": 250,
+          "y": 55,
+          "width": 400,
+          "height": 20
+        }
+      },
+      "text_score": 1,
+      "iou": 0,
+      "type_match": true
+    },
+    {
+      "ghost": {
+        "id": 37,
+        "text": "Choice C",
+        "type": "label",
+        "rect": {
+          "x": 542,
+          "y": 554,
+          "width": 68,
+          "height": 19
+        },
+        "confidence": 90,
+        "ocr_pass": ""
+      },
+      "judge": {
+        "text": "Choice C",
+        "type": "radio",
+        "rect": {
+          "x": 250,
+          "y": 535,
+          "width": 100,
+          "height": 20
+        }
+      },
+      "text_score": 1,
+      "iou": 0,
+      "type_match": false
+    },
+    {
+      "ghost": {
+        "id": 10,
+        "text": "Last Action:",
+        "type": "label",
+        "rect": {
+          "x": 564,
+          "y": 146,
+          "width": 94,
+          "height": 19
+        },
+        "confidence": 90,
+        "ocr_pass": ""
+      },
+      "judge": {
+        "text": "Last Action: None",
+        "type": "text",
+        "rect": {
+          "x": 200,
+          "y": 140,
+          "width": 300,
+          "height": 20
+        }
+      },
+      "text_score": 0.8529411764705883,
+      "iou": 0,
+      "type_match": false
+    },
+    {
+      "ghost": {
+        "id": 66,
+        "text": "Test fixture initialized. Waiting for interaction...",
+        "type": "text",
+        "rect": {
+          "x": 366,
+          "y": 1466,
+          "width": 350,
+          "height": 19
+        },
+        "confidence": 90,
+        "ocr_pass": ""
+      },
+      "judge": {
+        "text": "Waiting for interaction...",
+        "type": "text",
+        "rect": {
+          "x": 50,
+          "y": 105,
+          "width": 200,
+          "height": 16
+        }
+      },
+      "text_score": 0.75,
+      "iou": 0,
+      "type_match": true
+    },
+    {
+      "ghost": {
+        "id": 63,
+        "text": "Test fixture ready for MCP automation",
+        "type": "text",
+        "rect": {
+          "x": 344,
+          "y": 1442,
+          "width": 280,
+          "height": 19
+        },
+        "confidence": 90,
+        "ocr_pass": ""
+      },
+      "judge": {
+        "text": "Ghost MCP Automation",
+        "type": "text",
+        "rect": {
+          "x": 50,
+          "y": 1020,
+          "width": 200,
+          "height": 20
+        }
+      },
+      "text_score": 0.5283018867924528,
+      "iou": 0,
+      "type_match": true
+    }
+  ],
+  "missed_by_ghost": [
+    {
+      "text": "OCR Text Recognition",
+      "type": "heading",
+      "rect": {
+        "x": 30,
+        "y": 900,
+        "width": 250,
+        "height": 24
+      }
+    },
+    {
+      "text": "OCR Test Area",
+      "type": "heading",
+      "rect": {
+        "x": 50,
+        "y": 960,
+        "width": 200,
+        "height": 28
+      }
+    },
+    {
+      "text": "Hello World",
+      "type": "text",
+      "rect": {
+        "x": 50,
+        "y": 995,
+        "width": 120,
+        "height": 20
+      }
+    },
+    {
+      "text": "Click Submit to Continue",
+      "type": "text",
+      "rect": {
+        "x": 50,
+        "y": 1045,
+        "width": 230,
+        "height": 20
+      }
+    },
+    {
+      "text": "File",
+      "type": "text",
+      "rect": {
+        "x": 50,
+        "y": 1075,
+        "width": 30,
+        "height": 18
+      }
+    },
+    {
+      "text": "Edit",
+      "type": "text",
+      "rect": {
+        "x": 100,
+        "y": 1075,
+        "width": 30,
+        "height": 18
+      }
+    },
+    {
+      "text": "View",
+      "type": "text",
+      "rect": {
+        "x": 150,
+        "y": 1075,
+        "width": 30,
+        "height": 18
+      }
+    },
+    {
+      "text": "Help",
+      "type": "text",
+      "rect": {
+        "x": 200,
+        "y": 1075,
+        "width": 30,
+        "height": 18
+      }
+    }
+  ],
+  "false_positives": [
+    {
+      "id": 4,
+      "text": "|",
+      "type": "text",
+      "rect": {
+        "x": 593,
+        "y": 109,
+        "width": 6,
+        "height": 19
+      },
+      "confidence": 90,
+      "ocr_pass": ""
+    },
+    {
+      "id": 6,
+      "text": "Mouse:",
+      "type": "label",
+      "rect": {
+        "x": 930,
+        "y": 79,
+        "width": 50,
+        "height": 19
+      },
+      "confidence": 90,
+      "ocr_pass": ""
+    },
+    {
+      "id": 7,
+      "text": "--,--",
+      "type": "value",
+      "rect": {
+        "x": 989,
+        "y": 79,
+        "width": 45,
+        "height": 19
+      },
+      "confidence": 90,
+      "ocr_pass": ""
+    },
+    {
+      "id": 8,
+      "text": "Red dot",
+      "type": "icon",
+      "rect": {
+        "x": 220,
+        "y": 150,
+        "width": 10,
+        "height": 10
+      },
+      "confidence": 90,
+      "ocr_pass": ""
+    },
+    {
+      "id": 9,
+      "text": "Ready",
+      "type": "text",
+      "rect": {
+        "x": 238,
+        "y": 146,
+        "width": 48,
+        "height": 19
+      },
+      "confidence": 90,
+      "ocr_pass": ""
+    },
+    {
+      "id": 11,
+      "text": "None",
+      "type": "value",
+      "rect": {
+        "x": 667,
+        "y": 146,
+        "width": 38,
+        "height": 19
+      },
+      "confidence": 90,
+      "ocr_pass": ""
+    },
+    {
+      "id": 19,
+      "text": "Type here or use MCP type_text...",
+      "type": "input",
+      "rect": {
+        "x": 320,
+        "y": 340,
+        "width": 600,
+        "height": 30
+      },
+      "confidence": 90,
+      "ocr_pass": ""
+    },
+    {
+      "id": 22,
+      "text": "Multi-line text area...",
+      "type": "input",
+      "rect": {
+        "x": 320,
+        "y": 384,
+        "width": 690,
+        "height": 60
+      },
+      "confidence": 90,
+      "ocr_pass": ""
+    },
+    {
+      "id": 25,
+      "text": "Checkbox",
+      "type": "checkbox",
+      "rect": {
+        "x": 320,
+        "y": 512,
+        "width": 16,
+        "height": 16
+      },
+      "confidence": 90,
+      "ocr_pass": ""
+    },
+    {
+      "id": 27,
+      "text": "Checkbox",
+      "type": "checkbox",
+      "rect": {
+        "x": 420,
+        "y": 512,
+        "width": 16,
+        "height": 16
+      },
+      "confidence": 90,
+      "ocr_pass": ""
+    },
+    {
+      "id": 29,
+      "text": "Checkbox",
+      "type": "checkbox",
+      "rect": {
+        "x": 520,
+        "y": 512,
+        "width": 16,
+        "height": 16
+      },
+      "confidence": 90,
+      "ocr_pass": ""
+    },
+    {
+      "id": 32,
+      "text": "Radio button",
+      "type": "radio",
+      "rect": {
+        "x": 320,
+        "y": 556,
+        "width": 16,
+        "height": 16
+      },
+      "confidence": 90,
+      "ocr_pass": ""
+    },
+    {
+      "id": 34,
+      "text": "Radio button",
+      "type": "radio",
+      "rect": {
+        "x": 420,
+        "y": 556,
+        "width": 16,
+        "height": 16
+      },
+      "confidence": 90,
+      "ocr_pass": ""
+    },
+    {
+      "id": 36,
+      "text": "Radio button",
+      "type": "radio",
+      "rect": {
+        "x": 520,
+        "y": 556,
+        "width": 16,
+        "height": 16
+      },
+      "confidence": 90,
+      "ocr_pass": ""
+    },
+    {
+      "id": 40,
+      "text": "Dropdown arrow",
+      "type": "icon",
+      "rect": {
+        "x": 428,
+        "y": 655,
+        "width": 12,
+        "height": 16
+      },
+      "confidence": 90,
+      "ocr_pass": ""
+    },
+    {
+      "id": 42,
+      "text": "Slider",
+      "type": "slider",
+      "rect": {
+        "x": 220,
+        "y": 748,
+        "width": 790,
+        "height": 10
+      },
+      "confidence": 90,
+      "ocr_pass": ""
+    },
+    {
+      "id": 44,
+      "text": "Color Picker Test",
+      "type": "heading",
+      "rect": {
+        "x": 220,
+        "y": 828,
+        "width": 160,
+        "height": 24
+      },
+      "confidence": 90,
+      "ocr_pass": ""
+    },
+    {
+      "id": 45,
+      "text": "Blue color swatch",
+      "type": "icon",
+      "rect": {
+        "x": 220,
+        "y": 868,
+        "width": 50,
+        "height": 50
+      },
+      "confidence": 90,
+      "ocr_pass": ""
+    },
+    {
+      "id": 46,
+      "text": "Red color swatch",
+      "type": "icon",
+      "rect": {
+        "x": 280,
+        "y": 878,
+        "width": 30,
+        "height": 30
+      },
+      "confidence": 90,
+      "ocr_pass": ""
+    },
+    {
+      "id": 47,
+      "text": "Green color swatch",
+      "type": "icon",
+      "rect": {
+        "x": 320,
+        "y": 878,
+        "width": 30,
+        "height": 30
+      },
+      "confidence": 90,
+      "ocr_pass": ""
+    },
+    {
+      "id": 48,
+      "text": "Yellow color swatch",
+      "type": "icon",
+      "rect": {
+        "x": 360,
+        "y": 878,
+        "width": 30,
+        "height": 30
+      },
+      "confidence": 90,
+      "ocr_pass": ""
+    },
+    {
+      "id": 49,
+      "text": "Magenta color swatch",
+      "type": "icon",
+      "rect": {
+        "x": 400,
+        "y": 878,
+        "width": 30,
+        "height": 30
+      },
+      "confidence": 90,
+      "ocr_pass": ""
+    },
+    {
+      "id": 50,
+      "text": "Cyan color swatch",
+      "type": "icon",
+      "rect": {
+        "x": 440,
+        "y": 878,
+        "width": 30,
+        "height": 30
+      },
+      "confidence": 90,
+      "ocr_pass": ""
+    },
+    {
+      "id": 51,
+      "text": "Click Counter",
+      "type": "heading",
+      "rect": {
+        "x": 220,
+        "y": 942,
+        "width": 130,
+        "height": 24
+      },
+      "confidence": 90,
+      "ocr_pass": ""
+    },
+    {
+      "id": 52,
+      "text": "0",
+      "type": "value",
+      "rect": {
+        "x": 610,
+        "y": 982,
+        "width": 14,
+        "height": 29
+      },
+      "confidence": 90,
+      "ocr_pass": ""
+    },
+    {
+      "id": 53,
+      "text": "Total clicks on this button",
+      "type": "text",
+      "rect": {
+        "x": 540,
+        "y": 1018,
+        "width": 194,
+        "height": 19
+      },
+      "confidence": 90,
+      "ocr_pass": ""
+    },
+    {
+      "id": 54,
+      "text": "CLICK ME!",
+      "type": "button",
+      "rect": {
+        "x": 220,
+        "y": 1058,
+        "width": 790,
+        "height": 40
+      },
+      "confidence": 90,
+      "ocr_pass": ""
+    },
+    {
+      "id": 55,
+      "text": "Hover Detection Zone",
+      "type": "heading",
+      "rect": {
+        "x": 220,
+        "y": 1128,
+        "width": 200,
+        "height": 24
+      },
+      "confidence": 90,
+      "ocr_pass": ""
+    },
+    {
+      "id": 56,
+      "text": "Move mouse over this area...",
+      "type": "text",
+      "rect": {
+        "x": 540,
+        "y": 1188,
+        "width": 194,
+        "height": 19
+      },
+      "confidence": 90,
+      "ocr_pass": ""
+    },
+    {
+      "id": 57,
+      "text": "Keyboard Test",
+      "type": "heading",
+      "rect": {
+        "x": 220,
+        "y": 1258,
+        "width": 140,
+        "height": 24
+      },
+      "confidence": 90,
+      "ocr_pass": ""
+    },
+    {
+      "id": 58,
+      "text": "Press any key to test keyboard input:",
+      "type": "text",
+      "rect": {
+        "x": 220,
+        "y": 1298,
+        "width": 280,
+        "height": 19
+      },
+      "confidence": 90,
+      "ocr_pass": ""
+    },
+    {
+      "id": 59,
+      "text": "Focus here and press keys...",
+      "type": "input",
+      "rect": {
+        "x": 220,
+        "y": 1332,
+        "width": 790,
+        "height": 30
+      },
+      "confidence": 90,
+      "ocr_pass": ""
+    },
+    {
+      "id": 60,
+      "text": "Event Log",
+      "type": "heading",
+      "rect": {
+        "x": 220,
+        "y": 1402,
+        "width": 100,
+        "height": 24
+      },
+      "confidence": 90,
+      "ocr_pass": ""
+    },
+    {
+      "id": 61,
+      "text": "23:43:34",
+      "type": "text",
+      "rect": {
+        "x": 220,
+        "y": 1442,
+        "width": 68,
+        "height": 19
+      },
+      "confidence": 90,
+      "ocr_pass": ""
+    },
+    {
+      "id": 62,
+      "text": "INIT",
+      "type": "link",
+      "rect": {
+        "x": 298,
+        "y": 1442,
+        "width": 36,
+        "height": 19
+      },
+      "confidence": 90,
+      "ocr_pass": ""
+    },
+    {
+      "id": 64,
+      "text": "--:--:--",
+      "type": "text",
+      "rect": {
+        "x": 220,
+        "y": 1466,
+        "width": 68,
+        "height": 19
+      },
+      "confidence": 90,
+      "ocr_pass": ""
+    },
+    {
+      "id": 65,
+      "text": "System",
+      "type": "link",
+      "rect": {
+        "x": 298,
+        "y": 1466,
+        "width": 58,
+        "height": 19
+      },
+      "confidence": 90,
+      "ocr_pass": ""
+    },
+    {
+      "id": 67,
+      "text": "CLEAR LOG",
+      "type": "button",
+      "rect": {
+        "x": 220,
+        "y": 1506,
+        "width": 120,
+        "height": 30
+      },
+      "confidence": 90,
+      "ocr_pass": ""
+    }
+  ],
+  "type_mismatches": [
+    {
+      "text": "Option 1",
+      "ghost_type": "label",
+      "judge_type": "checkbox"
+    },
+    {
+      "text": "Choice A",
+      "ghost_type": "label",
+      "judge_type": "radio"
+    },
+    {
+      "text": "Choice B",
+      "ghost_type": "label",
+      "judge_type": "radio"
+    },
+    {
+      "text": "Option 3",
+      "ghost_type": "label",
+      "judge_type": "checkbox"
+    },
+    {
+      "text": "Option 2",
+      "ghost_type": "label",
+      "judge_type": "checkbox"
+    },
+    {
+      "text": "Choice C",
+      "ghost_type": "label",
+      "judge_type": "radio"
+    },
+    {
+      "text": "Last Action:",
+      "ghost_type": "label",
+      "judge_type": "text"
+    }
+  ]
+}

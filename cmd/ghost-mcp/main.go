@@ -11,6 +11,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"image"
 	"image/jpeg"
@@ -797,6 +798,7 @@ func handleTakeScreenshot(ctx context.Context, request mcp.CallToolRequest) (*mc
 	logging.Info("Success: Captured screenshot (%d bytes)", buf.Len())
 
 	// Save to disk only when explicitly requested for debugging.
+	var savedPath string
 	if os.Getenv("GHOST_MCP_KEEP_SCREENSHOTS") == "1" {
 		screenshotDir := os.Getenv("GHOST_MCP_SCREENSHOT_DIR")
 		if screenshotDir == "" {
@@ -810,12 +812,14 @@ func handleTakeScreenshot(ctx context.Context, request mcp.CallToolRequest) (*mc
 			fpath := filepath.Join(screenshotDir, fmt.Sprintf("ghost-mcp-screenshot-%d.%s", time.Now().UnixNano(), ext))
 			if writeErr := os.WriteFile(fpath, buf.Bytes(), 0644); writeErr == nil {
 				logging.Info("Screenshot kept at: %s", fpath)
+				savedPath = fpath
 			}
 		}
 	}
 
+	pathJSON, _ := json.Marshal(savedPath)
 	return mcp.NewToolResultImage(
-		fmt.Sprintf(`{"success": true, "width": %d, "height": %d, "format": %q, "bytes": %d}`, width, height, mimeType, buf.Len()),
+		fmt.Sprintf(`{"success": true, "width": %d, "height": %d, "format": %q, "bytes": %d, "path": %s}`, width, height, mimeType, buf.Len(), pathJSON),
 		base64.StdEncoding.EncodeToString(buf.Bytes()),
 		mimeType,
 	), nil

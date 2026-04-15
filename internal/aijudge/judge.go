@@ -90,9 +90,10 @@ func (j *Judge) AnalyzeScreenshot(ctx context.Context, imageBytes []byte, mimeTy
 	}
 
 	config := &genai.GenerateContentConfig{
-		Temperature:     genai.Ptr(float32(0.1)), // Low temperature for deterministic output
-		TopP:            genai.Ptr(float32(0.8)),
-		MaxOutputTokens: 8192, // GUI can have many elements
+		Temperature:      genai.Ptr(float32(0.0)), // Maximally deterministic output
+		TopP:             genai.Ptr(float32(0.8)),
+		MaxOutputTokens:  32768, // GUI screenshots can yield 60+ elements; 8192 truncated mid-array
+		ResponseMIMEType: "application/json",
 	}
 
 	content := []*genai.Content{{Parts: parts}}
@@ -190,9 +191,24 @@ func parseJudgeResponse(text string) ([]JudgedElement, error) {
 
 	// Find the JSON array boundaries
 	startIdx := strings.Index(text, "[")
-	endIdx := strings.LastIndex(text, "]")
-	if startIdx == -1 || endIdx == -1 || endIdx <= startIdx {
+	if startIdx == -1 {
 		return nil, fmt.Errorf("no JSON array found in response")
+	}
+	endIdx := strings.LastIndex(text, "]")
+
+	// If the response was truncated mid-array (no closing ]), try to recover
+	// the complete elements parsed so far by trimming back to the last complete
+	// object and synthesizing a closing bracket.
+	if endIdx == -1 || endIdx <= startIdx {
+		recovered, ok := recoverTruncatedArray(text[startIdx:])
+		if !ok {
+			return nil, fmt.Errorf("response appears truncated and could not be recovered (likely hit MaxOutputTokens)")
+		}
+		var elements []JudgedElement
+		if err := json.Unmarshal([]byte(recovered), &elements); err != nil {
+			return nil, fmt.Errorf("JSON parse error after recovery: %w", err)
+		}
+		return elements, nil
 	}
 
 	jsonStr := text[startIdx : endIdx+1]
@@ -203,6 +219,50 @@ func parseJudgeResponse(text string) ([]JudgedElement, error) {
 	}
 
 	return elements, nil
+}
+
+// recoverTruncatedArray attempts to salvage a JSON array that was cut off
+// mid-element. It walks the input tracking brace depth and trims back to the
+// last point where depth returned to 1 (i.e. between top-level objects), then
+// appends a closing bracket.
+func recoverTruncatedArray(s string) (string, bool) {
+	depth := 0
+	inStr := false
+	escaped := false
+	lastGoodEnd := -1 // index just after a top-level object's closing brace
+	for i, r := range s {
+		if escaped {
+			escaped = false
+			continue
+		}
+		if inStr {
+			if r == '\\' {
+				escaped = true
+			} else if r == '"' {
+				inStr = false
+			}
+			continue
+		}
+		switch r {
+		case '"':
+			inStr = true
+		case '[':
+			depth++
+		case '{':
+			depth++
+		case ']':
+			depth--
+		case '}':
+			depth--
+			if depth == 1 {
+				lastGoodEnd = i + 1
+			}
+		}
+	}
+	if lastGoodEnd <= 0 {
+		return "", false
+	}
+	return s[:lastGoodEnd] + "]", true
 }
 
 // truncate shortens a string with an ellipsis if it exceeds maxLen.

@@ -1,0 +1,1097 @@
+{
+  "timestamp": "2026-04-15T19:52:30.754978+02:00",
+  "fixture_name": "live_normal_fixture",
+  "ghost_count": 51,
+  "judge_count": 26,
+  "matched_count": 16,
+  "precision": 0.3137254901960784,
+  "recall": 0.6153846153846154,
+  "f1": 0.4155844155844156,
+  "type_accuracy": 0.0625,
+  "matches": [
+    {
+      "ghost": {
+        "id": 20,
+        "text": "0",
+        "type": "value",
+        "rect": {
+          "x": 848,
+          "y": 270,
+          "width": 13,
+          "height": 19
+        },
+        "confidence": 78.77191925048828,
+        "ocr_pass": "normal"
+      },
+      "judge": {
+        "text": "0",
+        "type": "value",
+        "rect": {
+          "x": 700,
+          "y": 250,
+          "width": 10,
+          "height": 20
+        }
+      },
+      "text_score": 1,
+      "iou": 0,
+      "type_match": true
+    },
+    {
+      "ghost": {
+        "id": 8,
+        "text": "Conversation",
+        "type": "button",
+        "rect": {
+          "x": 629,
+          "y": 266,
+          "width": 183,
+          "height": 23
+        },
+        "confidence": 95.733642578125,
+        "ocr_pass": "normal"
+      },
+      "judge": {
+        "text": "Conversation",
+        "type": "text",
+        "rect": {
+          "x": 600,
+          "y": 250,
+          "width": 90,
+          "height": 20
+        }
+      },
+      "text_score": 1,
+      "iou": 0.042324371205550736,
+      "type_match": false
+    },
+    {
+      "ghost": {
+        "id": 14,
+        "text": "Plsberg",
+        "type": "heading",
+        "rect": {
+          "x": 703,
+          "y": 391,
+          "width": 104,
+          "height": 31
+        },
+        "confidence": 85.81011962890625,
+        "ocr_pass": "normal"
+      },
+      "judge": {
+        "text": "Plsberg",
+        "type": "link",
+        "rect": {
+          "x": 720,
+          "y": 520,
+          "width": 70,
+          "height": 20
+        }
+      },
+      "text_score": 1,
+      "iou": 0,
+      "type_match": false
+    },
+    {
+      "ghost": {
+        "id": 4,
+        "text": "added",
+        "type": "button",
+        "rect": {
+          "x": 873,
+          "y": 757,
+          "width": 87,
+          "height": 24
+        },
+        "confidence": 96.36483001708984,
+        "ocr_pass": "normal"
+      },
+      "judge": {
+        "text": "added",
+        "type": "text",
+        "rect": {
+          "x": 790,
+          "y": 520,
+          "width": 50,
+          "height": 20
+        }
+      },
+      "text_score": 1,
+      "iou": 0,
+      "type_match": false
+    },
+    {
+      "ghost": {
+        "id": 51,
+        "text": "feat(core)",
+        "type": "button",
+        "rect": {
+          "x": 813,
+          "y": 878,
+          "width": 146,
+          "height": 25
+        },
+        "confidence": 35.51970672607422,
+        "ocr_pass": "normal"
+      },
+      "judge": {
+        "text": "feat(core)",
+        "type": "link",
+        "rect": {
+          "x": 810,
+          "y": 600,
+          "width": 80,
+          "height": 20
+        }
+      },
+      "text_score": 1,
+      "iou": 0,
+      "type_match": false
+    },
+    {
+      "ghost": {
+        "id": 30,
+        "text": "github.com/Plsberg/blindbean/pull/6",
+        "type": "heading",
+        "rect": {
+          "x": 355,
+          "y": 130,
+          "width": 503,
+          "height": 31
+        },
+        "confidence": 64.57256317138672,
+        "ocr_pass": "normal"
+      },
+      "judge": {
+        "text": "github.com/Plsberg/blindbean/pull/6",
+        "type": "input",
+        "rect": {
+          "x": 150,
+          "y": 60,
+          "width": 350,
+          "height": 20
+        }
+      },
+      "text_score": 1,
+      "iou": 0,
+      "type_match": false
+    },
+    {
+      "ghost": {
+        "id": 10,
+        "text": "docs:",
+        "type": "label",
+        "rect": {
+          "x": 813,
+          "y": 974,
+          "width": 67,
+          "height": 51
+        },
+        "confidence": 94.49898529052734,
+        "ocr_pass": "color"
+      },
+      "judge": {
+        "text": "docs:",
+        "type": "link",
+        "rect": {
+          "x": 810,
+          "y": 670,
+          "width": 50,
+          "height": 20
+        }
+      },
+      "text_score": 1,
+      "iou": 0,
+      "type_match": false
+    },
+    {
+      "ghost": {
+        "id": 28,
+        "text": "Plsberg",
+        "type": "heading",
+        "rect": {
+          "x": 757,
+          "y": 757,
+          "width": 104,
+          "height": 31
+        },
+        "confidence": 65.09703826904297,
+        "ocr_pass": "normal"
+      },
+      "judge": {
+        "text": "Plsberg",
+        "type": "link",
+        "rect": {
+          "x": 620,
+          "y": 345,
+          "width": 70,
+          "height": 20
+        }
+      },
+      "text_score": 1,
+      "iou": 0,
+      "type_match": false
+    },
+    {
+      "ghost": {
+        "id": 5,
+        "text": "description",
+        "type": "heading",
+        "rect": {
+          "x": 751,
+          "y": 494,
+          "width": 146,
+          "height": 31
+        },
+        "confidence": 96.35657501220703,
+        "ocr_pass": "normal"
+      },
+      "judge": {
+        "text": "No description prov",
+        "type": "text",
+        "rect": {
+          "x": 620,
+          "y": 380,
+          "width": 150,
+          "height": 20
+        }
+      },
+      "text_score": 0.7894736842105263,
+      "iou": 0,
+      "type_match": false
+    },
+    {
+      "ghost": {
+        "id": 17,
+        "text": "comment:",
+        "type": "label",
+        "rect": {
+          "x": 820,
+          "y": 394,
+          "width": 140,
+          "height": 21
+        },
+        "confidence": 83.02342987060547,
+        "ocr_pass": "normal"
+      },
+      "judge": {
+        "text": "commented",
+        "type": "text",
+        "rect": {
+          "x": 700,
+          "y": 345,
+          "width": 70,
+          "height": 20
+        }
+      },
+      "text_score": 0.7692307692307693,
+      "iou": 0,
+      "type_match": false
+    },
+    {
+      "ghost": {
+        "id": 22,
+        "text": "feat(core):",
+        "type": "label",
+        "rect": {
+          "x": 699,
+          "y": 34,
+          "width": 117,
+          "height": 24
+        },
+        "confidence": 72.21067810058594,
+        "ocr_pass": "normal"
+      },
+      "judge": {
+        "text": "feat(core): implement",
+        "type": "text",
+        "rect": {
+          "x": 680,
+          "y": 15,
+          "width": 150,
+          "height": 20
+        }
+      },
+      "text_score": 0.7619047619047619,
+      "iou": 0.02055877701634159,
+      "type_match": false
+    },
+    {
+      "ghost": {
+        "id": 13,
+        "text": "Ghost-MCP",
+        "type": "button",
+        "rect": {
+          "x": 163,
+          "y": 34,
+          "width": 137,
+          "height": 20
+        },
+        "confidence": 89.50769805908203,
+        "ocr_pass": "normal"
+      },
+      "judge": {
+        "text": "Ghost-MCP - Google Docs",
+        "type": "text",
+        "rect": {
+          "x": 90,
+          "y": 15,
+          "width": 180,
+          "height": 20
+        }
+      },
+      "text_score": 0.6956521739130435,
+      "iou": 0.017166693406064495,
+      "type_match": false
+    },
+    {
+      "ghost": {
+        "id": 43,
+        "text": "lo",
+        "type": "text",
+        "rect": {
+          "x": 754,
+          "y": 993,
+          "width": 16,
+          "height": 21
+        },
+        "confidence": 42.373695373535156,
+        "ocr_pass": "bright_text"
+      },
+      "judge": {
+        "text": "Close tab icon",
+        "type": "icon",
+        "rect": {
+          "x": 560,
+          "y": 15,
+          "width": 15,
+          "height": 15
+        }
+      },
+      "text_score": 0.5714285714285714,
+      "iou": 0,
+      "type_match": false
+    },
+    {
+      "ghost": {
+        "id": 18,
+        "text": "v",
+        "type": "text",
+        "rect": {
+          "x": 36,
+          "y": 39,
+          "width": 20,
+          "height": 12
+        },
+        "confidence": 82.35755920410156,
+        "ocr_pass": "normal"
+      },
+      "judge": {
+        "text": "User avatar",
+        "type": "icon",
+        "rect": {
+          "x": 780,
+          "y": 670,
+          "width": 20,
+          "height": 20
+        }
+      },
+      "text_score": 0.5454545454545454,
+      "iou": 0,
+      "type_match": false
+    },
+    {
+      "ghost": {
+        "id": 19,
+        "text": "C",
+        "type": "text",
+        "rect": {
+          "x": 198,
+          "y": 128,
+          "width": 27,
+          "height": 27
+        },
+        "confidence": 82.22142028808594,
+        "ocr_pass": "normal"
+      },
+      "judge": {
+        "text": "GitHub icon",
+        "type": "icon",
+        "rect": {
+          "x": 120,
+          "y": 60,
+          "width": 20,
+          "height": 20
+        }
+      },
+      "text_score": 0.5454545454545454,
+      "iou": 0,
+      "type_match": false
+    },
+    {
+      "ghost": {
+        "id": 42,
+        "text": "lo",
+        "type": "text",
+        "rect": {
+          "x": 754,
+          "y": 876,
+          "width": 16,
+          "height": 21
+        },
+        "confidence": 42.373695373535156,
+        "ocr_pass": "bright_text"
+      },
+      "judge": {
+        "text": "Upload/pull request icon",
+        "type": "icon",
+        "rect": {
+          "x": 690,
+          "y": 520,
+          "width": 20,
+          "height": 20
+        }
+      },
+      "text_score": 0.5416666666666666,
+      "iou": 0,
+      "type_match": false
+    }
+  ],
+  "missed_by_ghost": [
+    {
+      "text": "Down arrow icon",
+      "type": "icon",
+      "rect": {
+        "x": 15,
+        "y": 15,
+        "width": 20,
+        "height": 20
+      }
+    },
+    {
+      "text": "Hamburger menu icon",
+      "type": "icon",
+      "rect": {
+        "x": 60,
+        "y": 15,
+        "width": 20,
+        "height": 20
+      }
+    },
+    {
+      "text": "GitHub Octocat icon",
+      "type": "icon",
+      "rect": {
+        "x": 650,
+        "y": 15,
+        "width": 20,
+        "height": 20
+      }
+    },
+    {
+      "text": "Back arrow icon",
+      "type": "icon",
+      "rect": {
+        "x": 15,
+        "y": 60,
+        "width": 20,
+        "height": 20
+      }
+    },
+    {
+      "text": "Forward arrow icon",
+      "type": "icon",
+      "rect": {
+        "x": 50,
+        "y": 60,
+        "width": 20,
+        "height": 20
+      }
+    },
+    {
+      "text": "Refresh icon",
+      "type": "icon",
+      "rect": {
+        "x": 85,
+        "y": 60,
+        "width": 20,
+        "height": 20
+      }
+    },
+    {
+      "text": "Chat bubble icon",
+      "type": "icon",
+      "rect": {
+        "x": 570,
+        "y": 250,
+        "width": 20,
+        "height": 20
+      }
+    },
+    {
+      "text": "User avatar",
+      "type": "icon",
+      "rect": {
+        "x": 560,
+        "y": 340,
+        "width": 40,
+        "height": 40
+      }
+    },
+    {
+      "text": "Smiley face icon",
+      "type": "icon",
+      "rect": {
+        "x": 620,
+        "y": 420,
+        "width": 20,
+        "height": 20
+      }
+    },
+    {
+      "text": "User avatar",
+      "type": "icon",
+      "rect": {
+        "x": 780,
+        "y": 600,
+        "width": 20,
+        "height": 20
+      }
+    }
+  ],
+  "false_positives": [
+    {
+      "id": 1,
+      "text": "",
+      "type": "unknown",
+      "rect": {
+        "x": 114,
+        "y": 126,
+        "width": 36,
+        "height": 30
+      },
+      "confidence": 100,
+      "ocr_pass": "normal"
+    },
+    {
+      "id": 2,
+      "text": "Docs",
+      "type": "button",
+      "rect": {
+        "x": 421,
+        "y": 35,
+        "width": 55,
+        "height": 19
+      },
+      "confidence": 96.42012023925781,
+      "ocr_pass": "normal"
+    },
+    {
+      "id": 3,
+      "text": "=",
+      "type": "heading",
+      "rect": {
+        "x": 108,
+        "y": 27,
+        "width": 36,
+        "height": 36
+      },
+      "confidence": 96.3993148803711,
+      "ocr_pass": "normal"
+    },
+    {
+      "id": 6,
+      "text": "Google",
+      "type": "button",
+      "rect": {
+        "x": 330,
+        "y": 34,
+        "width": 77,
+        "height": 26
+      },
+      "confidence": 96.26868438720703,
+      "ocr_pass": "bright_text"
+    },
+    {
+      "id": 7,
+      "text": "implement",
+      "type": "heading",
+      "rect": {
+        "x": 829,
+        "y": 25,
+        "width": 125,
+        "height": 37
+      },
+      "confidence": 95.74598693847656,
+      "ocr_pass": "bright_text"
+    },
+    {
+      "id": 9,
+      "text": "No",
+      "type": "button",
+      "rect": {
+        "x": 701,
+        "y": 495,
+        "width": 39,
+        "height": 23
+      },
+      "confidence": 94.64059448242188,
+      "ocr_pass": "normal"
+    },
+    {
+      "id": 11,
+      "text": "adde",
+      "type": "button",
+      "rect": {
+        "x": 904,
+        "y": 996,
+        "width": 56,
+        "height": 19
+      },
+      "confidence": 92.39138793945312,
+      "ocr_pass": "normal"
+    },
+    {
+      "id": 12,
+      "text": "-",
+      "type": "value",
+      "rect": {
+        "x": 310,
+        "y": 46,
+        "width": 7,
+        "height": 1
+      },
+      "confidence": 92.15499114990234,
+      "ocr_pass": "normal"
+    },
+    {
+      "id": 15,
+      "text": "\u003c",
+      "type": "text",
+      "rect": {
+        "x": 36,
+        "y": 128,
+        "width": 26,
+        "height": 27
+      },
+      "confidence": 85.5105209350586,
+      "ocr_pass": "bright_text"
+    },
+    {
+      "id": 16,
+      "text": "©",
+      "type": "heading",
+      "rect": {
+        "x": 711,
+        "y": 576,
+        "width": 36,
+        "height": 36
+      },
+      "confidence": 83.66190338134766,
+      "ocr_pass": "normal"
+    },
+    {
+      "id": 21,
+      "text": "X",
+      "type": "text",
+      "rect": {
+        "x": 567,
+        "y": 36,
+        "width": 18,
+        "height": 18
+      },
+      "confidence": 77.02440643310547,
+      "ocr_pass": "normal"
+    },
+    {
+      "id": 23,
+      "text": "E+",
+      "type": "heading",
+      "rect": {
+        "x": 686,
+        "y": 751,
+        "width": 31,
+        "height": 36
+      },
+      "confidence": 68.9583740234375,
+      "ocr_pass": "color"
+    },
+    {
+      "id": 24,
+      "text": "LJ)",
+      "type": "heading",
+      "rect": {
+        "x": 574,
+        "y": 264,
+        "width": 36,
+        "height": 32
+      },
+      "confidence": 68.57193756103516,
+      "ocr_pass": "color"
+    },
+    {
+      "id": 25,
+      "text": "-O-",
+      "type": "text",
+      "rect": {
+        "x": 680,
+        "y": 875,
+        "width": 38,
+        "height": 28
+      },
+      "confidence": 66.34078979492188,
+      "ocr_pass": "normal"
+    },
+    {
+      "id": 26,
+      "text": "-O-",
+      "type": "text",
+      "rect": {
+        "x": 680,
+        "y": 992,
+        "width": 38,
+        "height": 28
+      },
+      "confidence": 65.1519775390625,
+      "ocr_pass": "normal"
+    },
+    {
+      "id": 27,
+      "text": "L+",
+      "type": "heading",
+      "rect": {
+        "x": 687,
+        "y": 751,
+        "width": 30,
+        "height": 36
+      },
+      "confidence": 65.09703826904297,
+      "ocr_pass": "normal"
+    },
+    {
+      "id": 29,
+      "text": "25",
+      "type": "value",
+      "rect": {
+        "x": 294,
+        "y": 129,
+        "width": 28,
+        "height": 26
+      },
+      "confidence": 64.57256317138672,
+      "ocr_pass": "normal"
+    },
+    {
+      "id": 31,
+      "text": "\u0026)",
+      "type": "heading",
+      "rect": {
+        "x": 752,
+        "y": 857,
+        "width": 46,
+        "height": 51
+      },
+      "confidence": 63.95329666137695,
+      "ocr_pass": "color"
+    },
+    {
+      "id": 32,
+      "text": "|",
+      "type": "text",
+      "rect": {
+        "x": 797,
+        "y": 876,
+        "width": 2,
+        "height": 15
+      },
+      "confidence": 63.678836822509766,
+      "ocr_pass": "bright_text"
+    },
+    {
+      "id": 33,
+      "text": "|",
+      "type": "text",
+      "rect": {
+        "x": 797,
+        "y": 993,
+        "width": 2,
+        "height": 15
+      },
+      "confidence": 63.678836822509766,
+      "ocr_pass": "bright_text"
+    },
+    {
+      "id": 34,
+      "text": "github.com",
+      "type": "heading",
+      "rect": {
+        "x": 355,
+        "y": 130,
+        "width": 151,
+        "height": 31
+      },
+      "confidence": 56.442054748535156,
+      "ocr_pass": "bright_text"
+    },
+    {
+      "id": 35,
+      "text": "\u0026)",
+      "type": "heading",
+      "rect": {
+        "x": 752,
+        "y": 974,
+        "width": 46,
+        "height": 51
+      },
+      "confidence": 52.242984771728516,
+      "ocr_pass": "color"
+    },
+    {
+      "id": 36,
+      "text": "Ly",
+      "type": "heading",
+      "rect": {
+        "x": 536,
+        "y": 386,
+        "width": 32,
+        "height": 47
+      },
+      "confidence": 51.78926086425781,
+      "ocr_pass": "bright_text"
+    },
+    {
+      "id": 37,
+      "text": "«",
+      "type": "text",
+      "rect": {
+        "x": 36,
+        "y": 128,
+        "width": 27,
+        "height": 27
+      },
+      "confidence": 49.04294967651367,
+      "ocr_pass": "normal"
+    },
+    {
+      "id": 38,
+      "text": "C)",
+      "type": "heading",
+      "rect": {
+        "x": 643,
+        "y": 27,
+        "width": 36,
+        "height": 35
+      },
+      "confidence": 48.5628547668457,
+      "ocr_pass": "bright_text"
+    },
+    {
+      "id": 39,
+      "text": "[|",
+      "type": "heading",
+      "rect": {
+        "x": 108,
+        "y": 27,
+        "width": 36,
+        "height": 36
+      },
+      "confidence": 46.805397033691406,
+      "ocr_pass": "dark_text"
+    },
+    {
+      "id": 40,
+      "text": "pros",
+      "type": "button",
+      "rect": {
+        "x": 907,
+        "y": 502,
+        "width": 53,
+        "height": 23
+      },
+      "confidence": 46.284236907958984,
+      "ocr_pass": "normal"
+    },
+    {
+      "id": 41,
+      "text": "—",
+      "type": "text",
+      "rect": {
+        "x": 553,
+        "y": 435,
+        "width": 56,
+        "height": 13
+      },
+      "confidence": 44.41583251953125,
+      "ocr_pass": "bright_text"
+    },
+    {
+      "id": 44,
+      "text": "Vv",
+      "type": "heading",
+      "rect": {
+        "x": 35,
+        "y": 35,
+        "width": 19,
+        "height": 30
+      },
+      "confidence": 41.442874908447266,
+      "ocr_pass": "bright_text"
+    },
+    {
+      "id": 45,
+      "text": ":",
+      "type": "label",
+      "rect": {
+        "x": 954,
+        "y": 277,
+        "width": 4,
+        "height": 5
+      },
+      "confidence": 40.523040771484375,
+      "ocr_pass": "color"
+    },
+    {
+      "id": 46,
+      "text": "\u0026",
+      "type": "heading",
+      "rect": {
+        "x": 536,
+        "y": 358,
+        "width": 90,
+        "height": 90
+      },
+      "confidence": 40.47636032104492,
+      "ocr_pass": "normal"
+    },
+    {
+      "id": 47,
+      "text": "“i,",
+      "type": "heading",
+      "rect": {
+        "x": 754,
+        "y": 861,
+        "width": 45,
+        "height": 45
+      },
+      "confidence": 40.23338317871094,
+      "ocr_pass": "normal"
+    },
+    {
+      "id": 48,
+      "text": "“i,",
+      "type": "heading",
+      "rect": {
+        "x": 754,
+        "y": 978,
+        "width": 45,
+        "height": 45
+      },
+      "confidence": 40.23338317871094,
+      "ocr_pass": "normal"
+    },
+    {
+      "id": 49,
+      "text": "bg",
+      "type": "heading",
+      "rect": {
+        "x": 536,
+        "y": 374,
+        "width": 88,
+        "height": 74
+      },
+      "confidence": 39.325599670410156,
+      "ocr_pass": "dark_text"
+    },
+    {
+      "id": 50,
+      "text": "2%",
+      "type": "value",
+      "rect": {
+        "x": 294,
+        "y": 129,
+        "width": 28,
+        "height": 26
+      },
+      "confidence": 38.35810852050781,
+      "ocr_pass": "bright_text"
+    }
+  ],
+  "type_mismatches": [
+    {
+      "text": "Conversation",
+      "ghost_type": "button",
+      "judge_type": "text"
+    },
+    {
+      "text": "Plsberg",
+      "ghost_type": "heading",
+      "judge_type": "link"
+    },
+    {
+      "text": "added",
+      "ghost_type": "button",
+      "judge_type": "text"
+    },
+    {
+      "text": "feat(core)",
+      "ghost_type": "button",
+      "judge_type": "link"
+    },
+    {
+      "text": "github.com/Plsberg/blindbean/pull/6",
+      "ghost_type": "heading",
+      "judge_type": "input"
+    },
+    {
+      "text": "docs:",
+      "ghost_type": "label",
+      "judge_type": "link"
+    },
+    {
+      "text": "Plsberg",
+      "ghost_type": "heading",
+      "judge_type": "link"
+    },
+    {
+      "text": "description",
+      "ghost_type": "heading",
+      "judge_type": "text"
+    },
+    {
+      "text": "comment:",
+      "ghost_type": "label",
+      "judge_type": "text"
+    },
+    {
+      "text": "feat(core):",
+      "ghost_type": "label",
+      "judge_type": "text"
+    },
+    {
+      "text": "Ghost-MCP",
+      "ghost_type": "button",
+      "judge_type": "text"
+    },
+    {
+      "text": "lo",
+      "ghost_type": "text",
+      "judge_type": "icon"
+    },
+    {
+      "text": "v",
+      "ghost_type": "text",
+      "judge_type": "icon"
+    },
+    {
+      "text": "C",
+      "ghost_type": "text",
+      "judge_type": "icon"
+    },
+    {
+      "text": "lo",
+      "ghost_type": "text",
+      "judge_type": "icon"
+    }
+  ]
+}

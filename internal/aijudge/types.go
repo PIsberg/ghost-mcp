@@ -6,7 +6,6 @@ package aijudge
 
 import (
 	"fmt"
-	"math"
 	"sort"
 	"strings"
 	"time"
@@ -191,6 +190,7 @@ func CompareResults(fixtureName string, ghostElems []GhostElement, judgeElems []
 		judgeIdx  int
 		textScore float64
 		iou       float64
+		typeMatch bool
 	}
 
 	var candidates []candidate
@@ -200,15 +200,26 @@ func CompareResults(fixtureName string, ghostElems []GhostElement, judgeElems []
 			iou := computeIoU(g.Rect, jj.Rect)
 
 			if ts >= cfg.MinTextScore && iou >= cfg.MinIoU {
-				candidates = append(candidates, candidate{i, j, ts, iou})
+				candidates = append(candidates, candidate{
+					ghostIdx:  i,
+					judgeIdx:  j,
+					textScore: ts,
+					iou:       iou,
+					typeMatch: normalizeType(g.Type) == normalizeType(jj.Type),
+				})
 			}
 		}
 	}
 
-	// Greedy matching: sort by text score desc, then IoU desc
+	// Greedy matching: sort by text score desc, then prefer type-matching
+	// candidates (so when two judge elements share the same text, the one whose
+	// type also matches wins), then IoU desc.
 	sort.Slice(candidates, func(a, b int) bool {
 		if candidates[a].textScore != candidates[b].textScore {
 			return candidates[a].textScore > candidates[b].textScore
+		}
+		if candidates[a].typeMatch != candidates[b].typeMatch {
+			return candidates[a].typeMatch
 		}
 		return candidates[a].iou > candidates[b].iou
 	})
@@ -417,9 +428,4 @@ func min(a, b int) int {
 // NormalizeTypeExported is the exported version of normalizeType for use in tests.
 func NormalizeTypeExported(t string) string {
 	return normalizeType(t)
-}
-
-// round2 rounds a float to 2 decimal places.
-func round2(f float64) float64 {
-	return math.Round(f*100) / 100
 }
