@@ -107,7 +107,7 @@ func launchControlledBrowser(t *testing.T, url string) func() {
 func waitForBrowserReady(ctx context.Context, client *mcpclient.Client, t *testing.T) {
 	t.Helper()
 	const (
-		maxWait    = 10 * time.Second
+		maxWait      = 10 * time.Second
 		pollInterval = 500 * time.Millisecond
 	)
 
