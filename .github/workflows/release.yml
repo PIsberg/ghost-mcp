@@ -253,7 +253,7 @@ jobs:
           echo "All required binaries found"
 
       - name: Install git-cliff
-        uses: taiki-e/install-action@85b24a67ef0c632dfefad70b9d5ce8fddb040754 # v2.75.10
+        uses: taiki-e/install-action@7ea35f098a7369cd23488403f58be9c491a6c55f # v2.77.0
         with:
           tool: git-cliff
 
