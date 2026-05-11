@@ -6,7 +6,7 @@ require (
 	github.com/go-vgo/robotgo v1.0.2
 	github.com/mark3labs/mcp-go v0.47.1
 	github.com/otiai10/gosseract/v2 v2.4.1
-	golang.org/x/image v0.39.0
+	golang.org/x/image v0.40.0
 	google.golang.org/genai v1.54.0
 )
 
@@ -47,7 +47,7 @@ require (
 	golang.org/x/exp v0.0.0-20260312153236-7ab1446f8b90 // indirect
 	golang.org/x/net v0.49.0 // indirect
 	golang.org/x/sys v0.42.0 // indirect
-	golang.org/x/text v0.36.0 // indirect
+	golang.org/x/text v0.37.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260120221211-b8f7ae30c516 // indirect
 	google.golang.org/grpc v1.80.0 // indirect
 	google.golang.org/protobuf v1.36.11 // indirect
