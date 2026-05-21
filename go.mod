@@ -4,7 +4,7 @@ go 1.25.8
 
 require (
 	github.com/go-vgo/robotgo v1.0.2
-	github.com/mark3labs/mcp-go v0.47.1
+	github.com/mark3labs/mcp-go v0.54.0
 	github.com/otiai10/gosseract/v2 v2.4.1
 	golang.org/x/image v0.39.0
 	google.golang.org/genai v1.54.0
@@ -30,6 +30,7 @@ require (
 	github.com/jezek/xgbutil v0.0.0-20260124183602-9fd151d6a51a // indirect
 	github.com/lufia/plan9stats v0.0.0-20260330125221-c963978e514e // indirect
 	github.com/power-devops/perfstat v0.0.0-20240221224432-82ca36839d55 // indirect
+	github.com/santhosh-tekuri/jsonschema/v6 v6.0.2 // indirect
 	github.com/shirou/gopsutil/v4 v4.26.3 // indirect
 	github.com/spf13/cast v1.10.0 // indirect
 	github.com/tailscale/win v0.0.0-20250627215312-f4da2b8ee071 // indirect
