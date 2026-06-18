@@ -441,6 +441,12 @@ func handleFindAndClick(ctx context.Context, request mcp.CallToolRequest) (*mcp.
 		return findAndClickMultiPage(ctx, request, searchText, button, nth, nextPageKeys, maxPages, screenW, screenH, elementTypeFilter)
 	}
 
+	// Fallback click target derived from the learned view, used when the fast
+	// narrowed re-scan fails to re-detect an element the learned view located.
+	learnedFallbackCX, learnedFallbackCY := 0, 0
+	learnedFallbackW, learnedFallbackH := 0, 0
+	haveLearnedFallback := false
+
 	// Learning-mode fast path: if a learned view exists and no custom region was
 	// specified, use the view to narrow the scan to the element's known location.
 	// When the element was found on a non-zero scroll page, navigate there first.
@@ -470,6 +476,16 @@ func handleFindAndClick(ctx context.Context, request mcp.CallToolRequest) (*mcp.
 			regionX, regionY, regionW, regionH = lx, ly, lw, lh
 			logging.Info("find_and_click: learned view region (%d,%d) %dx%d for %q (scroll_page=%d)",
 				regionX, regionY, regionW, regionH, searchText, scrollsNeeded)
+
+			// Remember the learned element's location as a fallback click target.
+			// If the narrowed live re-scan below fails (common for light text on
+			// coloured buttons that OCR reads inconsistently), we click here
+			// instead of discarding a location the learned view already knows.
+			if cx, cy, ew, eh, ok2 := learnerElementCenter(searchText); ok2 && nth <= 1 {
+				learnedFallbackCX, learnedFallbackCY = cx, cy
+				learnedFallbackW, learnedFallbackH = ew, eh
+				haveLearnedFallback = true
+			}
 		}
 	}
 
@@ -479,11 +495,26 @@ func handleFindAndClick(ctx context.Context, request mcp.CallToolRequest) (*mcp.
 		logging.Info("find_and_click: OCR region (%d,%d) %dx%d for text %q", regionX, regionY, regionW, regionH, searchText)
 	}
 
+	// The learned-view fast path above can overwrite the region with element
+	// coordinates that were re-validated only against the original screen; after
+	// a scroll-to-page they may fall outside the current viewport. Re-validate so
+	// an out-of-bounds region falls back to a full-screen scan rather than handing
+	// robotgo.CaptureImg an invalid rectangle (which returns a nil image and used
+	// to crash the OCR pipeline).
+	if err := validate.ScreenRegion(regionX, regionY, regionW, regionH, screenW, screenH); err != nil {
+		logging.Info("find_and_click: learned/computed region invalid (%v); falling back to full screen", err)
+		regionX, regionY, regionW, regionH = 0, 0, screenW, screenH
+	}
+
 	// Capture region for OCR.
 	img, captureErr := robotgo.CaptureImg(regionX, regionY, regionW, regionH)
 	if captureErr != nil {
 		logging.Error("Failed to capture screen: %v", captureErr)
 		return mcp.NewToolResultError(fmt.Sprintf("failed to capture screen: %v", captureErr)), nil
+	}
+	if img == nil {
+		logging.Error("find_and_click: capture returned a nil image for region (%d,%d) %dx%d", regionX, regionY, regionW, regionH)
+		return mcp.NewToolResultError(fmt.Sprintf("screen capture failed for region (%d,%d) %dx%d (nil image)", regionX, regionY, regionW, regionH)), nil
 	}
 
 	saveScreenshotIfKept(img, "ghost-mcp-findclick")
@@ -492,6 +523,37 @@ func handleFindAndClick(ctx context.Context, request mcp.CallToolRequest) (*mcp.
 
 	minX, minY, maxX, maxY, found, passName := parallelFindText(ctx, img, searchText, nth, grayscale, elementTypeFilter)
 	if !found {
+		// Fallback: the live re-scan missed the element, but the learned view
+		// already located it (e.g. white text on a coloured button, which OCR
+		// reads inconsistently). Click the known location rather than giving up.
+		if haveLearnedFallback {
+			if err := validate.Coords(learnedFallbackCX, learnedFallbackCY, screenW, screenH); err == nil {
+				logging.Info("find_and_click: live re-scan missed %q; falling back to learned-view location (%d,%d)",
+					searchText, learnedFallbackCX, learnedFallbackCY)
+				if err := guardComputedTarget(learnedFallbackCX, learnedFallbackCY, "find_and_click learned-view fallback"); err != nil {
+					return mcp.NewToolResultError(err.Error()), nil
+				}
+				robotgo.Move(learnedFallbackCX, learnedFallbackCY)
+				if err := checkFailsafe(); err != nil {
+					return mcp.NewToolResultError(err.Error()), nil
+				}
+				robotgo.Click(button, false)
+				applyClickDelay(request)
+
+				finalX, finalY := robotgo.GetMousePos()
+				tracker.recordClick(finalX, finalY, button, true)
+				tracker.recordCall("find_and_click", searchText, true)
+				logging.Info("ACTION COMPLETE: find_and_click %q via learned-view fallback at (%d, %d)", searchText, finalX, finalY)
+
+				response := fmt.Sprintf(
+					`{"success":true,"found":%q,"box":{"x":%d,"y":%d,"width":%d,"height":%d},"requested_x":%d,"requested_y":%d,"actual_x":%d,"actual_y":%d,"button":%q,"occurrence":%d,"fallback":"learned_view","note":"live OCR re-scan missed this element (common for light text on coloured buttons); clicked the location from the learned view instead"}`,
+					searchText, learnedFallbackCX-learnedFallbackW/2, learnedFallbackCY-learnedFallbackH/2, learnedFallbackW, learnedFallbackH,
+					learnedFallbackCX, learnedFallbackCY, finalX, finalY, button, nth,
+				)
+				return mcp.NewToolResultText(response), nil
+			}
+		}
+
 		logging.Info("Text %q (occurrence %d) not found on screen", searchText, nth)
 
 		// Get candidates to show what WAS found (helps AI decide next action)
@@ -548,6 +610,9 @@ func handleFindAndClick(ctx context.Context, request mcp.CallToolRequest) (*mcp.
 
 	logging.Info("ACTION: Found %q (occurrence %d) via %s pass at box (%d,%d)-(%d,%d), clicking center (%d,%d) with %s",
 		searchText, nth, passName, minX, minY, maxX, maxY, cx, cy, button)
+	if err := guardComputedTarget(cx, cy, fmt.Sprintf("find_and_click %q normal path (region=%d,%d box=%d,%d-%d,%d)", searchText, regionX, regionY, minX, minY, maxX, maxY)); err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
 	robotgo.Move(cx, cy)
 
 	if err := checkFailsafe(); err != nil {
@@ -752,6 +817,9 @@ func findAndClickWithScroll(
 
 			logging.Info("ACTION: Found %q (occurrence %d) via %s pass after %d scrolls at box (%d,%d)-(%d,%d), clicking center (%d,%d) with %s",
 				searchText, nth, passName, scroll, minX, minY, maxX, maxY, cx, cy, button)
+			if err := guardComputedTarget(cx, cy, "find_and_click with-scroll"); err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
 			robotgo.Move(cx, cy)
 
 			if err := checkFailsafe(); err != nil {
@@ -948,6 +1016,9 @@ func findAndClickMultiPageSelectBest(
 	regionCache.Put(normalizedText, bestMatch.minX, bestMatch.minY, bestMatch.maxX-bestMatch.minX, bestMatch.maxY-bestMatch.minY, screenW, screenH)
 
 	logging.Info("ACTION: Clicking best match %q (score %d) on page %d at (%d,%d)", bestMatch.phrase, bestMatch.score, bestMatch.page, cx, cy)
+	if err := guardComputedTarget(cx, cy, "find_and_click multipage best-match"); err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
 	robotgo.Move(cx, cy)
 
 	if err := checkFailsafe(); err != nil {
@@ -1006,6 +1077,9 @@ func findAndClickMultiPageFirstMatch(
 
 			logging.Info("ACTION: Found %q (occurrence %d) via %s pass on page %d at box (%d,%d)-(%d,%d), clicking center (%d,%d) with %s",
 				searchText, nth, passName, page, minX, minY, maxX, maxY, cx, cy, button)
+			if err := guardComputedTarget(cx, cy, "find_and_click multipage first-match"); err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
 			robotgo.Move(cx, cy)
 
 			if err := checkFailsafe(); err != nil {
@@ -2155,6 +2229,9 @@ func handleFindAndClickAll(ctx context.Context, request mcp.CallToolRequest) (*m
 		cy := (minY + maxY) / 2
 
 		logging.Info("ACTION: Clicking %q via %s pass at (%d, %d)", text, passName, cx, cy)
+		if err := guardComputedTarget(cx, cy, "find_and_click_all"); err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
 		robotgo.Move(cx, cy)
 		time.Sleep(10 * time.Millisecond) // Small delay for mouse movement
 		robotgo.Click(button, false)
@@ -2598,6 +2675,9 @@ func handleFindClickAndType(ctx context.Context, request mcp.CallToolRequest) (*
 	}
 
 	logging.Info("ACTION: Found %q, calculated target (%d,%d) applying offset (%d,%d)", searchText, cx, cy, xOffset, yOffset)
+	if err := guardComputedTarget(cx, cy, "find_click_and_type"); err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
 	robotgo.Move(cx, cy)
 
 	if err := checkFailsafe(); err != nil {
@@ -2639,6 +2719,9 @@ func handleFindClickAndType(ctx context.Context, request mcp.CallToolRequest) (*
 	if !verified {
 		// Retry: click again, CLEAR field, and re-type (common fix for missed focus)
 		logging.Info("find_click_and_type: verification failed, clearing field and retrying click + type")
+		if err := guardComputedTarget(cx, cy, "find_click_and_type retry"); err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
 		robotgo.Move(cx, cy)
 		time.Sleep(100 * time.Millisecond)
 		robotgo.Click("left", false)

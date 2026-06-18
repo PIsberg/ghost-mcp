@@ -302,6 +302,63 @@ func TestLearnerRegionHint_NoMatch(t *testing.T) {
 }
 
 // =============================================================================
+// learnerElementCenter (find_and_click fallback target)
+// =============================================================================
+
+func TestLearnerElementCenter_Match(t *testing.T) {
+	orig := globalLearner
+	defer func() { globalLearner = orig }()
+	globalLearner = learner.New()
+	globalLearner.Enable()
+	globalLearner.SetView(&learner.View{
+		Elements: []learner.Element{
+			{Text: "PRIMARY", X: 500, Y: 300, Width: 200, Height: 40, PageIndex: 0},
+		},
+		CapturedAt: time.Now(),
+		ScreenW:    1920,
+		ScreenH:    1080,
+	})
+
+	cx, cy, w, h, ok := learnerElementCenter("PRIMARY")
+	if !ok {
+		t.Fatal("expected element center to be found")
+	}
+	if cx != 600 || cy != 320 {
+		t.Errorf("center = (%d,%d), want (600,320)", cx, cy)
+	}
+	if w != 200 || h != 40 {
+		t.Errorf("size = (%d,%d), want (200,40)", w, h)
+	}
+}
+
+func TestLearnerElementCenter_Disabled(t *testing.T) {
+	orig := globalLearner
+	defer func() { globalLearner = orig }()
+	globalLearner = learner.New() // disabled by default
+
+	if _, _, _, _, ok := learnerElementCenter("PRIMARY"); ok {
+		t.Fatal("should return ok=false when learner is disabled")
+	}
+}
+
+func TestLearnerElementCenter_NoMatch(t *testing.T) {
+	orig := globalLearner
+	defer func() { globalLearner = orig }()
+	globalLearner = learner.New()
+	globalLearner.Enable()
+	globalLearner.SetView(&learner.View{
+		Elements:   []learner.Element{{Text: "Cancel", X: 100, Y: 100, Width: 80, Height: 30}},
+		CapturedAt: time.Now(),
+		ScreenW:    1920,
+		ScreenH:    1080,
+	})
+
+	if _, _, _, _, ok := learnerElementCenter("NonExistent"); ok {
+		t.Fatal("should return ok=false for unmatched text")
+	}
+}
+
+// =============================================================================
 // extractText
 // =============================================================================
 

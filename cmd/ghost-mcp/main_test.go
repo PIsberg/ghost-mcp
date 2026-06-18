@@ -896,6 +896,20 @@ func TestHandleTypeText_TooLong(t *testing.T) {
 	}
 }
 
+func TestGuardComputedTarget(t *testing.T) {
+	// The failsafe position must be rejected so an OCR-mis-computed (0,0) click
+	// target yields a graceful error instead of triggering emergency shutdown.
+	if err := guardComputedTarget(FailsafeX, FailsafeY, "unit-test"); err == nil {
+		t.Errorf("expected error for failsafe position (%d,%d)", FailsafeX, FailsafeY)
+	}
+	// Any other coordinate is allowed.
+	for _, c := range []struct{ x, y int }{{1, 0}, {0, 1}, {100, 200}, {1706, 1066}} {
+		if err := guardComputedTarget(c.x, c.y, "unit-test"); err != nil {
+			t.Errorf("guardComputedTarget(%d,%d): unexpected error: %v", c.x, c.y, err)
+		}
+	}
+}
+
 func TestHandlePressKey_UnknownKey(t *testing.T) {
 	req := mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: map[string]interface{}{"key": "not_a_real_key"}}}
 	result, err := handlePressKey(context.TODO(), req)
@@ -908,7 +922,12 @@ func TestHandlePressKey_UnknownKey(t *testing.T) {
 }
 
 func TestHandlePressKey_InjectionAttempt(t *testing.T) {
-	for _, key := range []string{"; rm -rf /", "$(whoami)", "../../../etc/passwd", "ctrl+alt+del"} {
+	// Arbitrary strings and combos with an unrecognised component must be
+	// rejected before reaching robotgo. (Note: "ctrl+alt+del" is no longer here —
+	// since press_key gained combination support it is a valid, allowlisted combo;
+	// the OS blocks any synthetic secure-attention sequence regardless. Combos are
+	// still validated component-by-component, e.g. "ctrl+rm" below is rejected.)
+	for _, key := range []string{"; rm -rf /", "$(whoami)", "../../../etc/passwd", "ctrl+rm", "ctrl+$(x)", "alt+; ls"} {
 		req := mcp.CallToolRequest{Params: mcp.CallToolParams{Arguments: map[string]interface{}{"key": key}}}
 		result, err := handlePressKey(context.TODO(), req)
 		if err != nil {

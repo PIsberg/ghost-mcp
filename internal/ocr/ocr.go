@@ -739,6 +739,18 @@ func preprocessToBytes(src string, factor int, opts Options) ([]byte, error) {
 //  5. Default (grayscale): BT.709 grayscale + contrast stretch + optional
 //     inversion (opts.Inverted). Upscaled as Gray.
 func encodeForOCR(img image.Image, factor int, opts Options) ([]byte, error) {
+	// Guard against a nil image. robotgo.CaptureImg returns (nil, nil) for an
+	// invalid/off-screen region, and this function runs inside PrepareParallelImageSet's
+	// goroutines — a nil dereference here panics on a goroutine the caller cannot
+	// recover, taking the whole server down. Return an error instead so the
+	// preprocessing pipeline fails gracefully.
+	if img == nil {
+		return nil, fmt.Errorf("encodeForOCR: nil image (capture likely failed for an invalid or off-screen region)")
+	}
+	if b := img.Bounds(); b.Dx() <= 0 || b.Dy() <= 0 {
+		return nil, fmt.Errorf("encodeForOCR: empty image bounds %v", b)
+	}
+
 	var scaledImg image.Image
 	if opts.BrightText {
 		preprocessed := brightTextToGray(img, 185)

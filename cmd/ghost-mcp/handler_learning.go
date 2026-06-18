@@ -999,6 +999,26 @@ func learnerRegionHint(searchText string, screenW, screenH int) (x, y, w, h, scr
 	return rx, ry, rw, rh, scrolls, true
 }
 
+// learnerElementCenter returns the screen-space center and size of a learned
+// element matching searchText, or ok=false when learning mode is off, no view
+// exists, or no element matches.
+//
+// It is the fallback click target for find_and_click: when the learned view has
+// already located an element (via the full multi-pass learn_screen scan) but the
+// fast narrowed live re-scan fails to re-detect it — a common case for light
+// text on coloured buttons, which OCR reads inconsistently — the handler can
+// still click the known location instead of giving up.
+func learnerElementCenter(searchText string) (cx, cy, w, h int, ok bool) {
+	if !globalLearner.IsEnabled() || !globalLearner.HasView() {
+		return 0, 0, 0, 0, false
+	}
+	elem := globalLearner.FindElement(searchText)
+	if elem == nil {
+		return 0, 0, 0, 0, false
+	}
+	return elem.X + elem.Width/2, elem.Y + elem.Height/2, elem.Width, elem.Height, true
+}
+
 // autoLearnIfNeeded triggers a learning scan the first time a tool is called
 // while learning mode is on but no view exists yet.
 func autoLearnIfNeeded() {

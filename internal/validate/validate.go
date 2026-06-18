@@ -7,6 +7,7 @@ package validate
 
 import (
 	"fmt"
+	"strings"
 	"unicode/utf8"
 )
 
@@ -103,6 +104,50 @@ func Key(key string) error {
 		return fmt.Errorf("unknown key %q — see documentation for the list of supported keys", key)
 	}
 	return nil
+}
+
+// KeyCombo parses and validates a key or key combination such as "ctrl+0",
+// "alt+tab", or "ctrl+shift+t". The string is split on "+": every component
+// except the last must be a modifier key, and the last component is the main
+// key. All components must be members of the key allowlist.
+//
+// It returns the main key and the ordered list of modifiers. For a plain single
+// key (no "+") it returns (key, nil, nil), preserving the original behaviour.
+// Handlers pass the modifiers to robotgo.KeyTap(main, mods...).
+func KeyCombo(key string) (main string, mods []string, err error) {
+	if len(key) > MaxKeyNameLength {
+		return "", nil, fmt.Errorf("key name too long (max %d characters)", MaxKeyNameLength)
+	}
+	if !strings.Contains(key, "+") {
+		if err := Key(key); err != nil {
+			return "", nil, err
+		}
+		return key, nil, nil
+	}
+	parts := strings.Split(key, "+")
+	for i, p := range parts {
+		if p == "" {
+			return "", nil, fmt.Errorf("invalid key combination %q: empty component", key)
+		}
+		if !allowedKeys[p] {
+			return "", nil, fmt.Errorf("unknown key %q in combination %q — see documentation for the list of supported keys", p, key)
+		}
+		// Every component before the last must be a modifier.
+		if i < len(parts)-1 && !modifierKeys[p] {
+			return "", nil, fmt.Errorf("invalid key combination %q: %q is not a modifier key", key, p)
+		}
+	}
+	main = parts[len(parts)-1]
+	mods = parts[:len(parts)-1]
+	return main, mods, nil
+}
+
+// modifierKeys is the subset of allowedKeys that may act as combo modifiers.
+var modifierKeys = map[string]bool{
+	"shift": true, "ctrl": true, "alt": true,
+	"cmd": true, "command": true, // macOS
+	"super": true, "windows": true, "win": true, // Linux / Windows
+	"option": true, // macOS alias for alt
 }
 
 // allowedKeys is the set of key names accepted by Key.
