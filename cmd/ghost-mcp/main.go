@@ -143,6 +143,23 @@ func checkFailsafe() error {
 	return nil
 }
 
+// guardComputedTarget rejects a tool-computed click target that lands on the
+// failsafe position. The failsafe (mouse at origin) is meant for a human
+// slamming the cursor to the corner as a panic button — NOT for an OCR-derived
+// coordinate to accidentally hit. Without this guard, a mis-computed (0,0)
+// target makes the tool move there and checkFailsafe shuts the whole server
+// down. Tools that compute a target from OCR call this before robotgo.Move so a
+// bad coordinate yields a graceful error instead of emergency shutdown. (Tools
+// that take explicit user coordinates — move_mouse, click_at — intentionally do
+// NOT call this, so a deliberate move to (0,0) still triggers the failsafe.)
+func guardComputedTarget(x, y int, source string) error {
+	if x == FailsafeX && y == FailsafeY {
+		logging.Error("guardComputedTarget: %s produced failsafe coordinate (%d,%d); refusing to move", source, x, y)
+		return fmt.Errorf("%s computed an invalid click target at the failsafe position (%d,%d) — likely an OCR/region miscalculation; aborting instead of triggering emergency shutdown", source, x, y)
+	}
+	return nil
+}
+
 func initiateShutdown() {
 	if state.isShuttingDown {
 		return

@@ -515,6 +515,9 @@ func handleFindAndClick(ctx context.Context, request mcp.CallToolRequest) (*mcp.
 			if err := validate.Coords(learnedFallbackCX, learnedFallbackCY, screenW, screenH); err == nil {
 				logging.Info("find_and_click: live re-scan missed %q; falling back to learned-view location (%d,%d)",
 					searchText, learnedFallbackCX, learnedFallbackCY)
+				if err := guardComputedTarget(learnedFallbackCX, learnedFallbackCY, "find_and_click learned-view fallback"); err != nil {
+					return mcp.NewToolResultError(err.Error()), nil
+				}
 				robotgo.Move(learnedFallbackCX, learnedFallbackCY)
 				if err := checkFailsafe(); err != nil {
 					return mcp.NewToolResultError(err.Error()), nil
@@ -592,6 +595,9 @@ func handleFindAndClick(ctx context.Context, request mcp.CallToolRequest) (*mcp.
 
 	logging.Info("ACTION: Found %q (occurrence %d) via %s pass at box (%d,%d)-(%d,%d), clicking center (%d,%d) with %s",
 		searchText, nth, passName, minX, minY, maxX, maxY, cx, cy, button)
+	if err := guardComputedTarget(cx, cy, fmt.Sprintf("find_and_click %q normal path (region=%d,%d box=%d,%d-%d,%d)", searchText, regionX, regionY, minX, minY, maxX, maxY)); err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
 	robotgo.Move(cx, cy)
 
 	if err := checkFailsafe(); err != nil {
@@ -796,6 +802,9 @@ func findAndClickWithScroll(
 
 			logging.Info("ACTION: Found %q (occurrence %d) via %s pass after %d scrolls at box (%d,%d)-(%d,%d), clicking center (%d,%d) with %s",
 				searchText, nth, passName, scroll, minX, minY, maxX, maxY, cx, cy, button)
+			if err := guardComputedTarget(cx, cy, "find_and_click with-scroll"); err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
 			robotgo.Move(cx, cy)
 
 			if err := checkFailsafe(); err != nil {
@@ -992,6 +1001,9 @@ func findAndClickMultiPageSelectBest(
 	regionCache.Put(normalizedText, bestMatch.minX, bestMatch.minY, bestMatch.maxX-bestMatch.minX, bestMatch.maxY-bestMatch.minY, screenW, screenH)
 
 	logging.Info("ACTION: Clicking best match %q (score %d) on page %d at (%d,%d)", bestMatch.phrase, bestMatch.score, bestMatch.page, cx, cy)
+	if err := guardComputedTarget(cx, cy, "find_and_click multipage best-match"); err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
 	robotgo.Move(cx, cy)
 
 	if err := checkFailsafe(); err != nil {
@@ -1050,6 +1062,9 @@ func findAndClickMultiPageFirstMatch(
 
 			logging.Info("ACTION: Found %q (occurrence %d) via %s pass on page %d at box (%d,%d)-(%d,%d), clicking center (%d,%d) with %s",
 				searchText, nth, passName, page, minX, minY, maxX, maxY, cx, cy, button)
+			if err := guardComputedTarget(cx, cy, "find_and_click multipage first-match"); err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
 			robotgo.Move(cx, cy)
 
 			if err := checkFailsafe(); err != nil {
@@ -2199,6 +2214,9 @@ func handleFindAndClickAll(ctx context.Context, request mcp.CallToolRequest) (*m
 		cy := (minY + maxY) / 2
 
 		logging.Info("ACTION: Clicking %q via %s pass at (%d, %d)", text, passName, cx, cy)
+		if err := guardComputedTarget(cx, cy, "find_and_click_all"); err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
 		robotgo.Move(cx, cy)
 		time.Sleep(10 * time.Millisecond) // Small delay for mouse movement
 		robotgo.Click(button, false)
@@ -2642,6 +2660,9 @@ func handleFindClickAndType(ctx context.Context, request mcp.CallToolRequest) (*
 	}
 
 	logging.Info("ACTION: Found %q, calculated target (%d,%d) applying offset (%d,%d)", searchText, cx, cy, xOffset, yOffset)
+	if err := guardComputedTarget(cx, cy, "find_click_and_type"); err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
 	robotgo.Move(cx, cy)
 
 	if err := checkFailsafe(); err != nil {
@@ -2683,6 +2704,9 @@ func handleFindClickAndType(ctx context.Context, request mcp.CallToolRequest) (*
 	if !verified {
 		// Retry: click again, CLEAR field, and re-type (common fix for missed focus)
 		logging.Info("find_click_and_type: verification failed, clearing field and retrying click + type")
+		if err := guardComputedTarget(cx, cy, "find_click_and_type retry"); err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
 		robotgo.Move(cx, cy)
 		time.Sleep(100 * time.Millisecond)
 		robotgo.Click("left", false)
