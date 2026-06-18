@@ -495,11 +495,26 @@ func handleFindAndClick(ctx context.Context, request mcp.CallToolRequest) (*mcp.
 		logging.Info("find_and_click: OCR region (%d,%d) %dx%d for text %q", regionX, regionY, regionW, regionH, searchText)
 	}
 
+	// The learned-view fast path above can overwrite the region with element
+	// coordinates that were re-validated only against the original screen; after
+	// a scroll-to-page they may fall outside the current viewport. Re-validate so
+	// an out-of-bounds region falls back to a full-screen scan rather than handing
+	// robotgo.CaptureImg an invalid rectangle (which returns a nil image and used
+	// to crash the OCR pipeline).
+	if err := validate.ScreenRegion(regionX, regionY, regionW, regionH, screenW, screenH); err != nil {
+		logging.Info("find_and_click: learned/computed region invalid (%v); falling back to full screen", err)
+		regionX, regionY, regionW, regionH = 0, 0, screenW, screenH
+	}
+
 	// Capture region for OCR.
 	img, captureErr := robotgo.CaptureImg(regionX, regionY, regionW, regionH)
 	if captureErr != nil {
 		logging.Error("Failed to capture screen: %v", captureErr)
 		return mcp.NewToolResultError(fmt.Sprintf("failed to capture screen: %v", captureErr)), nil
+	}
+	if img == nil {
+		logging.Error("find_and_click: capture returned a nil image for region (%d,%d) %dx%d", regionX, regionY, regionW, regionH)
+		return mcp.NewToolResultError(fmt.Sprintf("screen capture failed for region (%d,%d) %dx%d (nil image)", regionX, regionY, regionW, regionH)), nil
 	}
 
 	saveScreenshotIfKept(img, "ghost-mcp-findclick")
