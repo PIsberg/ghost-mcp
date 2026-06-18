@@ -5,7 +5,6 @@ package main
 import (
 	"context"
 	"os"
-	"os/exec"
 	"testing"
 	"time"
 
@@ -27,9 +26,9 @@ func TestIntegration_FunctionSweep(t *testing.T) {
 		t.Skip("set INTEGRATION=1 to run the live function sweep")
 	}
 
-	// Foreground the already-running fixture window so OCR sees it.
-	_ = exec.Command("powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass",
-		"-File", `C:\dev\private\ghost-mcp\scratch\test_setup.ps1`).Run()
+	_, cleanup := startFixtureServer(t)
+	defer cleanup()
+	waitForFixture(t) // opens and focuses the fixture (FocusFixtureWindow on Windows)
 	time.Sleep(settleTime)
 
 	client, err := mcpclient.NewClient(mcpclient.Config{
@@ -93,8 +92,9 @@ func TestReproCrashDirect(t *testing.T) {
 	if os.Getenv("INTEGRATION") != "1" {
 		t.Skip("set INTEGRATION=1")
 	}
-	_ = exec.Command("powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass",
-		"-File", `C:\dev\private\ghost-mcp\scratch\test_setup.ps1`).Run()
+	_, cleanup := startFixtureServer(t)
+	defer cleanup()
+	waitForFixture(t)
 	time.Sleep(settleTime)
 
 	globalLearner.Enable()
