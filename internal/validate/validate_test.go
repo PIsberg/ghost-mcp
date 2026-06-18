@@ -340,11 +340,11 @@ func TestKeyCombo_ValidCombos(t *testing.T) {
 
 func TestKeyCombo_Invalid(t *testing.T) {
 	invalid := []string{
-		"ctrl+",          // empty trailing component
-		"+c",             // empty leading component
-		"ctrl++c",        // empty middle component
-		"a+b",            // "a" is not a modifier but precedes the main key
-		"ctrl+boguskey",  // unknown main key
+		"ctrl+",         // empty trailing component
+		"+c",            // empty leading component
+		"ctrl++c",       // empty middle component
+		"a+b",           // "a" is not a modifier but precedes the main key
+		"ctrl+boguskey", // unknown main key
 		"ctrl+shift+ctrl+shift+ctrl+shift+ctrl+shift", // exceeds max length
 	}
 	for _, k := range invalid {

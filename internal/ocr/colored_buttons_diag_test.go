@@ -28,22 +28,22 @@ func loadJPEG(t *testing.T, path string) image.Image {
 // label.
 //
 // KNOWN LIMITATION (skipped): none of the six passes read these labels through
-// the normal pipeline. Root cause, proven by experiment (and it is NOT the
-// preprocessing): the sole blocker is the ScaleFactor=3 upscaling. The button
-// labels are large (≈45 px caps in the capture); 3× upscaling pushes them past
-// the size Tesseract reads reliably, while smaller page text survives. Evidence:
-// the UNMODIFIED brightTextToGray output of the button row, OCR'd at scale=1,
-// returns "PRIMARY SUCCESS" — but the same bytes at scale=2 or 3 return nothing.
-// (brightTextToGray does invert the near-white page to black, but that is a
-// red herring: page words still read; only the large button labels fail, purely
-// on size.)
+// the normal pipeline, and there is no simple pass/scale fix. Findings, proven
+// by experiment:
 //
-// Fix direction: run a native/low-scale variant of the bright-text and dark-text
-// passes (their targets — white/dark text on coloured buttons — are large), in
-// addition to the 3× passes that small body text needs. This touches three
-// duplicated pass-machinery sites (ocr.ReadAllPasses, cmd parallelFindPreparedText,
-// handler_learning's scan loop) and adds OCR latency, so it should be validated
-// against the live pipeline before shipping. Until then the workaround is visual
+//   - The preprocessing is fine: the UNMODIFIED brightTextToGray output of a
+//     TIGHT CROP of the button row OCRs to "PRIMARY SUCCESS" at scale=1.
+//   - But on the FULL screenshot, bright-text AND dark-text detect the buttons
+//     at NO scale (1, 2, and 3 all return zero button hits) — while smaller page
+//     text reads fine. So it is not just over-upscaling; full-image layout
+//     analysis drops these large, uppercase, letter-spaced labels regardless of
+//     scale. They are only recoverable from a tight per-region crop at native
+//     scale.
+//
+// Consequence: adding native/low-scale bright/dark-text passes would NOT fix
+// learn_screen (which scans full-screen) — verified, not assumed. A real fix
+// would need region-proposal OCR (detect coloured rectangles, then OCR each crop
+// at native scale), a much larger change. Until then the workaround is visual
 // click_at on the button (OCR locate does not find these). Remove the Skip when
 // fixed — the assertion below then guards the regression.
 func TestColoredButtonsDetection(t *testing.T) {
