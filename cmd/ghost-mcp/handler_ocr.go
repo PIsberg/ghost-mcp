@@ -441,6 +441,12 @@ func handleFindAndClick(ctx context.Context, request mcp.CallToolRequest) (*mcp.
 		return findAndClickMultiPage(ctx, request, searchText, button, nth, nextPageKeys, maxPages, screenW, screenH, elementTypeFilter)
 	}
 
+	// Fallback click target derived from the learned view, used when the fast
+	// narrowed re-scan fails to re-detect an element the learned view located.
+	learnedFallbackCX, learnedFallbackCY := 0, 0
+	learnedFallbackW, learnedFallbackH := 0, 0
+	haveLearnedFallback := false
+
 	// Learning-mode fast path: if a learned view exists and no custom region was
 	// specified, use the view to narrow the scan to the element's known location.
 	// When the element was found on a non-zero scroll page, navigate there first.
@@ -470,6 +476,16 @@ func handleFindAndClick(ctx context.Context, request mcp.CallToolRequest) (*mcp.
 			regionX, regionY, regionW, regionH = lx, ly, lw, lh
 			logging.Info("find_and_click: learned view region (%d,%d) %dx%d for %q (scroll_page=%d)",
 				regionX, regionY, regionW, regionH, searchText, scrollsNeeded)
+
+			// Remember the learned element's location as a fallback click target.
+			// If the narrowed live re-scan below fails (common for light text on
+			// coloured buttons that OCR reads inconsistently), we click here
+			// instead of discarding a location the learned view already knows.
+			if cx, cy, ew, eh, ok2 := learnerElementCenter(searchText); ok2 && nth <= 1 {
+				learnedFallbackCX, learnedFallbackCY = cx, cy
+				learnedFallbackW, learnedFallbackH = ew, eh
+				haveLearnedFallback = true
+			}
 		}
 	}
 
@@ -492,6 +508,34 @@ func handleFindAndClick(ctx context.Context, request mcp.CallToolRequest) (*mcp.
 
 	minX, minY, maxX, maxY, found, passName := parallelFindText(ctx, img, searchText, nth, grayscale, elementTypeFilter)
 	if !found {
+		// Fallback: the live re-scan missed the element, but the learned view
+		// already located it (e.g. white text on a coloured button, which OCR
+		// reads inconsistently). Click the known location rather than giving up.
+		if haveLearnedFallback {
+			if err := validate.Coords(learnedFallbackCX, learnedFallbackCY, screenW, screenH); err == nil {
+				logging.Info("find_and_click: live re-scan missed %q; falling back to learned-view location (%d,%d)",
+					searchText, learnedFallbackCX, learnedFallbackCY)
+				robotgo.Move(learnedFallbackCX, learnedFallbackCY)
+				if err := checkFailsafe(); err != nil {
+					return mcp.NewToolResultError(err.Error()), nil
+				}
+				robotgo.Click(button, false)
+				applyClickDelay(request)
+
+				finalX, finalY := robotgo.GetMousePos()
+				tracker.recordClick(finalX, finalY, button, true)
+				tracker.recordCall("find_and_click", searchText, true)
+				logging.Info("ACTION COMPLETE: find_and_click %q via learned-view fallback at (%d, %d)", searchText, finalX, finalY)
+
+				response := fmt.Sprintf(
+					`{"success":true,"found":%q,"box":{"x":%d,"y":%d,"width":%d,"height":%d},"requested_x":%d,"requested_y":%d,"actual_x":%d,"actual_y":%d,"button":%q,"occurrence":%d,"fallback":"learned_view","note":"live OCR re-scan missed this element (common for light text on coloured buttons); clicked the location from the learned view instead"}`,
+					searchText, learnedFallbackCX-learnedFallbackW/2, learnedFallbackCY-learnedFallbackH/2, learnedFallbackW, learnedFallbackH,
+					learnedFallbackCX, learnedFallbackCY, finalX, finalY, button, nth,
+				)
+				return mcp.NewToolResultText(response), nil
+			}
+		}
+
 		logging.Info("Text %q (occurrence %d) not found on screen", searchText, nth)
 
 		// Get candidates to show what WAS found (helps AI decide next action)

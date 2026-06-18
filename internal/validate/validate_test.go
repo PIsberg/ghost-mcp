@@ -289,3 +289,67 @@ func TestKey_ExactlyMaxLength(t *testing.T) {
 		t.Errorf("Expected 'unknown key' error, got: %v", err)
 	}
 }
+
+func TestKeyCombo_PlainKey(t *testing.T) {
+	main, mods, err := KeyCombo("enter")
+	if err != nil {
+		t.Fatalf("KeyCombo(\"enter\"): unexpected error: %v", err)
+	}
+	if main != "enter" {
+		t.Errorf("expected main \"enter\", got %q", main)
+	}
+	if len(mods) != 0 {
+		t.Errorf("expected no modifiers, got %v", mods)
+	}
+}
+
+func TestKeyCombo_ValidCombos(t *testing.T) {
+	cases := []struct {
+		key      string
+		wantMain string
+		wantMods []string
+	}{
+		{"ctrl+0", "0", []string{"ctrl"}},
+		{"alt+tab", "tab", []string{"alt"}},
+		{"ctrl+shift+t", "t", []string{"ctrl", "shift"}},
+		{"cmd+c", "c", []string{"cmd"}},
+		{"ctrl+minus", "minus", []string{"ctrl"}},
+		{"win+up", "up", []string{"win"}},
+	}
+	for _, c := range cases {
+		main, mods, err := KeyCombo(c.key)
+		if err != nil {
+			t.Errorf("KeyCombo(%q): unexpected error: %v", c.key, err)
+			continue
+		}
+		if main != c.wantMain {
+			t.Errorf("KeyCombo(%q): main = %q, want %q", c.key, main, c.wantMain)
+		}
+		if len(mods) != len(c.wantMods) {
+			t.Errorf("KeyCombo(%q): mods = %v, want %v", c.key, mods, c.wantMods)
+			continue
+		}
+		for i := range mods {
+			if mods[i] != c.wantMods[i] {
+				t.Errorf("KeyCombo(%q): mods = %v, want %v", c.key, mods, c.wantMods)
+				break
+			}
+		}
+	}
+}
+
+func TestKeyCombo_Invalid(t *testing.T) {
+	invalid := []string{
+		"ctrl+",          // empty trailing component
+		"+c",             // empty leading component
+		"ctrl++c",        // empty middle component
+		"a+b",            // "a" is not a modifier but precedes the main key
+		"ctrl+boguskey",  // unknown main key
+		"ctrl+shift+ctrl+shift+ctrl+shift+ctrl+shift", // exceeds max length
+	}
+	for _, k := range invalid {
+		if _, _, err := KeyCombo(k); err == nil {
+			t.Errorf("KeyCombo(%q): expected error, got nil", k)
+		}
+	}
+}

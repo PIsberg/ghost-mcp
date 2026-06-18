@@ -729,13 +729,23 @@ func handlePressKey(ctx context.Context, request mcp.CallToolRequest) (*mcp.Call
 		return mcp.NewToolResultError(fmt.Sprintf("invalid key parameter: %v", err)), nil
 	}
 
-	if err := validate.Key(key); err != nil {
+	main, mods, err := validate.KeyCombo(key)
+	if err != nil {
 		logging.Error("Key validation failed: %v", key)
 		return mcp.NewToolResultError(fmt.Sprintf("invalid key: %v", err)), nil
 	}
 
-	logging.Info("Action: Tapping key: %s", key)
-	robotgo.KeyTap(key)
+	if len(mods) > 0 {
+		logging.Info("Action: Tapping key combination: %s (key=%s, mods=%v)", key, main, mods)
+		args := make([]interface{}, len(mods))
+		for i, m := range mods {
+			args[i] = m
+		}
+		robotgo.KeyTap(main, args...)
+	} else {
+		logging.Info("Action: Tapping key: %s", main)
+		robotgo.KeyTap(main)
+	}
 	logging.Info("Success: Key %s pressed", key)
 	return mcp.NewToolResultText(fmt.Sprintf(`{"success": true, "key": "%s"}`, key)), nil
 }
@@ -1085,9 +1095,11 @@ Two modes:
 	), handleClickAndType)
 
 	mcpServer.AddTool(mcp.NewTool("press_key",
-		mcp.WithDescription(`Press a single keyboard key or key combination. 
-Common keys: 'enter', 'tab', 'esc', 'backspace', 'up', 'down'. Modifiers: 'ctrl', 'alt', 'shift'.`),
-		mcp.WithString("key", mcp.Description("Key name (e.g. 'enter', 'tab', 'shift', 'a', '1')."), mcp.Required()),
+		mcp.WithDescription(`Press a single keyboard key or a key combination.
+Common keys: 'enter', 'tab', 'esc', 'backspace', 'up', 'down'.
+Combinations: join a modifier and a key with '+', e.g. 'ctrl+0', 'alt+tab', 'ctrl+shift+t'.
+Modifiers: 'ctrl', 'alt', 'shift', 'cmd'/'command' (macOS), 'win'/'super' (Windows/Linux).`),
+		mcp.WithString("key", mcp.Description("Key name or combination (e.g. 'enter', 'a', 'ctrl+0', 'alt+tab')."), mcp.Required()),
 	), handlePressKey)
 
 	mcpServer.AddTool(mcp.NewTool("take_screenshot",
