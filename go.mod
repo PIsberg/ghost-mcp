@@ -7,7 +7,7 @@ require (
 	github.com/mark3labs/mcp-go v0.55.0
 	github.com/otiai10/gosseract/v2 v2.4.1
 	golang.org/x/image v0.43.0
-	google.golang.org/genai v1.60.0
+	google.golang.org/genai v1.62.0
 )
 
 require (
