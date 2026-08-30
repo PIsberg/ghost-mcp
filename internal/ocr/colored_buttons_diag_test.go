@@ -47,7 +47,7 @@ func loadJPEG(t *testing.T, path string) image.Image {
 // click_at on the button (OCR locate does not find these). Remove the Skip when
 // fixed — the assertion below then guards the regression.
 func TestColoredButtonsDetection(t *testing.T) {
-	t.Skip("known limitation: OCR does not detect white-on-saturated-colour buttons; see doc comment")
+	t.Skip("known limitation of the full-image passes (still true); the region-proposal pipeline covers these buttons now — see TestColoredButtons_RegionProposal in regions_test.go")
 	img := loadJPEG(t, "testdata/colored_buttons.jpg")
 	targets := []string{"PRIMARY", "SUCCESS", "WARNING"}
 	foundBy := detectButtonsAllPasses(t, img, targets)

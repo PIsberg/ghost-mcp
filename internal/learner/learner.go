@@ -56,6 +56,7 @@ const (
 	OcrPassBrightText OcrPass = "bright_text" // isolates near-white pixels (white text on coloured bg)
 	OcrPassDarkText   OcrPass = "dark_text"   // isolates near-dark achromatic pixels (dark text on coloured bg)
 	OcrPassColor      OcrPass = "color"       // full colour (coloured-background buttons)
+	OcrPassRegion     OcrPass = "region"      // per-region crop at native scale (colour-button labels)
 )
 
 // =============================================================================

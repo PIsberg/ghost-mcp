@@ -152,6 +152,30 @@ func appendIconElements(existing []learner.Element, iconRects []image.Rectangle,
 	return appendShapeElements(existing, iconRects, pageIndex, offsetX, offsetY, learner.ElementTypeIcon)
 }
 
+// appendRegionOCRElements converts words read by the per-region colour-button
+// OCR pass into elements (issue #158). These labels exist nowhere else in the
+// view — every full-image pass drops them — so no overlap filtering is
+// needed; the global dedupe still collapses accidental doubles.
+func appendRegionOCRElements(existing []learner.Element, words []ocr.Word, pageIndex, offsetX, offsetY int) []learner.Element {
+	for _, w := range words {
+		text := strings.TrimSpace(w.Text)
+		if text == "" || w.Confidence < ocr.MinConfidence {
+			continue
+		}
+		existing = append(existing, learner.Element{
+			Text:       text,
+			X:          offsetX + w.X,
+			Y:          offsetY + w.Y,
+			Width:      w.Width,
+			Height:     w.Height,
+			Confidence: w.Confidence,
+			PageIndex:  pageIndex,
+			OcrPass:    learner.OcrPassRegion,
+		})
+	}
+	return existing
+}
+
 // appendShapeElements adds CV-detected rectangles (icons, empty input boxes)
 // as text-less elements of the given type, skipping any rectangle that
 // overlaps an element OCR already found — text elements carry more signal.
@@ -325,6 +349,13 @@ func learnScreenAsync(cfg learnCfg) (*learner.View, error) {
 				inputRects := cv.FindInputBoxes(j.img)
 				elems = appendShapeElements(elems, inputRects, j.page, cfg.RegionX, cfg.RegionY, learner.ElementTypeInput)
 			}
+			if os.Getenv("GHOST_MCP_CV_BUTTONS") != "0" {
+				if btnRects := cv.FindColorButtons(j.img); len(btnRects) > 0 {
+					if regionRes, rerr := ocr.ReadColorButtonRegions(j.img, btnRects); rerr == nil && regionRes != nil {
+						elems = appendRegionOCRElements(elems, regionRes.Words, j.page, cfg.RegionX, cfg.RegionY)
+					}
+				}
+			}
 
 			resultsChan <- ocrResultStruct{page: j.page, elements: elems, err: nil}
 		}(job)
@@ -440,6 +471,13 @@ func learnScreenSync(cfg learnCfg) (*learner.View, error) {
 			pageElements = appendIconElements(pageElements, iconRects, page, cfg.RegionX, cfg.RegionY)
 			inputRects := cv.FindInputBoxes(img)
 			pageElements = appendShapeElements(pageElements, inputRects, page, cfg.RegionX, cfg.RegionY, learner.ElementTypeInput)
+		}
+		if os.Getenv("GHOST_MCP_CV_BUTTONS") != "0" {
+			if btnRects := cv.FindColorButtons(img); len(btnRects) > 0 {
+				if regionRes, rerr := ocr.ReadColorButtonRegions(img, btnRects); rerr == nil && regionRes != nil {
+					pageElements = appendRegionOCRElements(pageElements, regionRes.Words, page, cfg.RegionX, cfg.RegionY)
+				}
+			}
 		}
 
 		allElements = append(allElements, pageElements...)

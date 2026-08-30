@@ -196,6 +196,80 @@ func FindInputBoxes(img image.Image) []image.Rectangle {
 	return rects
 }
 
+// FindColorButtons discovers solid saturated-colour rectangles shaped like
+// buttons (PRIMARY blue, SUCCESS green, WARNING orange in the fixture).
+// Full-image OCR layout analysis reliably drops the large letter-spaced
+// labels on such buttons at every scale, while a tight crop reads them at
+// native scale — proven in internal/ocr/colored_buttons_diag_test.go. These
+// rectangles feed the per-region OCR pass (ocr.ReadColorButtonRegions).
+func FindColorButtons(img image.Image) []image.Rectangle {
+	a := analyzeComponents(img)
+	if a == nil {
+		return nil
+	}
+
+	var rects []image.Rectangle
+	for _, rect := range a.rects {
+		rw, rh := rect.Dx(), rect.Dy()
+
+		// Button proportions: wider than tall, tall enough for a label.
+		if rh < 24 || rh > 110 {
+			continue
+		}
+		if rw < 60 || rw < rh {
+			continue
+		}
+		if !saturatedInterior(img, rect) {
+			continue
+		}
+		rects = append(rects, rect)
+	}
+	return rects
+}
+
+// saturatedInterior reports whether the inset interior of r is predominantly
+// strongly coloured (high channel spread). The button face is a solid
+// saturated colour; the label glyphs are white or dark (spread ~0), so the
+// threshold tolerates a text share of the samples.
+func saturatedInterior(img image.Image, r image.Rectangle) bool {
+	const inset = 4
+	const minSpread = 60
+	const requiredRatio = 0.55
+
+	interior := image.Rect(r.Min.X+inset, r.Min.Y+inset, r.Max.X-inset, r.Max.Y-inset)
+	interior = interior.Intersect(img.Bounds())
+	if interior.Empty() {
+		return false
+	}
+
+	saturated, total := 0, 0
+	for y := interior.Min.Y; y < interior.Max.Y; y += 3 {
+		for x := interior.Min.X; x < interior.Max.X; x += 3 {
+			cr, cg, cb, _ := img.At(x, y).RGBA()
+			r8, g8, b8 := uint8(cr>>8), uint8(cg>>8), uint8(cb>>8)
+			hi, lo := r8, r8
+			if g8 > hi {
+				hi = g8
+			} else if g8 < lo {
+				lo = g8
+			}
+			if b8 > hi {
+				hi = b8
+			} else if b8 < lo {
+				lo = b8
+			}
+			total++
+			if hi-lo >= minSpread {
+				saturated++
+			}
+		}
+	}
+	if total == 0 {
+		return false
+	}
+	return float64(saturated)/float64(total) >= requiredRatio
+}
+
 // lightInterior reports whether the inset interior of r is predominantly
 // bright, as input-field backgrounds are white to light gray. The 85%
 // tolerance leaves room for a caret, placeholder text, or a label that the

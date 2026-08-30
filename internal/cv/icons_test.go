@@ -113,3 +113,36 @@ func TestFindInputBoxes_NilImage(t *testing.T) {
 		t.Fatalf("nil image should yield nil, got %v", boxes)
 	}
 }
+
+func TestFindColorButtons_DetectsSaturatedButton(t *testing.T) {
+	img := whiteCanvas(600, 200)
+	// A PRIMARY-style button: solid saturated blue, wide, label-height.
+	button := image.Rect(100, 80, 400, 130)
+	fillRect(img, button, color.RGBA{102, 126, 234, 255}) // #667eea
+
+	rects := FindColorButtons(img)
+	if len(rects) == 0 {
+		t.Fatal("expected the saturated button to be detected")
+	}
+	center := image.Pt(250, 105)
+	covered := false
+	for _, r := range rects {
+		if center.In(r) {
+			covered = true
+			break
+		}
+	}
+	if !covered {
+		t.Fatalf("no rect covers the button center: %v", rects)
+	}
+}
+
+func TestFindColorButtons_RejectsLightInputBox(t *testing.T) {
+	img := whiteCanvas(600, 200)
+	// A bordered light input field must NOT be proposed as a colour button.
+	drawRectOutline(img, image.Rect(100, 80, 460, 116), color.RGBA{118, 118, 118, 255})
+
+	if rects := FindColorButtons(img); len(rects) != 0 {
+		t.Fatalf("light input box misdetected as colour button: %v", rects)
+	}
+}
