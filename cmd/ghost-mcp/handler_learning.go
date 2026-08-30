@@ -149,7 +149,14 @@ func hammingDistance(h1, h2 uint64) int {
 }
 
 func appendIconElements(existing []learner.Element, iconRects []image.Rectangle, pageIndex, offsetX, offsetY int) []learner.Element {
-	for _, ir := range iconRects {
+	return appendShapeElements(existing, iconRects, pageIndex, offsetX, offsetY, learner.ElementTypeIcon)
+}
+
+// appendShapeElements adds CV-detected rectangles (icons, empty input boxes)
+// as text-less elements of the given type, skipping any rectangle that
+// overlaps an element OCR already found — text elements carry more signal.
+func appendShapeElements(existing []learner.Element, shapeRects []image.Rectangle, pageIndex, offsetX, offsetY int, elemType learner.ElementType) []learner.Element {
+	for _, ir := range shapeRects {
 		ir = ir.Add(image.Pt(offsetX, offsetY))
 
 		isText := false
@@ -163,14 +170,14 @@ func appendIconElements(existing []learner.Element, iconRects []image.Rectangle,
 		}
 		if !isText {
 			existing = append(existing, learner.Element{
-				Text:       "", // pure icons have absolutely no text
+				Text:       "", // shape-detected elements have no text
 				X:          ir.Min.X,
 				Y:          ir.Min.Y,
 				Width:      ir.Dx(),
 				Height:     ir.Dy(),
 				Confidence: 100.0,
 				PageIndex:  pageIndex,
-				Type:       learner.ElementTypeIcon,
+				Type:       elemType,
 				OcrPass:    learner.OcrPassNormal,
 			})
 		}
@@ -309,6 +316,8 @@ func learnScreenAsync(cfg learnCfg) (*learner.View, error) {
 			if os.Getenv("GHOST_MCP_CV_ICONS") != "0" {
 				iconRects := cv.FindIcons(j.img)
 				elems = appendIconElements(elems, iconRects, j.page, cfg.RegionX, cfg.RegionY)
+				inputRects := cv.FindInputBoxes(j.img)
+				elems = appendShapeElements(elems, inputRects, j.page, cfg.RegionX, cfg.RegionY, learner.ElementTypeInput)
 			}
 
 			resultsChan <- ocrResultStruct{page: j.page, elements: elems, err: nil}
@@ -419,6 +428,8 @@ func learnScreenSync(cfg learnCfg) (*learner.View, error) {
 		if os.Getenv("GHOST_MCP_CV_ICONS") != "0" {
 			iconRects := cv.FindIcons(img)
 			pageElements = appendIconElements(pageElements, iconRects, page, cfg.RegionX, cfg.RegionY)
+			inputRects := cv.FindInputBoxes(img)
+			pageElements = appendShapeElements(pageElements, inputRects, page, cfg.RegionX, cfg.RegionY, learner.ElementTypeInput)
 		}
 
 		allElements = append(allElements, pageElements...)
@@ -493,10 +504,16 @@ func learnScreenSync(cfg learnCfg) (*learner.View, error) {
 }
 
 // inferTypes applies InferElementType to every element in the slice.
+// Shape-detected elements (icons, empty input boxes) carry no text; their
+// type was assigned by the detector and re-inferring from the empty string
+// would clobber it to unknown, so they are left as-is.
 func inferTypes(elements []learner.Element) []learner.Element {
 	out := make([]learner.Element, len(elements))
 	copy(out, elements)
 	for i := range out {
+		if out[i].Text == "" && out[i].Type != "" && out[i].Type != learner.ElementTypeUnknown {
+			continue
+		}
 		out[i].Type = learner.InferElementType(out[i].Text, out[i].Width, out[i].Height)
 	}
 	return out

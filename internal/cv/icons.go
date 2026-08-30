@@ -4,9 +4,21 @@ import (
 	"image"
 )
 
-// FindIcons applies a fast pure-Go edge detection and connected-component grouping
-// to discover visual elements on the screen.
-func FindIcons(img image.Image) []image.Rectangle {
+// analysis holds the shared edge-grid connected-component result plus the
+// grayscale buffer, so shape detectors can run cheap interior checks without
+// re-scanning the image.
+type analysis struct {
+	rects  []image.Rectangle // component bounding boxes, in img's coordinate space
+	gray   []uint8           // grayscale pixels, indexed [y*w+x] relative to bounds.Min
+	w, h   int
+	bounds image.Rectangle
+}
+
+// analyzeComponents applies a fast pure-Go edge detection and
+// connected-component grouping over a coarse grid. It returns every component
+// found, unfiltered; detectors like FindIcons and FindInputBoxes apply their
+// own shape criteria.
+func analyzeComponents(img image.Image) *analysis {
 	if img == nil {
 		return nil
 	}
@@ -60,12 +72,11 @@ func FindIcons(img image.Image) []image.Rectangle {
 		}
 	}
 
-	// 3. Connected Components on the Coarse Grid
+	// 3. Connected components on the coarse grid.
+	// Dilation: link cells up to 2 cells apart (Chebyshev distance <= 2) so
+	// icon pieces separated by a small gap still group together.
 	visited := make([]bool, gw*gh)
 	var rects []image.Rectangle
-
-	// Dilation step: if standard grid is used, sometimes icon pieces are 1 cell apart.
-	// We'll link cells that are up to 2 cells apart (Chebyshev distance <= 2).
 
 	for y := 0; y < gh; y++ {
 		for x := 0; x < gw; x++ {
@@ -73,7 +84,6 @@ func FindIcons(img image.Image) []image.Rectangle {
 				continue
 			}
 
-			// BFS or DFS
 			minX, maxX := x, x
 			minY, maxY := y, y
 			q := []int{y*gw + x}
@@ -98,7 +108,6 @@ func FindIcons(img image.Image) []image.Rectangle {
 					maxY = cy
 				}
 
-				// Check neighborhood (radius 2 for dilation)
 				for ny := cy - 2; ny <= cy+2; ny++ {
 					for nx := cx - 2; nx <= cx+2; nx++ {
 						if nx >= 0 && nx < gw && ny >= 0 && ny < gh {
@@ -112,36 +121,111 @@ func FindIcons(img image.Image) []image.Rectangle {
 				}
 			}
 
-			// Convert back to pixel coordinates
 			rect := image.Rect(
 				minX*cellSize,
 				minY*cellSize,
 				(maxX+1)*cellSize,
 				(maxY+1)*cellSize,
 			)
-
-			// Offset to global bounds
-			rect = rect.Add(b.Min)
-
-			// 4. Filtering criteria for icons
-			rw, rh := rect.Dx(), rect.Dy()
-
-			// Too small? (noise or 1-letter text)
-			if rw < 14 || rh < 14 {
-				continue
-			}
-			// Too big? (panels, windows, large hero images)
-			if rw > 150 || rh > 150 {
-				continue
-			}
-			// Extreme aspect ratios (lines, dividers, text inputs)
-			if rw > rh*4 || rh > rw*4 {
-				continue
-			}
-
-			rects = append(rects, rect)
+			rects = append(rects, rect.Add(b.Min))
 		}
 	}
 
+	return &analysis{rects: rects, gray: gray, w: w, h: h, bounds: b}
+}
+
+// FindIcons discovers icon-sized visual elements: compact components that are
+// neither text-line thin nor panel large.
+func FindIcons(img image.Image) []image.Rectangle {
+	a := analyzeComponents(img)
+	if a == nil {
+		return nil
+	}
+
+	var rects []image.Rectangle
+	for _, rect := range a.rects {
+		rw, rh := rect.Dx(), rect.Dy()
+
+		// Too small? (noise or 1-letter text)
+		if rw < 14 || rh < 14 {
+			continue
+		}
+		// Too big? (panels, windows, large hero images)
+		if rw > 150 || rh > 150 {
+			continue
+		}
+		// Extreme aspect ratios (lines, dividers, text inputs)
+		if rw > rh*4 || rh > rw*4 {
+			continue
+		}
+
+		rects = append(rects, rect)
+	}
 	return rects
+}
+
+// FindInputBoxes discovers rectangles that look like text-entry fields: wide,
+// short components whose interior is mostly light and uniform, the way
+// browsers render <input> and <textarea> backgrounds. OCR cannot see an input
+// that contains no text at all, so this shape detector is what gives the
+// learned view coordinates (and therefore visual_ids) for empty fields.
+func FindInputBoxes(img image.Image) []image.Rectangle {
+	a := analyzeComponents(img)
+	if a == nil {
+		return nil
+	}
+
+	var rects []image.Rectangle
+	for _, rect := range a.rects {
+		rw, rh := rect.Dx(), rect.Dy()
+
+		// Single-line inputs are ~20-50px tall, textareas up to ~130px.
+		if rh < 18 || rh > 130 {
+			continue
+		}
+		// Wide and clearly wider than tall (3:1) — separates fields from
+		// icons, cards, and swatches.
+		if rw < 80 || rw < rh*3 {
+			continue
+		}
+		if !a.lightInterior(rect) {
+			continue
+		}
+		rects = append(rects, rect)
+	}
+	return rects
+}
+
+// lightInterior reports whether the inset interior of r is predominantly
+// bright, as input-field backgrounds are white to light gray. The 85%
+// tolerance leaves room for a caret, placeholder text, or a label that the
+// coarse grid merged into the component.
+func (a *analysis) lightInterior(r image.Rectangle) bool {
+	const inset = 5
+	const brightMin = 200
+	const requiredRatio = 0.85
+
+	interior := image.Rect(r.Min.X+inset, r.Min.Y+inset, r.Max.X-inset, r.Max.Y-inset)
+	interior = interior.Intersect(a.bounds)
+	if interior.Empty() {
+		return false
+	}
+
+	bright, total := 0, 0
+	for y := interior.Min.Y; y < interior.Max.Y; y += 3 {
+		for x := interior.Min.X; x < interior.Max.X; x += 3 {
+			lx, ly := x-a.bounds.Min.X, y-a.bounds.Min.Y
+			if lx < 0 || ly < 0 || lx >= a.w || ly >= a.h {
+				continue
+			}
+			total++
+			if a.gray[ly*a.w+lx] >= brightMin {
+				bright++
+			}
+		}
+	}
+	if total == 0 {
+		return false
+	}
+	return float64(bright)/float64(total) >= requiredRatio
 }
