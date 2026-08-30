@@ -218,6 +218,12 @@ func learnScreenAsync(cfg learnCfg) (*learner.View, error) {
 	scrollsDone := 0
 	consecutiveRepeats := 0
 
+	// Wheel events go to the window under the cursor, not the focused one.
+	// Park the cursor inside the scan region so page scrolling scrolls the
+	// target surface (found live: a cursor left over another window scrolled
+	// that window instead, and every "page" captured identically).
+	uiMoveMouse(cfg.RegionX+cfg.RegionW/2, cfg.RegionY+cfg.RegionH/2)
+
 	jobs := make([]ocrJob, 0, cfg.MaxPages)
 
 	for page := 0; page < cfg.MaxPages; page++ {
@@ -382,6 +388,10 @@ func learnScreenSync(cfg learnCfg) (*learner.View, error) {
 	prevPageText := ""
 	scrollsDone := 0
 	consecutiveRepeats := 0
+
+	// Park the cursor inside the scan region so page scrolling scrolls the
+	// target surface; see the matching comment in learnScreenAsync.
+	uiMoveMouse(cfg.RegionX+cfg.RegionW/2, cfg.RegionY+cfg.RegionH/2)
 
 	for page := 0; page < cfg.MaxPages; page++ {
 		img, err := uiCaptureImage(cfg.RegionX, cfg.RegionY, cfg.RegionW, cfg.RegionH)
