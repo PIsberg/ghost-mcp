@@ -193,7 +193,10 @@ func handleMoveMouse(_ context.Context, request mcp.CallToolRequest) (*mcp.CallT
 	vid, errVID := getIntParam(request, "visual_id")
 
 	if errVID == nil {
-		foundX, foundY, found := globalLearner.GetElementCoords(vid)
+		foundX, foundY, found, navErr := resolveVisualTarget(vid)
+		if navErr != nil {
+			return mcp.NewToolResultError(navErr.Error()), nil
+		}
 		if !found {
 			logging.Error("Target element (visual_id=%d) not found in current view", vid)
 			return mcp.NewToolResultError(fmt.Sprintf("visual_id %d not found in current view", vid)), nil
@@ -262,7 +265,10 @@ func handleClickAt(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallT
 	vid, errVID := getIntParam(request, "visual_id")
 
 	if errVID == nil {
-		foundX, foundY, found := globalLearner.GetElementCoords(vid)
+		foundX, foundY, found, navErr := resolveVisualTarget(vid)
+		if navErr != nil {
+			return mcp.NewToolResultError(navErr.Error()), nil
+		}
 		if !found {
 			logging.Error("Target element (visual_id=%d) not found in view", vid)
 			return mcp.NewToolResultError(fmt.Sprintf("visual_id %d not found in current view", vid)), nil
@@ -341,7 +347,10 @@ func handleDoubleClick(_ context.Context, request mcp.CallToolRequest) (*mcp.Cal
 	vid, errVID := getIntParam(request, "visual_id")
 
 	if errVID == nil {
-		foundX, foundY, found := globalLearner.GetElementCoords(vid)
+		foundX, foundY, found, navErr := resolveVisualTarget(vid)
+		if navErr != nil {
+			return mcp.NewToolResultError(navErr.Error()), nil
+		}
 		if !found {
 			logging.Error("Target element (visual_id=%d) not found", vid)
 			return mcp.NewToolResultError(fmt.Sprintf("visual_id %d not found in current view", vid)), nil
@@ -422,6 +431,7 @@ func handleScroll(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallTo
 	}
 
 	uiScrollDir(amount, direction)
+	recordTrackedScroll(amount, direction)
 
 	// Run a quick OCR pass on the centre half of the screen so the AI knows
 	// what is now visible without needing a separate screenshot + find_elements call.
@@ -445,6 +455,7 @@ func handleScroll(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallTo
 func scrollSearchForText(ctx context.Context, cfg scrollSearchConfig) (*scrollSearchResult, error) {
 	var lastHash uint64
 	var lastVisibleText string
+	repeatCount := 0
 
 	for attempt := 0; attempt <= cfg.MaxScrolls; attempt++ {
 		img, captureErr := uiCaptureImage(cfg.RegionX, cfg.RegionY, cfg.RegionW, cfg.RegionH)
@@ -454,13 +465,20 @@ func scrollSearchForText(ctx context.Context, cfg scrollSearchConfig) (*scrollSe
 
 		currentHash := ocr.HashImageFast(img)
 
-		// Abort immediately before doing expensive OCR if the viewport hasn't changed
+		// An unchanged viewport is only proof of the end after two consecutive
+		// identical captures: right after a scroll a single capture can race
+		// the repaint and look unchanged even though the page moved.
 		if attempt > 0 && currentHash == lastHash {
-			return &scrollSearchResult{
-				VisibleText:      lastVisibleText,
-				ScrollCount:      attempt,
-				RepeatedViewport: true,
-			}, nil
+			repeatCount++
+			if repeatCount >= 2 {
+				return &scrollSearchResult{
+					VisibleText:      lastVisibleText,
+					ScrollCount:      attempt,
+					RepeatedViewport: true,
+				}, nil
+			}
+		} else {
+			repeatCount = 0
 		}
 		lastHash = currentHash
 
@@ -498,6 +516,11 @@ func scrollSearchForText(ctx context.Context, cfg scrollSearchConfig) (*scrollSe
 			return nil, err
 		}
 		uiScrollDir(cfg.Amount, cfg.Direction)
+		recordTrackedScroll(cfg.Amount, cfg.Direction)
+		// Give the page time to repaint before the next capture, so the
+		// repeat detector compares the post-scroll frame rather than a
+		// stale pre-scroll one.
+		time.Sleep(250 * time.Millisecond)
 	}
 
 	return nil, fmt.Errorf("unreachable scrollSearchForText state")
@@ -671,7 +694,10 @@ func handleClickAndType(ctx context.Context, request mcp.CallToolRequest) (*mcp.
 	vid, errVID := getIntParam(request, "visual_id")
 
 	if errVID == nil {
-		foundX, foundY, found := globalLearner.GetElementCoords(vid)
+		foundX, foundY, found, navErr := resolveVisualTarget(vid)
+		if navErr != nil {
+			return mcp.NewToolResultError(navErr.Error()), nil
+		}
 		if !found {
 			logging.Error("Target element (visual_id=%d) not found", vid)
 			return mcp.NewToolResultError(fmt.Sprintf("visual_id %d not found in current view", vid)), nil
@@ -1197,6 +1223,9 @@ func main() {
 
 	logging.Info("Starting %s v%s...", ServerName, ServerVersion)
 	logging.Info("Platform: %s/%s", runtime.GOOS, runtime.GOARCH)
+
+	// Opt-in per-monitor DPI awareness must be declared before any capture.
+	setupDPIAwareness()
 
 	// Step 1: Initialize environment (auto-configure Tesseract/DLLs on Windows)
 	SetupWindowsEnv()

@@ -463,19 +463,15 @@ func handleFindAndClick(ctx context.Context, request mcp.CallToolRequest) (*mcp.
 			}
 		}
 
-		if lx, ly, lw, lh, scrollsNeeded, ok := learnerRegionHint(searchText, screenW, screenH); ok {
-			if scrollsNeeded > 0 {
-				logging.Info("find_and_click: learned view — element on scroll page, scrolling down %d ticks then using region (%d,%d) %dx%d",
-					scrollsNeeded, lx, ly, lw, lh)
-				uiScrollDir(scrollsNeeded, "down")
-				time.Sleep(300 * time.Millisecond)
-				if err := uiCheckFailsafe(); err != nil {
-					return mcp.NewToolResultError(err.Error()), nil
-				}
+		if lx, ly, lw, lh, pageIdx, ok := learnerRegionHint(searchText, screenW, screenH); ok {
+			// Navigate to the element's captured page by tracked delta rather
+			// than blindly scrolling down; see scrollToLearnedPage.
+			if err := scrollToLearnedPage(pageIdx); err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
 			}
 			regionX, regionY, regionW, regionH = lx, ly, lw, lh
 			logging.Info("find_and_click: learned view region (%d,%d) %dx%d for %q (scroll_page=%d)",
-				regionX, regionY, regionW, regionH, searchText, scrollsNeeded)
+				regionX, regionY, regionW, regionH, searchText, pageIdx)
 
 			// Remember the learned element's location as a fallback click target.
 			// If the narrowed live re-scan below fails (common for light text on
@@ -846,6 +842,7 @@ func findAndClickWithScroll(
 			logging.Info("Text %q not found on screen (scroll %d/%d), scrolling %s", searchText, scroll, maxScrolls, scrollDirection)
 			robotgo.Move(screenW/2, scrollAmount*20) // Move to scroll area
 			uiScrollDir(scrollAmount, scrollDirection)
+			recordTrackedScroll(scrollAmount, scrollDirection)
 			time.Sleep(200 * time.Millisecond) // Wait for scroll animation
 
 			if err := checkFailsafe(); err != nil {
@@ -2626,6 +2623,39 @@ func handleFindClickAndType(ctx context.Context, request mcp.CallToolRequest) (*
 				passName = "label"
 				labelFound = true
 				logging.Info("find_click_and_type: found label %q for search text %q", labelFoundText, searchText)
+			}
+		}
+	}
+
+	// Learned-view assist: the live viewport may simply be on the wrong scroll
+	// page. When the learned view knows this text, navigate to its captured
+	// page and re-scan the narrowed region before falling back to blind
+	// scrolling — the same fast path find_and_click already has.
+	userSpecifiedRegion := regionX != 0 || regionY != 0 || regionW != screenW || regionH != screenH
+	if !found && !userSpecifiedRegion {
+		autoLearnIfNeeded()
+		if lx, ly, lw, lh, pageIdx, ok := learnerRegionHint(searchText, screenW, screenH); ok {
+			if err := scrollToLearnedPage(pageIdx); err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			if rimg, cerr := robotgo.CaptureImg(lx, ly, lw, lh); cerr == nil && rimg != nil {
+				if mx, my, mX, mY, f2, p2 := parallelFindText(ctx, rimg, searchText, nth, grayscale, elementTypeFilter); f2 {
+					minX, minY, maxX, maxY = lx+mx, ly+my, lx+mX, ly+mY
+					found, passName = true, p2
+					logging.Info("find_click_and_type: found %q via learned-view region on page %d", searchText, pageIdx)
+				}
+			}
+			if !found {
+				// The narrowed live re-scan missed the element (common for
+				// faint placeholder text); fall back to the learned location.
+				// The type-verification step below still guards a stale hit.
+				if ecx, ecy, _, _, ok2 := learnerElementCenter(searchText); ok2 {
+					minX, minY = ecx, ecy
+					maxX, maxY = minX, minY
+					found = true
+					passName = "learned_view"
+					logging.Info("find_click_and_type: live re-scan missed %q; using learned-view location (%d,%d)", searchText, ecx, ecy)
+				}
 			}
 		}
 	}

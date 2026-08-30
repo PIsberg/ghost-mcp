@@ -149,7 +149,14 @@ func hammingDistance(h1, h2 uint64) int {
 }
 
 func appendIconElements(existing []learner.Element, iconRects []image.Rectangle, pageIndex, offsetX, offsetY int) []learner.Element {
-	for _, ir := range iconRects {
+	return appendShapeElements(existing, iconRects, pageIndex, offsetX, offsetY, learner.ElementTypeIcon)
+}
+
+// appendShapeElements adds CV-detected rectangles (icons, empty input boxes)
+// as text-less elements of the given type, skipping any rectangle that
+// overlaps an element OCR already found — text elements carry more signal.
+func appendShapeElements(existing []learner.Element, shapeRects []image.Rectangle, pageIndex, offsetX, offsetY int, elemType learner.ElementType) []learner.Element {
+	for _, ir := range shapeRects {
 		ir = ir.Add(image.Pt(offsetX, offsetY))
 
 		isText := false
@@ -163,14 +170,14 @@ func appendIconElements(existing []learner.Element, iconRects []image.Rectangle,
 		}
 		if !isText {
 			existing = append(existing, learner.Element{
-				Text:       "", // pure icons have absolutely no text
+				Text:       "", // shape-detected elements have no text
 				X:          ir.Min.X,
 				Y:          ir.Min.Y,
 				Width:      ir.Dx(),
 				Height:     ir.Dy(),
 				Confidence: 100.0,
 				PageIndex:  pageIndex,
-				Type:       learner.ElementTypeIcon,
+				Type:       elemType,
 				OcrPass:    learner.OcrPassNormal,
 			})
 		}
@@ -209,6 +216,13 @@ func learnScreenAsync(cfg learnCfg) (*learner.View, error) {
 	var prevImg image.Image
 	var prevHash uint64
 	scrollsDone := 0
+	consecutiveRepeats := 0
+
+	// Wheel events go to the window under the cursor, not the focused one.
+	// Park the cursor inside the scan region so page scrolling scrolls the
+	// target surface (found live: a cursor left over another window scrolled
+	// that window instead, and every "page" captured identically).
+	uiMoveMouse(cfg.RegionX+cfg.RegionW/2, cfg.RegionY+cfg.RegionH/2)
 
 	jobs := make([]ocrJob, 0, cfg.MaxPages)
 
@@ -244,16 +258,23 @@ func learnScreenAsync(cfg learnCfg) (*learner.View, error) {
 		}
 
 		if page > 0 {
+			repeat := false
 			if usePHash {
-				if hammingDistance(prevHash, currHash) <= 2 {
-					logging.Info("learn_screen: page %d dHash matches previous (dist <= 2) — reached end of scrollable area", page)
+				repeat = hammingDistance(prevHash, currHash) <= 2
+			} else {
+				repeat = imageSimilarity(prevImg, img) > 0.99
+			}
+			if repeat {
+				// With a small scroll step, adjacent viewports can look nearly
+				// identical, so a single repeat is not proof the page ended.
+				// Require two repeats in a row before stopping.
+				consecutiveRepeats++
+				if consecutiveRepeats >= 2 {
+					logging.Info("learn_screen: page %d matches previous twice in a row — reached end of scrollable area", page)
 					break
 				}
 			} else {
-				if imageSimilarity(prevImg, img) > 0.99 {
-					logging.Info("learn_screen: page %d image matches previous — reached end of scrollable area", page)
-					break
-				}
+				consecutiveRepeats = 0
 			}
 		}
 		prevImg = img
@@ -301,6 +322,8 @@ func learnScreenAsync(cfg learnCfg) (*learner.View, error) {
 			if os.Getenv("GHOST_MCP_CV_ICONS") != "0" {
 				iconRects := cv.FindIcons(j.img)
 				elems = appendIconElements(elems, iconRects, j.page, cfg.RegionX, cfg.RegionY)
+				inputRects := cv.FindInputBoxes(j.img)
+				elems = appendShapeElements(elems, inputRects, j.page, cfg.RegionX, cfg.RegionY, learner.ElementTypeInput)
 			}
 
 			resultsChan <- ocrResultStruct{page: j.page, elements: elems, err: nil}
@@ -364,6 +387,11 @@ func learnScreenSync(cfg learnCfg) (*learner.View, error) {
 	var pages []learner.PageSnapshot
 	prevPageText := ""
 	scrollsDone := 0
+	consecutiveRepeats := 0
+
+	// Park the cursor inside the scan region so page scrolling scrolls the
+	// target surface; see the matching comment in learnScreenAsync.
+	uiMoveMouse(cfg.RegionX+cfg.RegionW/2, cfg.RegionY+cfg.RegionH/2)
 
 	for page := 0; page < cfg.MaxPages; page++ {
 		img, err := uiCaptureImage(cfg.RegionX, cfg.RegionY, cfg.RegionW, cfg.RegionH)
@@ -410,6 +438,8 @@ func learnScreenSync(cfg learnCfg) (*learner.View, error) {
 		if os.Getenv("GHOST_MCP_CV_ICONS") != "0" {
 			iconRects := cv.FindIcons(img)
 			pageElements = appendIconElements(pageElements, iconRects, page, cfg.RegionX, cfg.RegionY)
+			inputRects := cv.FindInputBoxes(img)
+			pageElements = appendShapeElements(pageElements, inputRects, page, cfg.RegionX, cfg.RegionY, learner.ElementTypeInput)
 		}
 
 		allElements = append(allElements, pageElements...)
@@ -438,8 +468,16 @@ func learnScreenSync(cfg learnCfg) (*learner.View, error) {
 		}
 
 		if page > 0 && textSimilarity(prevPageText, currentText) > 0.85 {
-			logging.Info("learn_screen: page %d content matches previous — reached end of scrollable area", page)
-			break
+			// With a small scroll step, adjacent viewports legitimately share
+			// most of their text, so a single repeat is not proof the page
+			// ended. Require two repeats in a row before stopping.
+			consecutiveRepeats++
+			if consecutiveRepeats >= 2 {
+				logging.Info("learn_screen: page %d content matches previous twice in a row — reached end of scrollable area", page)
+				break
+			}
+		} else {
+			consecutiveRepeats = 0
 		}
 		prevPageText = currentText
 
@@ -476,10 +514,16 @@ func learnScreenSync(cfg learnCfg) (*learner.View, error) {
 }
 
 // inferTypes applies InferElementType to every element in the slice.
+// Shape-detected elements (icons, empty input boxes) carry no text; their
+// type was assigned by the detector and re-inferring from the empty string
+// would clobber it to unknown, so they are left as-is.
 func inferTypes(elements []learner.Element) []learner.Element {
 	out := make([]learner.Element, len(elements))
 	copy(out, elements)
 	for i := range out {
+		if out[i].Text == "" && out[i].Type != "" && out[i].Type != learner.ElementTypeUnknown {
+			continue
+		}
 		out[i].Type = learner.InferElementType(out[i].Text, out[i].Width, out[i].Height)
 	}
 	return out
@@ -975,8 +1019,9 @@ func handleGetPageScreenshot(_ context.Context, request mcp.CallToolRequest) (*m
 // =============================================================================
 
 // learnerRegionHint checks the learned view for a matching element and returns
-// a padded region hint plus the number of scroll ticks needed to reach it.
-func learnerRegionHint(searchText string, screenW, screenH int) (x, y, w, h, scrollsNeeded int, found bool) {
+// a padded region hint plus the learned page index the element was captured on.
+// Callers navigate there with scrollToLearnedPage before scanning the region.
+func learnerRegionHint(searchText string, screenW, screenH int) (x, y, w, h, pageIndex int, found bool) {
 	if !globalLearner.IsEnabled() || !globalLearner.HasView() {
 		return 0, 0, 0, 0, 0, false
 	}
@@ -991,12 +1036,7 @@ func learnerRegionHint(searchText string, screenW, screenH int) (x, y, w, h, scr
 	rw := min(screenW-rx, elem.Width+2*padding)
 	rh := min(screenH-ry, elem.Height+2*padding)
 
-	view := globalLearner.GetView()
-	scrolls := 0
-	if view != nil {
-		scrolls = elem.PageIndex * view.ScrollAmountUsed
-	}
-	return rx, ry, rw, rh, scrolls, true
+	return rx, ry, rw, rh, elem.PageIndex, true
 }
 
 // learnerElementCenter returns the screen-space center and size of a learned
@@ -1017,6 +1057,62 @@ func learnerElementCenter(searchText string) (cx, cy, w, h int, ok bool) {
 		return 0, 0, 0, 0, false
 	}
 	return elem.X + elem.Width/2, elem.Y + elem.Height/2, elem.Width, elem.Height, true
+}
+
+// scrollToLearnedPage brings the real viewport to the scroll offset at which
+// the given learned page was captured, using the Learner's tracked scroll
+// position. A no-op when no view exists or the viewport is already there.
+// The scroll is recorded, so repeated calls (or calls after other tracked
+// scrolls) navigate by delta instead of blindly scrolling down.
+func scrollToLearnedPage(pageIndex int) error {
+	view := globalLearner.GetView()
+	if view == nil {
+		return nil
+	}
+	target := pageIndex * view.ScrollAmountUsed
+	delta := target - globalLearner.CurrentScrollTicks()
+	if delta == 0 {
+		return nil
+	}
+	dir := "down"
+	ticks := delta
+	if delta < 0 {
+		dir = "up"
+		ticks = -delta
+	}
+	logging.Info("learned view: navigating %d ticks %s to reach page %d", ticks, dir, pageIndex)
+	uiScrollDir(ticks, dir)
+	globalLearner.RecordScroll(delta)
+	time.Sleep(300 * time.Millisecond)
+	return uiCheckFailsafe()
+}
+
+// recordTrackedScroll records a vertical scroll in the Learner's tracked
+// offset so learned page positions stay resolvable after server-initiated
+// scrolling. Horizontal scrolls do not affect learned page positions.
+func recordTrackedScroll(amount int, direction string) {
+	switch direction {
+	case "down":
+		globalLearner.RecordScroll(amount)
+	case "up":
+		globalLearner.RecordScroll(-amount)
+	}
+}
+
+// resolveVisualTarget resolves a visual_id from the learned view to clickable
+// screen coordinates. If the element was captured on a non-zero scroll page,
+// the viewport is first scrolled to that page so the stored page-relative
+// coordinates are valid; previously the raw coordinates were clicked at
+// whatever scroll position the screen happened to be in.
+func resolveVisualTarget(vid int) (x, y int, found bool, err error) {
+	elem, ok := globalLearner.GetElementByID(vid)
+	if !ok {
+		return 0, 0, false, nil
+	}
+	if navErr := scrollToLearnedPage(elem.PageIndex); navErr != nil {
+		return 0, 0, true, navErr
+	}
+	return elem.X + elem.Width/2, elem.Y + elem.Height/2, true, nil
 }
 
 // autoLearnIfNeeded triggers a learning scan the first time a tool is called

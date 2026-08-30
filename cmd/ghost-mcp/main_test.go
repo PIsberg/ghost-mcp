@@ -1319,7 +1319,7 @@ func TestHandleScrollUntilText_StopsWhenViewportRepeats(t *testing.T) {
 	uiCaptureImage = func(x, y, width, height int) (image.Image, error) {
 		return image.NewRGBA(image.Rect(0, 0, width, height)), nil
 	}
-	visibleTexts := []string{"same viewport", "same viewport"}
+	visibleTexts := []string{"same viewport", "same viewport", "same viewport"}
 	var readCalls int
 	uiReadImage = func(image.Image, ocr.Options) (*ocr.Result, error) {
 		text := visibleTexts[readCalls]
@@ -1352,8 +1352,10 @@ func TestHandleScrollUntilText_StopsWhenViewportRepeats(t *testing.T) {
 	if !strings.Contains(text, "viewport stopped changing") {
 		t.Fatalf("unexpected error text: %s", text)
 	}
-	if scrollCalls != 1 {
-		t.Fatalf("scroll calls = %d, want 1", scrollCalls)
+	// Two scrolls, not one: a single unchanged capture can be a repaint race,
+	// so the search only gives up after two identical captures in a row.
+	if scrollCalls != 2 {
+		t.Fatalf("scroll calls = %d, want 2", scrollCalls)
 	}
 }
 

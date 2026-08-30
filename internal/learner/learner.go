@@ -119,6 +119,11 @@ type Learner struct {
 	mu      sync.RWMutex
 	view    *View
 	enabled bool
+	// scrollTicks tracks the viewport's current scroll offset, in wheel ticks,
+	// relative to the position at which the view was captured (0 = capture
+	// origin, positive = scrolled down). Every server-initiated scroll must be
+	// recorded here so page-relative element coordinates stay resolvable.
+	scrollTicks int
 }
 
 // New returns a new Learner with learning mode disabled.
@@ -165,6 +170,25 @@ func (l *Learner) GetElementCoords(id int) (x, y int, found bool) {
 	return 0, 0, false
 }
 
+// GetElementByID returns a copy of the element with the given numeric ID and
+// whether it was found. Unlike GetElementCoords it exposes the full element,
+// so callers can navigate to the element's captured scroll page before using
+// its page-relative coordinates.
+func (l *Learner) GetElementByID(id int) (Element, bool) {
+	l.mu.RLock()
+	defer l.mu.RUnlock()
+
+	if l.view == nil {
+		return Element{}, false
+	}
+	for _, e := range l.view.Elements {
+		if e.ID == id {
+			return e, true
+		}
+	}
+	return Element{}, false
+}
+
 // GetView returns the current learned view. Returns nil if not yet learned.
 func (l *Learner) GetView() *View {
 	l.mu.RLock()
@@ -172,11 +196,14 @@ func (l *Learner) GetView() *View {
 	return l.view
 }
 
-// SetView replaces the current learned view with v.
+// SetView replaces the current learned view with v and resets the tracked
+// scroll offset: a fresh view is always captured from (and scrolled back to)
+// its own origin position.
 func (l *Learner) SetView(v *View) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	l.view = v
+	l.scrollTicks = 0
 }
 
 // ClearView discards the current learned view.
@@ -184,6 +211,7 @@ func (l *Learner) ClearView() {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	l.view = nil
+	l.scrollTicks = 0
 }
 
 // HasView reports whether a learned view is currently available.
@@ -191,6 +219,24 @@ func (l *Learner) HasView() bool {
 	l.mu.RLock()
 	defer l.mu.RUnlock()
 	return l.view != nil
+}
+
+// RecordScroll adjusts the tracked scroll offset by deltaTicks wheel ticks
+// (positive = scrolled down, negative = scrolled up). Every scroll the server
+// performs while a view is held must be recorded here, otherwise learned
+// page-relative coordinates silently desync from the real viewport.
+func (l *Learner) RecordScroll(deltaTicks int) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.scrollTicks += deltaTicks
+}
+
+// CurrentScrollTicks returns the tracked scroll offset, in wheel ticks,
+// relative to the view's capture origin.
+func (l *Learner) CurrentScrollTicks() int {
+	l.mu.RLock()
+	defer l.mu.RUnlock()
+	return l.scrollTicks
 }
 
 // GetPageScreenshot returns the stored JPEG bytes for the given page index,
