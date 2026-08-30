@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ghost-mcp/internal/cv"
 	"github.com/ghost-mcp/internal/learner"
 	"github.com/ghost-mcp/internal/logging"
 	"github.com/ghost-mcp/internal/ocr"
@@ -550,6 +551,20 @@ func handleFindAndClick(ctx context.Context, request mcp.CallToolRequest) (*mcp.
 			}
 		}
 
+		// Region-proposal rescue (issue #158): white/dark labels on saturated
+		// colour buttons are invisible to every full-image pass at every
+		// scale, but a tight crop of the button reads them natively.
+		if rects := cv.FindColorButtons(img); len(rects) > 0 {
+			if rr, rerr := ocr.ReadColorButtonRegions(img, rects); rerr == nil && rr != nil {
+				if bMinX, bMinY, bMaxX, bMaxY, bFound := findButtonBounds(rr, searchText, nth, elementTypeFilter); bFound {
+					logging.Info("find_and_click: region-proposal crop pass found %q", searchText)
+					minX, minY, maxX, maxY, found, passName = bMinX, bMinY, bMaxX, bMaxY, true, "region"
+				}
+			}
+		}
+	}
+
+	if !found {
 		logging.Info("Text %q (occurrence %d) not found on screen", searchText, nth)
 
 		// Get candidates to show what WAS found (helps AI decide next action)
