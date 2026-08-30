@@ -1141,7 +1141,8 @@ func recordTrackedScroll(amount int, direction string) {
 // screen coordinates. If the element was captured on a non-zero scroll page,
 // the viewport is first scrolled to that page so the stored page-relative
 // coordinates are valid; previously the raw coordinates were clicked at
-// whatever scroll position the screen happened to be in.
+// whatever scroll position the screen happened to be in. The landing page is
+// then verified against the stored snapshot, since this path clicks blind.
 func resolveVisualTarget(vid int) (x, y int, found bool, err error) {
 	elem, ok := globalLearner.GetElementByID(vid)
 	if !ok {
@@ -1150,7 +1151,99 @@ func resolveVisualTarget(vid int) (x, y int, found bool, err error) {
 	if navErr := scrollToLearnedPage(elem.PageIndex); navErr != nil {
 		return 0, 0, true, navErr
 	}
+	if verErr := verifyLearnedPage(elem.PageIndex); verErr != nil {
+		return 0, 0, true, verErr
+	}
 	return elem.X + elem.Width/2, elem.Y + elem.Height/2, true, nil
+}
+
+// learnedPageMatchMaxDist is the maximum dHash hamming distance at which a
+// live capture is considered to show a stored learned page. Re-captures of
+// the same position differ by 0-2 bits (cursor, caret); distinct scroll pages
+// of real UIs differ by far more.
+const learnedPageMatchMaxDist = 10
+
+// verifyLearnedPage compares the live viewport against the stored snapshot of
+// the learned page and, on mismatch, attempts one resync: it locates which
+// stored page the screen actually shows, corrects the tracked scroll offset,
+// and navigates again. This catches drift the server cannot observe — a page
+// reload restoring a mid-page position, or the user scrolling by hand.
+// If the screen matches no learned page, the stale view is cleared and an
+// error tells the caller to re-learn instead of clicking blind.
+//
+// Regional learns do not record their region origin, so only full-screen
+// views are verified; others pass through unchanged.
+func verifyLearnedPage(pageIndex int) error {
+	view := globalLearner.GetView()
+	if view == nil || len(view.Pages) == 0 {
+		return nil
+	}
+	if view.Pages[0].Width != view.ScreenW || view.Pages[0].Height != view.ScreenH {
+		return nil
+	}
+	storedHash, ok := pageSnapshotDHash(view, pageIndex)
+	if !ok {
+		return nil
+	}
+
+	liveHash, ok := captureDHash(view)
+	if !ok {
+		return nil
+	}
+	if hammingDistance(liveHash, storedHash) <= learnedPageMatchMaxDist {
+		return nil
+	}
+
+	// Mismatch: find which learned page the screen actually shows.
+	bestPage, bestDist := -1, 65
+	for _, p := range view.Pages {
+		h, ok := pageSnapshotDHash(view, p.Index)
+		if !ok {
+			continue
+		}
+		if d := hammingDistance(liveHash, h); d < bestDist {
+			bestDist, bestPage = d, p.Index
+		}
+	}
+	if bestPage >= 0 && bestDist <= learnedPageMatchMaxDist {
+		logging.Info("learned view: viewport shows page %d, expected page %d — resyncing tracked offset", bestPage, pageIndex)
+		// The tracker believed we were at pageIndex; the screen says bestPage.
+		globalLearner.RecordScroll((bestPage - pageIndex) * view.ScrollAmountUsed)
+		if err := scrollToLearnedPage(pageIndex); err != nil {
+			return err
+		}
+		if liveHash, ok := captureDHash(view); ok {
+			if h, ok2 := pageSnapshotDHash(view, pageIndex); ok2 && hammingDistance(liveHash, h) <= learnedPageMatchMaxDist {
+				return nil
+			}
+		}
+	}
+
+	globalLearner.ClearView()
+	return fmt.Errorf("learned view is out of sync with the screen (expected page %d); view cleared — call learn_screen and retry", pageIndex)
+}
+
+// pageSnapshotDHash decodes the stored JPEG for a page and returns its dHash.
+func pageSnapshotDHash(view *learner.View, pageIndex int) (uint64, bool) {
+	for _, p := range view.Pages {
+		if p.Index == pageIndex && len(p.JPEG) > 0 {
+			img, err := jpeg.Decode(bytes.NewReader(p.JPEG))
+			if err != nil {
+				return 0, false
+			}
+			return computeDHash(img), true
+		}
+	}
+	return 0, false
+}
+
+// captureDHash captures the full learned-view region live and hashes it.
+func captureDHash(view *learner.View) (uint64, bool) {
+	img, err := uiCaptureImage(0, 0, view.ScreenW, view.ScreenH)
+	if err != nil || img == nil {
+		return 0, false
+	}
+	return computeDHash(img), true
 }
 
 // autoLearnIfNeeded triggers a learning scan the first time a tool is called
