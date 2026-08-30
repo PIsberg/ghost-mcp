@@ -6,6 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Ghost MCP is an MCP (Model Context Protocol) server written in Go that exposes OS-level UI automation to AI clients like Claude. It uses the `robotgo` library to control mouse, keyboard, and screen on Windows, macOS, and Linux.
 
+Detailed documentation lives in `docs/`; [`docs/README.md`](docs/README.md) is the index, grouped by topic (usage, architecture, OCR/learning mode, testing, maintenance).
+
 ## Build Commands
 
 ```bash
