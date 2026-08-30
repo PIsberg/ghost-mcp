@@ -271,13 +271,14 @@ func TestLearnerRegionHint_ScrollPageElement(t *testing.T) {
 		ScreenH:          1080,
 	})
 
-	_, _, _, _, scrolls, ok := learnerRegionHint("Footer", 1920, 1080)
+	_, _, _, _, pageIdx, ok := learnerRegionHint("Footer", 1920, 1080)
 	if !ok {
 		t.Fatal("expected hint to be found")
 	}
-	// page_index=2 * scroll_amount=5 = 10 scroll ticks
-	if scrolls != 10 {
-		t.Errorf("expected 10 scrolls for page 2 with amount 5, got %d", scrolls)
+	// The hint reports the captured page; scrollToLearnedPage converts it to
+	// a tick delta against the tracked scroll position.
+	if pageIdx != 2 {
+		t.Errorf("expected page index 2, got %d", pageIdx)
 	}
 }
 
