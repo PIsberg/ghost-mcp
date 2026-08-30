@@ -1224,6 +1224,9 @@ func main() {
 	logging.Info("Starting %s v%s...", ServerName, ServerVersion)
 	logging.Info("Platform: %s/%s", runtime.GOOS, runtime.GOARCH)
 
+	// Opt-in per-monitor DPI awareness must be declared before any capture.
+	setupDPIAwareness()
+
 	// Step 1: Initialize environment (auto-configure Tesseract/DLLs on Windows)
 	SetupWindowsEnv()
 

@@ -8,3 +8,7 @@ package main
 func getDPIScale() float64 {
 	return 1.0
 }
+
+// setupDPIAwareness is a no-op outside Windows; DPI virtualisation of the
+// capture region is a Windows-specific behaviour (issue #159).
+func setupDPIAwareness() {}

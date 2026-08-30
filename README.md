@@ -464,6 +464,7 @@ Add this to your MCP client configuration to connect to Ghost MCP:
 | `GHOST_MCP_HTTP_ADDR` | Listen address for HTTP/SSE mode | `localhost:8080` |
 | `GHOST_MCP_HTTP_BASE_URL` | Public base URL advertised to SSE clients | `http://<addr>` |
 | `GHOST_MCP_LEARNING` | Learning mode (`0` = off, `1` = on). When on, the first OCR call auto-scans the screen and all subsequent calls use the cached element map (10–25× faster). | `1` (on by default; set `0` to disable) |
+| `GHOST_MCP_DPI_AWARE` | Windows only: `1` declares per-monitor-v2 DPI awareness at startup so captures cover the physical desktop on scaled displays. Changes the capture/click coordinate space; verify against your setup. | `0` (off) |
 
 > **Security note:** `GHOST_MCP_TOKEN` must be set to a random secret. Generate one with:
 > ```bash
