@@ -820,12 +820,17 @@ See [ARCHITECTURE.md](./docs/ARCHITECTURE.md) for detailed information about:
 
 ## Documentation
 
+The full documentation set lives in [`docs/`](./docs/) and is mapped by the
+[documentation index](./docs/README.md). Key entry points:
+
 | Document | Description |
 |----------|-------------|
-| [README.md](./README.md) | Getting started and usage |
+| [docs/README.md](./docs/README.md) | Index of all documentation, grouped by topic |
 | [USAGE.md](./docs/USAGE.md) | Interactive examples and API reference |
+| [routing_prompt.md](./docs/routing_prompt.md) | Tool routing guide for AI clients |
 | [ARCHITECTURE.md](./docs/ARCHITECTURE.md) | System design and internals |
 | [TESTING.md](./docs/TESTING.md) | Testing guide and fixture docs |
+| [BENCHMARKING.md](./docs/BENCHMARKING.md) | Benchmark suite and HTML reports |
 
 ## License
 
